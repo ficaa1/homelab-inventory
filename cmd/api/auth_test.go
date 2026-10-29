@@ -37,7 +37,9 @@ func TestSessionAuthorityAndCSRF(t *testing.T) {
 		{"GET", "/agent/artifacts/1/file", "", "", "", 401},
 		{"POST", "/agent/offers", "", "homelab-inventory", "", 403},
 		{"POST", "/actions/execute", "", "homelab-inventory", "", 403},
-		{"POST", "/setup/enroll", "", "homelab-inventory", "", 401},
+		// Sessions may enroll hosts (503 here: the fixture has no setup manager), with CSRF.
+		{"POST", "/setup/enroll", "", "homelab-inventory", "", 503},
+		{"POST", "/setup/enroll", "", "", "", 403},
 		{"GET", "/hosts", "wrong", "", "", 401},
 		{"GET", "/hosts", "fixture-agent-token", "", "", 401},
 		{"GET", "/hosts", "fixture-operator-token", "", "", 401},

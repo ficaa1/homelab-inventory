@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ficaa1/homelab-inventory/internal/auth"
 	"github.com/ficaa1/homelab-inventory/internal/httpx"
 	"github.com/ficaa1/homelab-inventory/internal/setup"
 	"github.com/ficaa1/homelab-inventory/internal/store"
@@ -45,10 +46,23 @@ func (s *server) setupRoutes(mux *http.ServeMux) {
 }
 func (s *server) setupAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !httpx.BearerOK(r, s.apiToken(), httpx.DenyWhenUnset) {
+		actor := "bearer"
+		if len(r.Header.Values("Authorization")) == 0 && s.browserAuth != nil {
+			// A signed-in owner can enroll hosts from the dashboard; the code it
+			// creates grants only the agent's narrower authority.
+			if session, ok := s.browserAuth.Session(r); ok {
+				if !auth.CSRF(r, s.authConfig()) {
+					writeError(w, 403, "missing CSRF header")
+					return
+				}
+				actor = session.Email
+			}
+		}
+		if actor == "bearer" && !httpx.BearerOK(r, s.apiToken(), httpx.DenyWhenUnset) {
 			writeError(w, 401, "missing or invalid bearer token")
 			return
 		}
+		r = withActor(r, actor)
 		if s.setup == nil {
 			writeError(w, 503, "enrollment unavailable in development mode")
 			return

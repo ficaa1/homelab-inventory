@@ -26,8 +26,8 @@ even when the browser also carries a session cookie.
 | --- | --- | --- |
 | `GET /setup/status` | Claim state and remaining window | Public |
 | `POST /setup/claim` | Generate/persist initial credentials | Public, only within claim window |
-| `POST /setup/enroll` | Create single-use enrollment code and Linux command | API token only |
-| `GET /setup/enroll` | List code hints, expiry and redemption hostname | API token only |
+| `POST /setup/enroll` | Create single-use enrollment code and Linux command | API token or browser session |
+| `GET /setup/enroll` | List code hints, expiry and redemption hostname | API token or browser session |
 | `POST /agent/enroll` | Exchange code for agent token | Enrollment code, rate limited |
 | `GET /install.sh` | Installer with API origin prefilled | Public |
 | `GET /agent/bin/SHA256SUMS` | Packaged agent checksums | Public |
@@ -101,8 +101,7 @@ even when the browser also carries a session cookie.
 While unclaimed or expired, all routes return 503 `{"error":"setup required"}`
 except `/`, dashboard static assets, `/healthz`, `/setup/*`, `/install.sh`,
 `/agent/bin/*` and the public `/auth/*` routes. While unclaimed, auth status says
-`enabled:false`, login returns 404, and callback redirects with `disabled`. Development open mode is separate. Setup enrollment still
-requires API bearer authority. `/agent/enroll` is usable only after claiming.
+`enabled:false`, login returns 404, and callback redirects with `disabled`. Development open mode is separate. Setup enrollment accepts API bearer authority or a browser session (with the CSRF header). `/agent/enroll` is usable only after claiming.
 
 `GET /setup/status` returns one of:
 
@@ -256,7 +255,7 @@ is present it requires `X-Requested-By: homelab-inventory`. All unsafe methods
 Origin is supplied it must equal the configured public URL's origin. Failure
 returns 403 `{"error":"missing CSRF header"}`. Bearer-authenticated requests
 are exempt. A session never authorizes inventory POSTs, release downloads,
-enrollment/setup, release offers or restart execution. The public packaged
+the setup claim, release offers or restart execution. The public packaged
 installer downloads remain public.
 
 `GET /settings/auth` returns `enabled`, `state`, `message`, `issuer`,
