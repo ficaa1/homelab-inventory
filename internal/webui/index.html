@@ -1402,6 +1402,47 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   .chart-plot { height: 180px; margin: 4px 4px 6px; }
 }
 
+/* Sign-in on the token gate. */
+.gate-note { font-size: var(--fs-sm); text-align: left; padding: 10px 12px; border-radius: var(--r-sm); margin: 0 0 16px; background: var(--surface-2); color: var(--text-2); overflow-wrap: anywhere; }
+.gate-note.bad { background: var(--crit-soft); color: var(--text); }
+.gate-note.bad::before { content: "◆"; color: var(--crit); font-size: 9px; margin-right: 7px; vertical-align: 1px; }
+.gate-sso { display: grid; gap: 10px; margin-bottom: 4px; }
+.gate-sso .btn { min-height: 42px; font-size: var(--fs-md); }
+.gate-alt { background: none; border: 0; color: var(--text-3); font-size: var(--fs-sm); cursor: pointer; padding: 6px; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-2); }
+.gate-alt:hover { color: var(--text); }
+.gate-sso + #gate-token-box { margin-top: 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+
+/* Admin → Sign-in, and who is signed in. */
+#signin { scroll-margin-top: calc(var(--top-h) + 56px); }
+#signin h4 .pill { margin-left: auto; }
+.session-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 16px; font-size: var(--fs-sm); color: var(--text-2); }
+.session-line .ic { color: var(--text-3); }
+.session-line b { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+.session-line .btn { margin-left: auto; }
+.signin-body { margin-top: 12px; padding: 16px; background: var(--surface-2); border-radius: var(--r); }
+.signin-toggle { display: flex; align-items: center; gap: 8px; }
+.signin-toggle .lab { font-size: var(--fs-sm); font-weight: 600; color: var(--text); cursor: pointer; margin: 0; display: inline; }
+.signin-toggle .src { margin: 0; }
+.signin-toggle .src.bad { color: var(--crit); }
+.plug-form .flab { font-size: var(--fs-xs); color: var(--text-3); display: block; margin-bottom: 4px; font-weight: 550; }
+.signin-toggle .switch { margin-left: -6px; }
+.plug-form textarea {
+  width: 100%; min-height: 84px; resize: vertical; font: var(--fs-md)/1.45 var(--mono); font-size: 13px; color: var(--text);
+  background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--r-sm); padding: 9px 10px;
+}
+.plug-form textarea:focus { outline: none; border-color: var(--accent); }
+.plug-form textarea[aria-invalid="true"] { border-color: var(--crit); }
+.plug-form .from { font-size: var(--fs-xs); color: var(--text-3); margin-top: 4px; display: flex; align-items: center; gap: 5px; }
+.plug-form .from .ic { width: 12px; height: 12px; }
+.redirect { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 2px 4px 2px 10px; background: var(--bg); border: 1px dashed var(--line-2); border-radius: var(--r-sm); }
+.redirect code { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text); user-select: all; overflow-wrap: anywhere; }
+.redirect .btn { min-height: 30px; padding: 3px 9px; background: none; border-color: transparent; color: var(--text-2); }
+.redirect .btn:hover { background: var(--hover); color: var(--text); }
+.redirect .btn.ok { color: var(--ok); }
+.redirect.none code { color: var(--text-3); font-family: inherit; }
+.signin-warn { display: flex; gap: 7px; align-items: baseline; font-size: var(--fs-xs); color: var(--text-2); margin: 0; }
+.signin-warn .g { color: var(--warn); font-size: 9px; }
+
 </style>
 </head>
 <body>
@@ -1443,6 +1484,8 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></symbol>
   <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
   <symbol id="i-network" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
 </svg>
 
@@ -1452,11 +1495,20 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     <div class="logo"><svg class="ic lg" aria-hidden="true"><use href="#i-logo"/></svg></div>
     <h2>homelab-inventory</h2>
     <p id="gate-msg">API token</p>
-    <form id="gate-form">
-      <input id="gate-token" type="password" placeholder="API_TOKEN" autocomplete="current-password" required>
-      <button class="btn primary" type="submit">Unlock</button>
-    </form>
-    <div id="gate-err" class="err hidden">Invalid token.</div>
+    <div id="gate-note" class="gate-note hidden" role="alert"></div>
+    <!-- Sign-in, when GET /auth/status says a provider is configured. The
+         token form stays one tap away underneath it. -->
+    <div id="gate-sso" class="gate-sso hidden">
+      <a id="gate-sso-link" class="btn primary" href="/auth/login">Sign in</a>
+      <button id="gate-alt" class="gate-alt" type="button" aria-expanded="false" aria-controls="gate-token-box">Use a token instead</button>
+    </div>
+    <div id="gate-token-box">
+      <form id="gate-form">
+        <input id="gate-token" type="password" placeholder="API_TOKEN" autocomplete="current-password" aria-label="API token" required>
+        <button class="btn primary" type="submit">Unlock</button>
+      </form>
+      <div id="gate-err" class="err hidden">Invalid token.</div>
+    </div>
   </div>
 
   <!-- First-run setup. Shown instead of the gate while GET /setup/status
@@ -1583,7 +1635,15 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
         floor would cover.
       -->
       <section id="panel-admin" class="hidden">
+        <!-- Who is signed in, when the session came from the provider. -->
+        <div id="session-line" class="setting session-line hidden"></div>
         <div id="admin"></div>
+        <!-- Sign-in: outside #admin for the same reason as the plugins below. -->
+        <section id="signin" class="setting hidden" aria-labelledby="signin-h">
+          <h4 id="signin-h"><svg class="ic" aria-hidden="true"><use href="#i-key"/></svg>Sign-in<span id="signin-state"></span></h4>
+          <p>Let people in through an OpenID Connect provider instead of pasting the API token. The token keeps working either way.</p>
+          <div id="signin-body"></div>
+        </section>
         <!-- Plugins: outside #admin, which is rebuilt on every refresh, so a
              settings form being typed into survives the page's polling. -->
         <section id="plugins" class="setting hidden" aria-labelledby="plugins-h">
@@ -1776,6 +1836,8 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       return { view: "plugin", plugin: safeDecode(parts[1]), pview: parts[2] ? safeDecode(parts[2]) : "",
                params: params, tab: route.tab, host: "" };
     }
+    // Where a failed sign-in lands; the gate reads the error from it.
+    if (parts[0] === "login") return { view: "fleet", tab: "home", host: "", login: true };
     if (parts[0] === "home" || parts[0] === "alerts" || parts[0] === "hosts" ||
         parts[0] === "ports" || parts[0] === "admin") {
       return { view: "fleet", tab: parts[0], host: "", sub: parts[0] === "admin" && parts[1] === "plugins" ? "plugins" : "" };
@@ -1795,6 +1857,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   function applyRoute() {
     var previous = route;
     route = readHash();
+    if (route.login) history.replaceState(null, "", "#/home");
     closeMore();
     $("view-fleet").classList.toggle("hidden", route.view !== "fleet");
     $("view-host").classList.toggle("hidden", route.view !== "host");
@@ -1811,6 +1874,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       // when the page was first loaded.
       if (route.tab === "admin") {
         loadSettings();
+        loadSignin();
         loadPlugins(route.sub === "plugins" && (previous.view !== "fleet" || previous.tab !== "admin" || previous.sub !== "plugins"));
       }
       if (previous.view !== "fleet" || previous.tab !== route.tab) routeIn($("panel-" + route.tab));
@@ -5772,13 +5836,14 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
           ? h("button", { class: "btn", type: "button", onclick: function () { ui.secret[f.key] = "keep"; rerender(); } }, ["Undo"])
           : h("button", { class: "btn", type: "button", id: fid + "-replace", "aria-label": "Replace " + (str(f.label) || f.key),
               onclick: function () { ui.secret[f.key] = "replace"; rerender(); var i = $(fid); if (i) i.focus(); } }, ["Replace"]),
-        clearing ? null : h("button", { class: "btn", type: "button", "aria-label": "Clear " + (str(f.label) || f.key),
+        clearing || f.noClear ? null : h("button", { class: "btn", type: "button", "aria-label": "Clear " + (str(f.label) || f.key),
               onclick: function () { ui.secret[f.key] = "clear"; delete ui.vals[f.key]; rerender(); } }, ["Clear"])]);
     }
     return h("div", { id: fid + "-box" }, [node]);
   }
 
   function syncPlugActions(id, ui) {
+    if (ui.sync) { ui.sync(); return; }
     var p = plugByID(id), dirty = plugDirty(p, ui), body = ui.el.body;
     var save = body.querySelector("[data-plug-save]"), revert = body.querySelector("[data-plug-revert]");
     if (save) save.disabled = !!ui.busy || (!ui.enable && !dirty);
@@ -5878,6 +5943,355 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     });
   }
 
+  // ------------------------------------------------------------ sign-in
+  //
+  // GET /auth/status is public: it says whether a provider is set up and
+  // whether this browser carries a session. A session is a cookie, so a
+  // signed-in browser needs no token at all; the requests above simply go
+  // without a bearer. Every request names the page in X-Requested-By, which
+  // is what the server's CSRF check asks of a cookie.
+
+  var auth = { status: null, retried: false, tokenOpen: false };
+  var LOGIN_ERRORS = {
+    state: "Sign-in took too long or was started in another tab. Try again.",
+    denied: "Sign-in was cancelled at the provider.",
+    provider: "The provider could not be reached, or did not answer properly. Try again, or use a token.",
+    unverified: "The provider has not verified that email address, so it cannot be used here.",
+    not_allowed: "That account is not on this dashboard's allowed list. Ask the owner to add it.",
+    disabled: "Sign-in is turned off on this dashboard. Use a token instead."
+  };
+
+  function loadAuthStatus() {
+    return api("/auth/status").then(function (s) {
+      auth.status = s && typeof s === "object" ? s : { enabled: false };
+    }, function () { auth.status = auth.status || { enabled: false }; }).then(function () {
+      renderSessionLine();
+      return auth.status;
+    });
+  }
+
+  function loginError() {
+    var m = /^#\/?login\?(.*)$/.exec(location.hash || "");
+    if (!m) return "";
+    var code = "";
+    try { code = new URLSearchParams(m[1]).get("error") || ""; } catch (e) { code = ""; }
+    return LOGIN_ERRORS[code] || "Sign-in did not complete. Try again.";
+  }
+
+  // Where the provider sends the browser back to: the view that was open.
+  function loginNext() {
+    var hash = location.hash || "";
+    return "/" + (hash && hash !== "#" && !/^#\/?login/.test(hash) ? hash : "");
+  }
+
+  function renderGate(failed, note) {
+    var s = auth.status || {}, sso = !!s.enabled, err = loginError();
+    var text = err || note || "";
+    $("gate-note").textContent = text;
+    $("gate-note").classList.toggle("bad", !!err);
+    $("gate-note").classList.toggle("hidden", !text);
+    $("gate-msg").textContent = sso ? "Sign in to continue." : "API token";
+    $("gate-sso").classList.toggle("hidden", !sso);
+    if (sso) {
+      $("gate-sso-link").textContent = "Sign in with " + (str(s.provider) || "your provider");
+      $("gate-sso-link").href = "/auth/login?next=" + encodeURIComponent(loginNext());
+    }
+    // Until the status is known, show neither way in rather than the wrong one.
+    var known = !!auth.status, open = known && (!sso || failed || auth.tokenOpen);
+    $("gate-alt").setAttribute("aria-expanded", open ? "true" : "false");
+    $("gate-alt").classList.toggle("hidden", !known || open);
+    $("gate-token-box").classList.toggle("hidden", !open);
+    $("gate-err").classList.toggle("hidden", !failed);
+  }
+
+  $("gate-alt").addEventListener("click", function () {
+    auth.tokenOpen = true;
+    $("gate-alt").setAttribute("aria-expanded", "true");
+    $("gate-alt").classList.add("hidden");
+    $("gate-token-box").classList.remove("hidden");
+    $("gate-token").focus();
+  });
+
+  // Who this browser is signed in as, at the top of Admin.
+  function renderSessionLine() {
+    var s = auth.status || {}, line = $("session-line");
+    var on = !!(s.signed_in && str(s.email));
+    line.classList.toggle("hidden", !on);
+    if (!on) { line.replaceChildren(); return; }
+    var until = Date.parse(s.expires_at);
+    line.replaceChildren(
+      iconNode("user", "sm"),
+      h("span", {}, ["Signed in as ", h("b", { text: str(s.email) }),
+        isFinite(until) ? h("span", { title: new Date(until).toLocaleString(), text: " · until " + new Date(until).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) }) : null]),
+      h("button", { class: "btn", type: "button", onclick: signOut }, [iconNode("logout", "sm"), "Sign out"]));
+  }
+
+  function signOut() {
+    var b = $("session-line").querySelector("button");
+    if (b) { b.disabled = true; b.setAttribute("aria-busy", "true"); }
+    write("/auth/logout", "POST").then(function () {
+      auth.status = Object.assign({}, auth.status, { signed_in: false, email: "", expires_at: "" });
+      renderSessionLine();
+      if (!token) { showGate(false, "Signed out."); return; }
+      announce("Signed out. This browser still has the API token.");
+    }, function (err) {
+      if (b) { b.disabled = false; b.removeAttribute("aria-busy"); }
+      if (err.unauthorized) { showGate(false, "Signed out."); return; }
+      announce("Could not sign out: " + err.message);
+    });
+  }
+
+  // ------------------------------------------------------------ Admin → Sign-in
+  //
+  // The provider's settings, as a form shaped like a plugin's. The fields are
+  // fixed here rather than sent by the server; the same merge rules apply
+  // (a value sets, null clears, absent keeps) and secrets never come back.
+
+  var SIGNIN_ENV = { issuer: "OIDC_ISSUER", client_id: "OIDC_CLIENT_ID", client_secret: "OIDC_CLIENT_SECRET", allowed: "OIDC_ALLOWED",
+    public_url: "OIDC_PUBLIC_URL", provider_name: "OIDC_PROVIDER_NAME", session_hours: "OIDC_SESSION_HOURS" };
+  var SIGNIN_FIELDS = [
+    { key: "issuer", group: "Provider", type: "url", label: "Issuer URL", required: true, placeholder: "https://id.example.org",
+      help: "The provider's base address. Its settings are read from /.well-known/openid-configuration under it." },
+    { key: "client_id", group: "Provider", type: "text", label: "Client ID", required: true },
+    { key: "client_secret", group: "Provider", type: "secret", label: "Client secret", required: true },
+    { key: "provider_name", group: "Provider", type: "text", label: "Button label",
+      help: "Shown as “Sign in with …”. Leave empty to use the issuer's host name." },
+    { key: "allowed", group: "Who gets in", type: "list", label: "Allowed accounts", required: true,
+      help: "One per line: an address such as owner@example.org, or @example.org for a whole domain." },
+    { key: "require_verified", group: "Who gets in", type: "bool", label: "Only verified email addresses", default: true },
+    { key: "session_hours", group: "Who gets in", type: "number", label: "Stay signed in for (hours)", default: 168,
+      help: "1 to 720. The default is a week." },
+    { key: "public_url", group: "This dashboard", type: "url", label: "Public URL", required: true, placeholder: "https://dash.example.org",
+      help: "The address people open this dashboard at, without a path." }
+  ];
+  var signin = { data: null, err: "", missing: false,
+    ui: { open: true, vals: {}, secret: {}, errors: {}, msg: "", bad: false, test: null, busy: "", el: { body: null } } };
+
+  function signinAsPlugin() {
+    var d = signin.data || {}, settings = {};
+    SIGNIN_FIELDS.forEach(function (f) { if (d[f.key] !== undefined) settings[f.key] = d[f.key]; });
+    return { id: "-auth", settings: settings, settings_schema: SIGNIN_FIELDS.map(function (f) {
+      var src = (d.sources || {})[f.key];
+      return f.type === "secret" && src === "env" ? Object.assign({ noClear: true }, f) : f;
+    }) };
+  }
+  function allowedText(v) { return Array.isArray(v) ? v.join("\n") : ""; }
+  function allowedList(text) {
+    return String(text).split(/[\n,]/).map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+  function signinEnabled() {
+    var ui = signin.ui;
+    return Object.prototype.hasOwnProperty.call(ui.vals, "enabled") ? ui.vals.enabled : !!(signin.data && signin.data.enabled);
+  }
+  function signinChanges() {
+    var ui = signin.ui, d = signin.data || {}, out = plugChanges(signinAsPlugin(), ui);
+    delete out.allowed; delete out.enabled;
+    if (Object.prototype.hasOwnProperty.call(ui.vals, "allowed")) {
+      var list = allowedList(ui.vals.allowed);
+      if (list.join("\n") !== allowedText(d.allowed)) out.allowed = list.length ? list : null;
+    }
+    if (signinEnabled() !== !!d.enabled) out.enabled = signinEnabled();
+    return out;
+  }
+  function signinDirty() { return Object.keys(signinChanges()).length > 0; }
+
+  function loadSignin() {
+    return api("/settings/auth").then(function (d) {
+      signin.data = d && typeof d === "object" ? d : {}; signin.err = ""; signin.missing = false;
+    }, function (err) {
+      if (err.unauthorized) { showGate(true); return; }
+      // A server without browser sign-in: no section at all.
+      if (err.status === 404) signin.missing = true;
+      else signin.err = err.message;
+    }).then(renderSignin);
+  }
+
+  var SIGNIN_STATE = { disabled: ["", "○", "off"], unconfigured: ["warn", GLYPH.warning, "needs setup"], ok: ["ok", GLYPH.good, "on"], error: ["crit", GLYPH.critical, "error"] };
+  function renderSignin() {
+    var sec = $("signin"), body = $("signin-body"), ui = signin.ui;
+    sec.classList.toggle("hidden", signin.missing);
+    if (signin.missing) return;
+    if (!signin.data) {
+      if (signin.err) body.replaceChildren(h("div", { class: "src plug-status bad", role: "alert", text: "Could not load sign-in settings: " + signin.err }));
+      else if (!body.firstChild) body.innerHTML = skeleton(2);
+      return;
+    }
+    var d = signin.data, st = SIGNIN_STATE[d.state] || ["", "•", str(d.state) || "unknown"];
+    $("signin-state").replaceChildren(pill(st[2], st[0], st[1]));
+    if (ui.el.body && ui.el.body.isConnected && (ui.busy || signinDirty() || ui.el.body.contains(document.activeElement))) return;
+    renderSigninForm();
+  }
+
+  function signinRedirect() {
+    var ui = signin.ui, d = signin.data || {};
+    var pub = Object.prototype.hasOwnProperty.call(ui.vals, "public_url") ? String(ui.vals.public_url).trim() : str(d.public_url);
+    if (!pub) return "";
+    if (pub === str(d.public_url) && str(d.redirect_uri)) return str(d.redirect_uri);
+    return pub.replace(/\/+$/, "") + "/auth/callback";
+  }
+
+  function renderSigninForm() {
+    var ui = signin.ui, d = signin.data || {}, p = signinAsPlugin(), sources = d.sources || {};
+    var body = h("div", { class: "signin-body" });
+    ui.el.body = body;
+    ui.sync = syncSignin;
+    function fromEnv(f) {
+      if (sources[f.key] !== "env") return null;
+      return h("div", { class: "from" }, [iconNode("server", "sm"),
+        "From the environment" + (SIGNIN_ENV[f.key] ? " (" + SIGNIN_ENV[f.key] + ")" : "") + ". A saved value takes precedence."]);
+    }
+    function field(f) {
+      if (f.type !== "list") {
+        var node = plugField(p, ui, f), env = fromEnv(f);
+        if (env) node.insertBefore(env, node.querySelector(".ferr"));
+        return node;
+      }
+      var fid = "pf--auth-" + f.key, err = str(ui.errors[f.key]);
+      var ta = h("textarea", { id: fid, rows: "4", spellcheck: "false", autocomplete: "off", placeholder: "owner@example.org\n@example.org",
+        "aria-describedby": fid + "-help" + (err ? " " + fid + "-err" : ""), "aria-invalid": err ? "true" : null, "aria-required": "true",
+        oninput: function () {
+          ui.vals[f.key] = ta.value;
+          if (ui.errors[f.key]) { delete ui.errors[f.key]; $(fid + "-err").textContent = ""; ta.removeAttribute("aria-invalid"); }
+          syncSignin();
+        } });
+      ta.value = Object.prototype.hasOwnProperty.call(ui.vals, f.key) ? ui.vals[f.key] : allowedText(d.allowed);
+      return h("div", { class: "pf" }, [
+        h("label", { for: fid, id: fid + "-label" }, [f.label, h("span", { class: "req", "aria-hidden": "true", text: "*" }), h("span", { class: "sr-only", text: " (required)" })]),
+        ta, h("div", { class: "help", id: fid + "-help", text: f.help }), fromEnv(f),
+        h("div", { class: "ferr", id: fid + "-err", text: err })]);
+    }
+    var groups = [];
+    SIGNIN_FIELDS.forEach(function (f) {
+      var g = groups.filter(function (x) { return x.name === f.group; })[0];
+      if (!g) groups.push(g = { name: f.group, fields: [] });
+      g.fields.push(f);
+    });
+    var redirect = signinRedirect();
+    var sets = groups.map(function (g) {
+      var kids = [h("legend", { text: g.name })].concat(g.fields.map(field));
+      if (g.name === "This dashboard") {
+        kids.push(h("div", { class: "pf" }, [
+          h("span", { class: "flab", id: "signin-redirect-label", text: "Redirect URI" }),
+          h("div", { class: "redirect" + (redirect ? "" : " none"), id: "signin-redirect", role: "group", "aria-labelledby": "signin-redirect-label" }, [
+            redirectCode(redirect),
+            redirect ? h("button", { class: "btn", type: "button", "data-copy": "", "aria-label": "Copy redirect URI" }, [iconNode("copy", "sm"), "Copy"]) : null]),
+          h("div", { class: "help", text: "Register this address with the provider as an allowed redirect or callback URL." })]));
+      }
+      return h("fieldset", { class: "plug-group" }, kids);
+    });
+    var on = signinEnabled(), dirty = signinDirty();
+    var sw = h("button", { class: "switch", type: "button", role: "switch", id: "signin-enabled", "aria-checked": on ? "true" : "false", "aria-labelledby": "signin-enabled-label",
+      onclick: function () { ui.vals.enabled = !signinEnabled(); if (ui.errors.enabled) delete ui.errors.enabled; renderSigninForm(); signin.ui.el.body.querySelector(".switch").focus(); } });
+    var form = h("form", { class: "form plug-form", novalidate: true, "aria-label": "Sign-in settings",
+      onsubmit: function (e) { e.preventDefault(); saveSignin(); } }, [
+      h("div", { class: "signin-toggle" }, [sw, h("label", { class: "lab", id: "signin-enabled-label", for: "signin-enabled", text: "Allow sign-in" }),
+        str(d.message) ? h("span", { class: "src" + (d.state === "error" ? " bad" : ""), text: "· " + str(d.message) }) : null]),
+      str(ui.errors.enabled) ? h("div", { class: "ferr", role: "alert", text: str(ui.errors.enabled) }) : null,
+      h("p", { class: "legend-note", text: "* required to allow sign-in" }),
+      h("div", { class: "plug-groups" }, sets),
+      h("div", { class: "signin-warn", id: "signin-warn" }, [h("span", { class: "g", "aria-hidden": "true", text: GLYPH.warning }),
+        h("span", { text: "Saving signs everyone out of the dashboard, so they sign in again with the new settings. The API token keeps working." })]),
+      h("div", { class: "plug-actions" }, [
+        h("button", { class: "btn", type: "button", "data-plug-test": "", disabled: !!ui.busy, onclick: testSignin },
+          [iconNode("activity", "sm"), ui.busy === "test" ? "Testing…" : "Test"]),
+        h("button", { class: "btn primary", type: "submit", "data-plug-save": "", "aria-describedby": "signin-warn", disabled: !!ui.busy || !dirty },
+          [ui.busy === "save" ? "Saving…" : "Save"]),
+        h("button", { class: "btn" + (dirty ? "" : " hidden"), type: "button", "data-plug-revert": "", disabled: !!ui.busy,
+          onclick: function () { ui.vals = {}; ui.secret = {}; ui.errors = {}; ui.msg = ""; ui.test = null; renderSigninForm(); } }, ["Revert"]),
+        h("span", { class: "src plug-status" + (ui.bad ? " bad" : ""), role: "status", "aria-live": "polite", text: ui.msg })]),
+      h("div", { class: "plug-test", "aria-live": "polite", "aria-busy": ui.busy === "test" ? "true" : null }, plugTestNodes(ui.test))]);
+    body.appendChild(form);
+    $("signin-body").replaceChildren(body);
+    if (!ui.busy && ui.refocus) {
+      var again = body.querySelector("[data-plug-" + ui.refocus + "]");
+      ui.refocus = "";
+      if (again && again.disabled) again = body.querySelector(".plug-actions button:not([disabled])");
+      if (again) again.focus();
+    }
+  }
+
+  // A URL that may wrap after a slash, never inside a word.
+  function redirectCode(uri) {
+    if (!uri) return h("code", { text: "Fill in the public URL first" });
+    var kids = [];
+    uri.split(/(?<=\/)/).forEach(function (part, i) { if (i) kids.push(h("wbr")); kids.push(part); });
+    return h("code", {}, kids);
+  }
+
+  // Typing updates the buttons and the redirect URI in place, never the form.
+  function syncSignin() {
+    var ui = signin.ui, body = ui.el.body, dirty = signinDirty();
+    if (!body) return;
+    var save = body.querySelector("[data-plug-save]"), revert = body.querySelector("[data-plug-revert]");
+    if (save) save.disabled = !!ui.busy || !dirty;
+    if (revert) revert.classList.toggle("hidden", !dirty);
+    var box = body.querySelector(".redirect"), uri = signinRedirect();
+    if (box && box.querySelector("code").textContent !== (uri || "Fill in the public URL first")) {
+      box.classList.toggle("none", !uri);
+      box.querySelector("code").replaceWith(redirectCode(uri));
+      var copy = box.querySelector("[data-copy]");
+      if (!uri && copy) copy.remove();
+      if (uri && !copy) box.appendChild(h("button", { class: "btn", type: "button", "data-copy": "", "aria-label": "Copy redirect URI" }, [iconNode("copy", "sm"), "Copy"]));
+    }
+  }
+
+  function signinMsg(text, bad) {
+    var ui = signin.ui;
+    ui.msg = text; ui.bad = !!bad;
+    var s = ui.el.body && ui.el.body.querySelector(".plug-status");
+    if (s) { s.textContent = text; s.classList.toggle("bad", !!bad); }
+  }
+
+  function saveSignin() {
+    var ui = signin.ui;
+    if (ui.busy || !signinDirty()) return;
+    // A browser with no token is about to lose the session it is using.
+    var cookieOnly = !token && auth.status && auth.status.signed_in;
+    if (cookieOnly && !confirm("Saving signs everyone out, including you. You will need to sign in again. Save?")) return;
+    var body = signinChanges();
+    ui.busy = "save"; ui.refocus = "save"; ui.msg = ""; renderSigninForm();
+    write("/settings/auth", "PUT", body).then(function (d) {
+      signin.data = d && typeof d === "object" ? d : signin.data;
+      ui.busy = ""; ui.vals = {}; ui.secret = {}; ui.errors = {}; ui.test = null;
+      ui.msg = "Saved. Anyone signed in through the provider has to sign in again."; ui.bad = false;
+      renderSignin(); renderSigninForm();
+      if (cookieOnly) { showGate(false, "Sign-in settings saved. Sign in again."); return; }
+      loadAuthStatus();
+    }, function (err) {
+      ui.busy = "";
+      if (err.unauthorized) { showGate(!!token, cookieOnly ? "Sign in again." : ""); return; }
+      ui.errors = err.fields && typeof err.fields === "object" ? err.fields : {};
+      var names = Object.keys(ui.errors);
+      ui.msg = names.length ? (err.message && err.message !== "HTTP 422" ? err.message.charAt(0).toUpperCase() + err.message.slice(1).replace(/\.$/, "") + ". " : "") + "Nothing was saved." : "Could not save: " + err.message;
+      ui.bad = true;
+      renderSigninForm();
+      var first = ["enabled"].concat(SIGNIN_FIELDS.map(function (f) { return f.key; })).filter(function (k) { return ui.errors[k]; })[0];
+      var el = first === "enabled" ? ui.el.body.querySelector(".switch") : first && ($("pf--auth-" + first) || $("pf--auth-" + first + "-replace"));
+      if (el) el.focus();
+    });
+  }
+
+  function testSignin() {
+    var ui = signin.ui;
+    if (ui.busy) return;
+    var changes = signinChanges();
+    delete changes.enabled;
+    ui.busy = "test"; ui.test = null; ui.refocus = "test"; ui.msg = "";
+    renderSigninForm();
+    var ctrl = new AbortController(), timer = setTimeout(function () { ctrl.abort(); }, 30000);
+    write("/settings/auth/test", "POST", { settings: changes }, ctrl.signal).then(function (r) {
+      ui.test = r && typeof r === "object" ? r : { ok: false, message: "empty answer" };
+    }, function (err) {
+      if (err.unauthorized) { showGate(true); return; }
+      if (err.fields && typeof err.fields === "object") ui.errors = err.fields;
+      ui.test = { ok: false, message: err.name === "AbortError" ? "no answer within 30 s" : err.status === 429 ? "a test is already running, try again in a moment" : err.message };
+    }).then(function () {
+      clearTimeout(timer);
+      ui.busy = "";
+      renderSigninForm();
+    });
+  }
+
   // ------------------------------------------------------------ loading
 
   var loading = null, refreshTimer = null;
@@ -5923,10 +6337,12 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
         $("refresh").classList.remove("spin");
         $("meta").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         $("meta").parentNode.title = "Updated " + new Date().toLocaleString();
+        auth.retried = false; auth.tokenOpen = false;
         renderAll();
         renderPluginNav();
         refreshAgents();
         applyRoute();
+        loadAuthStatus();
       })
       .catch(function (err) {
         if (err.unauthorized) { showGate(!!token); return; }
@@ -5939,7 +6355,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     return loading;
   }
 
-  function showGate(failed) {
+  function showGate(failed, note) {
     closeDrawer();
     sessionStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(OPERATOR_KEY);
@@ -5948,8 +6364,13 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     clearTimeout(refreshTimer);
     $("app").classList.add("hidden");
     $("gate").classList.remove("hidden");
-    $("gate-err").classList.toggle("hidden", !failed);
-
+    renderGate(failed, note);
+    loadAuthStatus().then(function (s) {
+      if ($("gate").classList.contains("hidden")) return;
+      // A session cookie can still let this browser in where a token did not.
+      if (s.signed_in && !auth.retried) { auth.retried = true; load(); return; }
+      renderGate(failed, note);
+    });
   }
 
   // ------------------------------------------------------------ first-run setup
