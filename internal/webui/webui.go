@@ -31,7 +31,9 @@ var buildTime = time.Now()
 
 // Hash the exact embedded blocks so edits cannot leave stale CSP hashes. Style
 // attributes drive numeric meters/layout; scripts and style elements stay hashed.
-var contentPolicy = "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'none'; frame-ancestors 'none'; connect-src 'self'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; script-src " + inlineHash("script") + "; style-src " + inlineHash("style") + "; style-src-attr 'unsafe-inline'"
+// blob: images are plugin pictures the page fetched itself with the bearer
+// token, since an <img> cannot send it.
+var contentPolicy = "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'none'; frame-ancestors 'none'; connect-src 'self'; img-src 'self' data: blob:; manifest-src 'self'; worker-src 'self'; script-src " + inlineHash("script") + "; style-src " + inlineHash("style") + "; style-src-attr 'unsafe-inline'"
 
 func inlineHash(tag string) string {
 	_, rest, ok := strings.Cut(string(indexHTML), "<"+tag+">")
