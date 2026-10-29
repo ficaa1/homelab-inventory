@@ -6629,7 +6629,7 @@ body.has-up-bubble main.wrap { padding-bottom: 88px; }
       try { j = JSON.parse(xhr.responseText); } catch (e) { j = null; }
       if (xhr.status >= 200 && xhr.status < 300) {
         var stored = str(j && j.name), msg = str(j && j.message) || "Uploaded.";
-        settle("done", msg + (stored && stored !== q.file.name ? " Saved as " + stored + "." : ""));
+        settle("done", stored && stored !== q.file.name ? msg.replace(/\.?$/, ".") + " Saved as " + stored + "." : msg);
       } else settle("failed", upError(q, xhr.status, j));
     };
     xhr.onerror = function () { settle("failed", upError(q, 0, null)); };
