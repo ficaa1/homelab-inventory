@@ -1452,6 +1452,8 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   transition: transform var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out);
 }
 .up-bubble:hover { background: color-mix(in srgb, var(--surface-3) 85%, var(--text)); }
+/* Room at the end of the page so the bubble never covers the last row. */
+body.has-up-bubble main.wrap { padding-bottom: 88px; }
 .up-bubble:active { transform: scale(0.95); }
 .up-bubble .ic { width: 22px; height: 22px; position: relative; }
 .up-bubble.busy::before {
@@ -6414,6 +6416,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   function renderUpBubble() {
     var b = $("up-bubble"), active = upActive(), show = appShown() && (up.targets.length > 0 || up.queue.length > 0);
     b.classList.toggle("hidden", !show);
+    document.body.classList.toggle("has-up-bubble", show);
     var badge = $("up-badge"), failed = up.queue.filter(function (q) { return q.state === "failed"; }).length;
     var done = up.queue.filter(function (q) { return q.state === "done"; }).length;
     badge.className = "up-badge";
