@@ -251,7 +251,7 @@ code {
   .tabs {
     position: fixed; z-index: 45; left: 0; right: 0; bottom: 0; margin: 0;
     height: calc(var(--nav-h) + var(--safe-b)); padding: 4px 6px var(--safe-b);
-    display: grid; grid-template-columns: repeat(6, 1fr); gap: 0;
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0;
     background: color-mix(in srgb, var(--bg) 88%, transparent);
     -webkit-backdrop-filter: saturate(160%) blur(14px); backdrop-filter: saturate(160%) blur(14px);
     border-top: 1px solid var(--line);
@@ -897,7 +897,7 @@ pre.code {
   .strip .meta { margin-left: 0; }
   .schip, .brand { min-height: 44px; }
   .actions-bar .ibtn { min-width: 44px; width: 44px; height: 44px; }
-  :is(#panel-home, #panel-alerts, #panel-hosts, #panel-ports, #panel-admin, #view-host, #pal, #gate) :is(button, select, summary),
+  :is(#panel-home, #panel-alerts, #panel-hosts, #panel-ports, #panel-admin, #view-host, #view-plugin, #pal, #gate) :is(button, select, summary),
   #drawer :is(button, select) { min-height: 44px; min-width: 44px; }
   :is(#panel-home, #panel-alerts, #panel-ports, #panel-admin, #view-host, #gate) input:not([type="checkbox"]) { min-height: 44px; }
   :is(#panel-home, #panel-alerts, #panel-ports, #panel-admin, #view-host) .field { height: 44px; }
@@ -1167,6 +1167,201 @@ pre.code {
   .arrivals .what { flex-basis: 100%; margin-left: 20px; text-align: left; }
 }
 
+/* ------------------------------------------------------------------ plugins */
+/*
+  Plugin tabs and views are drawn from data with the page's own parts: the
+  same tiles, cards, pills and meters as the built-in tabs, so a plugin reads
+  as part of the dashboard rather than something embedded in it.
+*/
+.tab-more { display: none; }
+.more-scrim { position: fixed; inset: 0; z-index: 44; }
+.more-sheet {
+  position: fixed; z-index: 46; right: 8px; bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
+  width: min(280px, calc(100vw - 16px)); padding: 6px; display: grid; gap: 2px;
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-lg);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.35);
+}
+.more-sheet button {
+  display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 12px;
+  border: 0; background: none; border-radius: var(--r); color: var(--text);
+  font-size: var(--fs-md); font-weight: 500; text-align: left; cursor: pointer;
+}
+.more-sheet button:hover, .more-sheet button:focus-visible { background: var(--hover); }
+.more-sheet button .ic { color: var(--text-3); }
+.more-sheet button[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
+.more-sheet button[aria-current="page"] .ic { color: var(--accent); }
+.more-sheet hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
+@media (max-width: 640px) {
+  .tabs.has-more .tab[data-overflow] { display: none; }
+  .tabs.has-more .tab-more { display: inline-flex; }
+}
+
+/* A plugin's tab. */
+.pv-head { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; margin-bottom: var(--s4); }
+.pv-head h2 { font-size: var(--fs-lg); margin: 0; overflow-wrap: anywhere; }
+.pv-head .seg .btn { min-width: 64px; }
+.pv-stamp { margin-left: auto; font-size: var(--fs-xs); color: var(--text-3); font-variant-numeric: tabular-nums; }
+.pv-stamp.stale { color: var(--warn); }
+.pv-blocks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
+.pv-blocks > * { grid-column: 1 / -1; min-width: 0; }
+.pv-blocks > .pv-half { grid-column: auto; }
+.pv-blocks .kpis, .pv-blocks .banner { margin-bottom: 0; }
+.tile .value.info { color: var(--info); }
+.tile .value.muted { color: var(--text-3); }
+.pv-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; min-width: 0; }
+.pv-card > h3 {
+  display: flex; align-items: baseline; gap: 8px; margin: 0; padding: 12px 16px;
+  font-size: var(--fs-sm); font-weight: 600; border-bottom: 1px solid var(--line); overflow-wrap: anywhere;
+}
+.pv-card > h3 .n { color: var(--text-3); font-weight: 500; font-variant-numeric: tabular-nums; }
+.pv-empty { padding: 18px 16px; color: var(--text-3); font-size: var(--fs-sm); }
+.pv-item {
+  display: flex; gap: 12px; align-items: flex-start; padding: 11px 16px;
+  border-top: 1px solid var(--line); color: inherit; text-decoration: none; min-width: 0;
+}
+.pv-item:first-of-type { border-top: 0; }
+a.pv-item:hover { background: var(--hover); }
+.pv-thumb { position: relative; width: 34px; height: 51px; flex: none; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
+.pv-thumb img, .pv-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.pv-main { flex: 1; min-width: 0; }
+.pv-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.pv-title { font-weight: 600; font-size: var(--fs-sm); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-glyph { font-size: 9px; flex: none; align-self: center; }
+.pv-meta { margin-left: auto; flex: none; font-size: var(--fs-xs); color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+.pv-meta .ic { width: 12px; height: 12px; color: var(--text-3); }
+.pv-sub { font-size: var(--fs-xs); color: var(--text-3); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.pv-badges .pill, .pv-art .pill { font-size: 10px; padding: 0 6px; line-height: 16px; }
+.pv-prog { display: flex; align-items: center; gap: 8px; margin-top: 7px; }
+.pv-track { flex: 1; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
+.pv-track i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+.pv-prog .pl { font-size: var(--fs-xs); color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.t-ok { color: var(--ok); } .t-info { color: var(--info); } .t-warn { color: var(--warn); } .t-crit { color: var(--crit); } .t-muted { color: var(--text-3); }
+.pv-track.t-ok i { background: var(--ok); } .pv-track.t-info i { background: var(--info); }
+.pv-track.t-warn i { background: var(--warn); } .pv-track.t-crit i { background: var(--crit); }
+.pv-track.t-muted i { background: var(--text-3); }
+.pv-posters { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); gap: 16px 12px; padding: 14px 16px 16px; }
+.pv-poster { display: flex; flex-direction: column; gap: 3px; min-width: 0; color: inherit; text-decoration: none; }
+.pv-art { position: relative; aspect-ratio: 2 / 3; border-radius: var(--r-sm); background: var(--surface-3); overflow: hidden; margin-bottom: 5px; }
+.pv-art .ini { position: absolute; inset: 0; display: grid; place-items: center; padding: 8px; text-align: center; font-size: var(--fs-sm); font-weight: 600; color: var(--text-3); overflow-wrap: anywhere; }
+.pv-art img + .ini { display: none; }
+.pv-art .pill { position: absolute; top: 6px; left: 6px; background: color-mix(in srgb, var(--bg) 84%, transparent); }
+.pv-art .pill:not([class*="good"]):not([class*="info"]):not([class*="warning"]):not([class*="critical"]) { color: var(--text); }
+.pv-art .pv-track { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; border-radius: 0; background: rgba(0,0,0,0.45); }
+.pv-art .pv-track i { border-radius: 0; }
+a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0; }
+.pv-poster .t { font-size: var(--fs-sm); font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.pv-poster .s { font-size: var(--fs-xs); color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pv-card .scroll { border-radius: 0; }
+.pv-card table { border: 0; border-radius: 0; background: none; }
+.pv-card td.txt { max-width: 360px; overflow: hidden; text-overflow: ellipsis; }
+.banner.t-ok::before { background: var(--ok); } .banner.t-info::before { background: var(--info); }
+.banner.t-warn::before { background: var(--warn); } .banner.t-crit::before { background: var(--crit); }
+.banner.t-muted::before { background: var(--text-3); }
+.banner.pv-notice { color: var(--text); flex-wrap: nowrap; align-items: flex-start; }
+.banner.pv-notice > .ic { margin-top: 1px; }
+.banner.pv-notice > span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.pv-section { display: grid; gap: var(--s3); min-width: 0; }
+.pv-section > h3 { margin: 6px 0 0; font-size: var(--fs-md); font-weight: 650; overflow-wrap: anywhere; }
+.pv-section .pv-section > h3 { font-size: var(--fs-sm); color: var(--text-2); }
+.empty.bad .big { color: var(--text); }
+.empty .big .t-crit { margin-right: 6px; font-size: 11px; vertical-align: 1px; }
+.empty .actions { justify-content: center; margin-top: 12px; }
+.empty .why-text { overflow-wrap: anywhere; font-family: var(--mono); font-size: var(--fs-xs); }
+@media (max-width: 900px) {
+  .pv-blocks { grid-template-columns: minmax(0, 1fr); }
+  .pv-blocks > .pv-half { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .pv-head { gap: 8px 12px; }
+  .pv-head .seg { order: 3; width: 100%; }
+  .pv-head .seg .btn { flex: 1; min-height: 40px; }
+  .pv-blocks { gap: var(--s3); }
+  .pv-item { padding: 10px 12px; }
+  .pv-card > h3 { padding: 11px 12px; }
+  .pv-posters { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 8px; padding: 12px; }
+  .pv-card td.txt { max-width: 200px; }
+}
+
+/* Admin → Plugins. */
+#plugins { scroll-margin-top: calc(var(--top-h) + 56px); }
+.plug-count { margin-left: auto; font-size: var(--fs-xs); font-weight: 500; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.plug { border-top: 1px solid var(--line); padding: 14px 0; }
+.plug:first-child { border-top: 0; padding-top: 6px; }
+.plug:last-child { padding-bottom: 0; }
+.plug-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 16px; align-items: center; }
+.plug-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 650; font-size: var(--fs-md); min-width: 0; }
+.plug-name .ver { font-weight: 400; font-size: var(--fs-xs); color: var(--text-3); }
+.plug-desc { font-size: var(--fs-sm); color: var(--text-2); grid-column: 1; overflow-wrap: anywhere; }
+.plug-msg { font-size: var(--fs-xs); color: var(--text-3); grid-column: 1; overflow-wrap: anywhere; }
+.plug-msg.bad { color: var(--crit); }
+.plug-msg:empty { display: none; }
+.plug-ctl { grid-column: 2; grid-row: 1 / span 3; display: flex; align-items: center; gap: 4px; }
+.plug-ctl .btn .ic { transition: transform var(--dur-1) var(--ease-out); }
+.plug-ctl .btn[aria-expanded="true"] .ic { transform: rotate(180deg); }
+.switch {
+  position: relative; width: 50px; height: 44px; flex: none; padding: 0;
+  border: 0; background: none; cursor: pointer; border-radius: var(--r);
+}
+.switch::before {
+  content: ""; position: absolute; left: 6px; top: 11px; width: 38px; height: 22px; border-radius: 999px;
+  background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--line-2);
+  transition: background-color var(--dur-1) var(--ease-out);
+}
+.switch::after {
+  content: ""; position: absolute; left: 9px; top: 14px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--text-2); transition: transform var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out);
+}
+.switch[aria-checked="true"]::before { background: var(--accent); box-shadow: none; }
+.switch[aria-checked="true"]::after { transform: translateX(16px); background: var(--accent-ink); }
+.switch:disabled { cursor: default; opacity: 0.45; }
+.switch[aria-busy="true"] { opacity: 0.6; cursor: progress; }
+.plug-body { margin-top: 12px; padding: 16px; background: var(--surface-2); border-radius: var(--r); }
+.plug-form { margin-top: 0; gap: 16px; }
+.plug-note { display: flex; gap: 10px; align-items: flex-start; font-size: var(--fs-sm); color: var(--text); padding: 10px 12px; border-radius: var(--r-sm); background: var(--warn-soft); }
+.plug-note .ic { color: var(--warn); margin-top: 1px; }
+.plug-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 20px 24px; }
+.plug-group { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 12px; align-content: start; }
+.plug-group legend { padding: 0; margin-bottom: 10px; font-size: var(--fs-sm); font-weight: 650; color: var(--text); }
+.plug-form .req { color: var(--text-2); margin-left: 2px; }
+.plug-form .help { font-size: var(--fs-xs); color: var(--text-3); margin-top: 4px; overflow-wrap: anywhere; }
+.plug-form .ferr { font-size: var(--fs-xs); color: var(--crit); margin-top: 4px; overflow-wrap: anywhere; display: flex; gap: 5px; }
+.plug-form .ferr:empty { display: none; }
+.plug-form input[aria-invalid="true"], .plug-form select[aria-invalid="true"], .secret-saved[data-invalid] { border-color: var(--crit); }
+.plug-form input[type="checkbox"] { width: auto; margin: 0; accent-color: var(--accent); }
+.plug-form label.chk { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--text); margin: 0; font-weight: 500; cursor: pointer; }
+.plug-form .legend-note { font-size: var(--fs-xs); color: var(--text-3); margin: -4px 0 0; }
+.secret-saved {
+  display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 2px 4px 2px 10px;
+  background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--r-sm); font-size: var(--fs-sm);
+}
+.secret-saved .ic { color: var(--text-3); }
+.secret-saved .st { flex: 1; min-width: 0; color: var(--text-2); }
+.secret-saved.clearing .st { color: var(--warn); }
+.secret-saved .btn { min-height: 30px; padding: 3px 9px; background: none; border-color: transparent; color: var(--text-2); }
+.secret-saved .btn:hover { background: var(--hover); color: var(--text); }
+.secret-row { display: flex; gap: 6px; }
+.secret-row input { flex: 1; min-width: 0; }
+.plug-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.plug-actions .src { margin: 0; }
+.plug-status.bad { color: var(--crit); }
+.plug-test { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); }
+.plug-test:empty { display: none; }
+.plug-test .head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; font-size: var(--fs-sm); font-weight: 600; overflow-wrap: anywhere; }
+.plug-test .chk-row { display: grid; grid-template-columns: 14px minmax(90px, auto) minmax(0, 1fr); gap: 2px 10px; align-items: baseline; padding: 8px 12px; border-top: 1px solid var(--line); font-size: var(--fs-sm); }
+.plug-test .chk-row .g { font-size: 9px; }
+.plug-test .chk-row .m { color: var(--text-2); overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .plug-head { grid-template-columns: minmax(0, 1fr) auto; }
+  .plug-ctl { grid-row: 1; align-self: start; }
+  .plug-desc, .plug-msg { grid-column: 1 / -1; }
+  .plug-body { padding: 12px; margin-left: -4px; margin-right: -4px; }
+  .plug-test .chk-row { grid-template-columns: 14px minmax(0, 1fr); }
+  .plug-test .chk-row .m { grid-column: 2; }
+  .plug-actions .btn { flex: 1 1 auto; }
+  .plug-actions .src { flex-basis: 100%; }
+}
+
 </style>
 </head>
 <body>
@@ -1200,6 +1395,13 @@ pre.code {
   <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></symbol>
   <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M15 8l2 2"/></symbol>
+  <symbol id="i-puzzle" viewBox="0 0 24 24"><path d="M10 4a2 2 0 1 1 4 0v2h4a1 1 0 0 1 1 1v4h-2a2 2 0 1 0 0 4h2v4a1 1 0 0 1-1 1h-4v-2a2 2 0 1 0-4 0v2H6a1 1 0 0 1-1-1v-4h2a2 2 0 1 0 0-4H5V7a1 1 0 0 1 1-1h4z"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 8h4M3 12h4M3 16h4M17 8h4M17 12h4M17 16h4"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
 </svg>
 
@@ -1239,7 +1441,8 @@ pre.code {
           <button class="tab" role="tab" data-panel="alerts" aria-selected="false" title="Alerts"><svg class="ic" aria-hidden="true"><use href="#i-bell"/></svg><span class="tl">Alerts</span><span class="count" id="c-alerts"></span></button>
           <button class="tab" role="tab" data-panel="hosts" aria-selected="false" title="Hosts"><svg class="ic" aria-hidden="true"><use href="#i-server"/></svg><span class="tl">Hosts</span><span class="count" id="c-hosts"></span></button>
           <button class="tab" role="tab" data-panel="ports" aria-selected="false" title="Ports"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg><span class="tl">Ports</span></button>
-          <button class="tab" role="tab" data-panel="admin" aria-selected="false" title="Admin"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg><span class="tl">Admin</span></button>
+          <button class="tab" role="tab" data-panel="admin" data-overflow aria-selected="false" title="Admin"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg><span class="tl">Admin</span></button>
+          <button class="tab tab-more" role="tab" id="tab-more" type="button" aria-selected="false" aria-haspopup="true" aria-expanded="false" aria-controls="more-sheet" title="More"><svg class="ic" aria-hidden="true"><use href="#i-more"/></svg><span class="tl">More</span></button>
         </nav>
         <div class="actions-bar">
           <button class="ibtn search-btn" id="search" type="button" title="Search (⌘K or /)" aria-label="Search"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg><span class="lab">Search</span><kbd>⌘K</kbd></button>
@@ -1340,6 +1543,13 @@ pre.code {
       -->
       <section id="panel-admin" class="hidden">
         <div id="admin"></div>
+        <!-- Plugins: outside #admin, which is rebuilt on every refresh, so a
+             settings form being typed into survives the page's polling. -->
+        <section id="plugins" class="setting hidden" aria-labelledby="plugins-h">
+          <h4 id="plugins-h"><svg class="ic" aria-hidden="true"><use href="#i-puzzle"/></svg>Plugins<span class="plug-count" id="plugins-count"></span></h4>
+          <p>Optional integrations. Each stays off until you enable it here, and settings are checked before they are saved.</p>
+          <div id="plugins-list"></div>
+        </section>
       </section>
     </div>
 
@@ -1347,6 +1557,12 @@ pre.code {
     <div id="view-host" class="hidden">
       <button class="back" id="host-back" type="button"><svg class="ic sm" aria-hidden="true"><use href="#i-back"/></svg>Hosts</button>
       <div id="host-body"></div>
+    </div>
+
+    <!-- ===================================================== plugin view -->
+    <!-- A plugin's tab, drawn from the declarative view it returns. -->
+    <div id="view-plugin" class="hidden">
+      <div id="plugin-body"></div>
     </div>
     </main>
   </div>
@@ -1364,6 +1580,8 @@ pre.code {
   </div>
 </div>
 
+<div id="more-scrim" class="more-scrim hidden"></div>
+<div id="more-sheet" class="more-sheet hidden" role="menu" aria-label="More sections"></div>
 <div id="tip" class="tip hidden" role="status" aria-live="polite"></div>
 <div id="scrim" class="scrim hidden"></div>
 <aside id="drawer" class="drawer hidden" role="dialog" aria-modal="true" aria-label="Details">
@@ -1501,15 +1719,29 @@ pre.code {
 
   function readHash() {
     var h = (location.hash || "").replace(/^#\/?/, "");
+    // Plugin views carry their parameters as a query after the path:
+    // #/p/<id>/<view>?k=v. Nothing else uses one.
+    var query = "", qi = h.indexOf("?");
+    if (qi >= 0) { query = h.slice(qi + 1); h = h.slice(0, qi); }
     var parts = h.split("/").filter(Boolean);
     if (parts[0] === "host" && parts[1]) {
       return { view: "host", host: decodeURIComponent(parts[1]), tab: route.tab };
     }
+    if (parts[0] === "p" && parts[1]) {
+      var params = "";
+      try { params = new URLSearchParams(query).toString(); } catch (e) { params = ""; }
+      return { view: "plugin", plugin: safeDecode(parts[1]), pview: parts[2] ? safeDecode(parts[2]) : "",
+               params: params, tab: route.tab, host: "" };
+    }
     if (parts[0] === "home" || parts[0] === "alerts" || parts[0] === "hosts" ||
         parts[0] === "ports" || parts[0] === "admin") {
-      return { view: "fleet", tab: parts[0], host: "" };
+      return { view: "fleet", tab: parts[0], host: "", sub: parts[0] === "admin" && parts[1] === "plugins" ? "plugins" : "" };
     }
     return { view: "fleet", tab: "home", host: "" };
+  }
+
+  function safeDecode(s) {
+    try { return decodeURIComponent(s); } catch (e) { return ""; }
   }
 
   function go(hash) {
@@ -1520,25 +1752,32 @@ pre.code {
   function applyRoute() {
     var previous = route;
     route = readHash();
+    closeMore();
     $("view-fleet").classList.toggle("hidden", route.view !== "fleet");
     $("view-host").classList.toggle("hidden", route.view !== "host");
+    $("view-plugin").classList.toggle("hidden", route.view !== "plugin");
+    if (route.view !== "plugin") leavePluginView();
+    syncNavSelection();
 
     if (route.view === "fleet") {
-      Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (t) {
-        var on = t.dataset.panel === route.tab;
-        t.setAttribute("aria-selected", on ? "true" : "false");
-        $("panel-" + t.dataset.panel).classList.toggle("hidden", !on);
+      Array.prototype.forEach.call(document.querySelectorAll(".tab[data-panel]"), function (t) {
+        $("panel-" + t.dataset.panel).classList.toggle("hidden", t.dataset.panel !== route.tab);
       });
       // Refetched on open rather than on every page refresh: the coverage
       // numbers must reflect the alerts as they are now, not as they were
       // when the page was first loaded.
-      if (route.tab === "admin") loadSettings();
+      if (route.tab === "admin") {
+        loadSettings();
+        loadPlugins(route.sub === "plugins" && (previous.view !== "fleet" || previous.tab !== "admin" || previous.sub !== "plugins"));
+      }
       if (previous.view !== "fleet" || previous.tab !== route.tab) routeIn($("panel-" + route.tab));
       return;
     }
-    Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (t) {
-      t.setAttribute("aria-selected", t.dataset.panel === "hosts" ? "true" : "false");
-    });
+    if (route.view === "plugin") {
+      openPluginView();
+      if (previous.view !== "plugin" || previous.plugin !== route.plugin) routeIn($("view-plugin"));
+      return;
+    }
     openHost(route.host);
     if (previous.view !== "host" || previous.host !== route.host) routeIn($("view-host"));
   }
@@ -3477,7 +3716,7 @@ pre.code {
       body: body === undefined ? undefined : JSON.stringify(body)
     }).then(function (r) {
       if (r.status === 401) { var e = new Error("unauthorized"); e.unauthorized = true; throw e; }
-      if (!r.ok) return r.json().catch(function () { return {}; }).then(function (j) { var e = new Error(j.error || ("HTTP " + r.status)); e.status = r.status; if (r.status === 403 && extraHeaders) sessionStorage.removeItem(OPERATOR_KEY); throw e; });
+      if (!r.ok) return r.json().catch(function () { return {}; }).then(function (j) { var e = new Error(j.error || ("HTTP " + r.status)); e.status = r.status; e.fields = j.fields; if (r.status === 403 && extraHeaders) sessionStorage.removeItem(OPERATOR_KEY); throw e; });
       return r.json();
     });
   }
@@ -3533,6 +3772,9 @@ pre.code {
 
     ["home", "alerts", "hosts", "ports", "admin"].forEach(function (t) {
       items.push({ tag: "go", what: t.charAt(0).toUpperCase() + t.slice(1), hash: "#/" + t });
+    });
+    pluginTabs().forEach(function (p) {
+      items.push({ tag: "go", what: p.tab.title, sub: p.name !== p.tab.title ? p.name : "", hash: "#/p/" + encodeURIComponent(p.id) });
     });
 
     (data.hosts || []).forEach(function (h) {
@@ -4407,6 +4649,931 @@ pre.code {
     });
   }
 
+  // ------------------------------------------------------------ plugins
+  //
+  // A plugin describes its UI as data: a settings schema for Admin and views
+  // built from six block types. Nothing a plugin sends is ever treated as
+  // markup. Every string is set as text on nodes built here; links are rebuilt
+  // from a validated view name or an http(s) URL; images are fetched with the
+  // bearer and shown from blob URLs, because an <img> cannot send the header.
+
+  var PLUGIN_ID = /^[a-z][a-z0-9-]{1,31}$/, VIEW_NAME = /^[a-z][a-z0-9-]{0,31}$/, IMAGE_REF = /^[A-Za-z0-9._-]{1,128}$/;
+  var TONE_PILL = { ok: "good", info: "info", warn: "warning", crit: "critical", muted: "" };
+  var TONE_WORD = { ok: "ok", info: "info", warn: "warning", crit: "critical" };
+  var TONE_GLYPH = { ok: GLYPH.good, info: GLYPH.info, warn: GLYPH.warning, crit: GLYPH.critical };
+
+  function tone(t) { return Object.prototype.hasOwnProperty.call(TONE_PILL, t) ? t : ""; }
+  function str(v) { return v == null || typeof v === "object" ? "" : String(v); }
+
+  // A DOM node from a tag, attributes and children. "text" sets textContent;
+  // "on<event>" adds a listener. Strings among the children become text nodes.
+  function h(tag, attrs, kids) {
+    var el = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) {
+      var v = attrs[k];
+      if (v == null || v === false) return;
+      if (k === "class") el.className = v;
+      else if (k === "text") el.textContent = v;
+      else if (k.slice(0, 2) === "on") el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? "" : String(v));
+    });
+    (kids || []).forEach(function (c) {
+      if (c != null && c !== false && c !== "") el.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+    });
+    return el;
+  }
+
+  // An icon by name. Plugins name one of the sprite's symbols; anything else
+  // gets the generic plugin piece.
+  function iconNode(name, cls) {
+    var n = /^[a-z0-9-]{1,32}$/.test(name || "") ? name : "";
+    var sym = n && document.getElementById("i-" + n);
+    if (!sym || sym.tagName.toLowerCase() !== "symbol") n = "puzzle";
+    var NS = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(NS, "svg"), use = document.createElementNS(NS, "use");
+    svg.setAttribute("class", "ic" + (cls ? " " + cls : ""));
+    svg.setAttribute("aria-hidden", "true");
+    use.setAttribute("href", "#i-" + n);
+    svg.appendChild(use);
+    return svg;
+  }
+
+  function pill(text, t, glyph) {
+    var cls = TONE_PILL[tone(t)] || "";
+    return h("span", { class: "pill" + (cls ? " " + cls : "") }, [
+      glyph ? h("span", { class: "glyph", "aria-hidden": "true", text: glyph }) : null, text]);
+  }
+
+  // ------------------------------------------------------------ plugin nav
+
+  function pluginTabs() {
+    return (capabilities.plugins || []).filter(function (p) {
+      return p && PLUGIN_ID.test(p.id) && p.tab && str(p.tab.title);
+    });
+  }
+  function pluginInfo(id) {
+    return pluginTabs().filter(function (p) { return p.id === id; })[0] || null;
+  }
+  function pluginViews(info) {
+    return ((info && info.tab && info.tab.views) || []).filter(function (v) { return v && VIEW_NAME.test(v.name); });
+  }
+
+  // Plugin tabs follow the built-ins. On a phone the bar keeps four built-ins
+  // and a More button; Admin and the plugin tabs move into its menu.
+  function renderPluginNav() {
+    var nav = document.querySelector(".tabs"), more = $("tab-more");
+    Array.prototype.forEach.call(nav.querySelectorAll("[data-plugin]"), function (t) { t.remove(); });
+    var tabs = pluginTabs();
+    tabs.forEach(function (p) {
+      nav.insertBefore(h("button", { class: "tab", role: "tab", type: "button", "data-plugin": p.id, "data-overflow": true,
+        "aria-selected": "false", title: str(p.tab.title) }, [iconNode(p.tab.icon), h("span", { class: "tl", text: str(p.tab.title) })]), more);
+    });
+    nav.classList.toggle("has-more", tabs.length > 0);
+    syncNavSelection();
+  }
+
+  function syncNavSelection() {
+    var overflowOn = false;
+    Array.prototype.forEach.call(document.querySelectorAll(".tab[data-panel], .tab[data-plugin]"), function (t) {
+      var on = t.dataset.plugin
+        ? route.view === "plugin" && route.plugin === t.dataset.plugin
+        : (route.view === "fleet" && route.tab === t.dataset.panel) || (route.view === "host" && t.dataset.panel === "hosts");
+      t.setAttribute("aria-selected", on ? "true" : "false");
+      if (on && t.hasAttribute("data-overflow")) overflowOn = true;
+    });
+    $("tab-more").setAttribute("aria-selected", overflowOn ? "true" : "false");
+  }
+
+  document.querySelector(".tabs").addEventListener("click", function (e) {
+    var t = e.target.closest ? e.target.closest("[data-plugin]") : null;
+    if (t) { go(pluginHash(t.dataset.plugin, pluginLastView[t.dataset.plugin] || "", "")); return; }
+    if (e.target.closest && e.target.closest("#tab-more")) {
+      if ($("more-sheet").classList.contains("hidden")) openMore(); else closeMore(true);
+    }
+  });
+
+  function openMore() {
+    var sheet = $("more-sheet"), items = [];
+    pluginTabs().forEach(function (p) {
+      items.push(h("button", { type: "button", role: "menuitem", "data-more": "#/p/" + encodeURIComponent(p.id),
+        "aria-current": route.view === "plugin" && route.plugin === p.id ? "page" : null },
+        [iconNode(p.tab.icon), str(p.tab.title)]));
+    });
+    if (items.length) items.push(h("hr", { "aria-hidden": "true" }));
+    items.push(h("button", { type: "button", role: "menuitem", "data-more": "#/admin",
+      "aria-current": route.view === "fleet" && route.tab === "admin" ? "page" : null }, [iconNode("sliders"), "Admin"]));
+    sheet.replaceChildren.apply(sheet, items);
+    reveal(sheet, sheetFrames(), motion.d2, motion.out);
+    $("more-scrim").classList.remove("hidden");
+    $("tab-more").setAttribute("aria-expanded", "true");
+    var first = sheet.querySelector('[aria-current="page"]') || sheet.querySelector("button");
+    if (first) first.focus();
+  }
+  function closeMore(refocus) {
+    if ($("more-sheet").classList.contains("hidden")) return;
+    conceal($("more-sheet"), sheetFrames().reverse(), motion.d1);
+    $("more-scrim").classList.add("hidden");
+    $("tab-more").setAttribute("aria-expanded", "false");
+    if (refocus) $("tab-more").focus();
+  }
+  $("more-scrim").addEventListener("click", function () { closeMore(false); });
+  $("more-sheet").addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("[data-more]") : null;
+    if (!b) return;
+    var id = /^#\/p\/(.+)$/.exec(b.dataset.more);
+    closeMore(false);
+    go(id ? pluginHash(safeDecode(id[1]), pluginLastView[safeDecode(id[1])] || "", "") : b.dataset.more);
+  });
+  $("more-sheet").addEventListener("keydown", function (e) {
+    var list = Array.prototype.slice.call($("more-sheet").querySelectorAll("button"));
+    var i = list.indexOf(document.activeElement);
+    if (e.key === "Escape" || e.key === "Tab") { e.preventDefault(); e.stopPropagation(); closeMore(true); return; }
+    var next = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: list.length - 1 }[e.key];
+    if (next === undefined) return;
+    e.preventDefault();
+    list[(next + list.length) % list.length].focus();
+  });
+  window.addEventListener("resize", function () { if (!phone()) closeMore(false); });
+
+  // ------------------------------------------------------------ plugin views
+
+  var pluginLastView = {};   // plugin id -> the tab view last shown, for its nav button
+  var pv = { key: "", plugin: "", view: "", data: null, err: null, at: 0, ctrl: null, timer: 0 };
+  var pvImg = { plugin: "", urls: {}, waiting: {}, ctrl: null, observer: null };
+
+  function pluginHash(id, view, params) {
+    return "#/p/" + encodeURIComponent(id) + (view ? "/" + encodeURIComponent(view) : "") + (params ? "?" + params : "");
+  }
+
+  function leavePluginView() {
+    if (!pv.key) return;
+    if (pv.ctrl) pv.ctrl.abort();
+    clearTimeout(pv.timer);
+    pv = { key: "", plugin: "", view: "", data: null, err: null, at: 0, ctrl: null, timer: 0 };
+    releaseImages();
+  }
+
+  // Opens the view the route names, or the tab's first view. Re-applying the
+  // same route (the page's own 60-second refresh) leaves it alone: a view
+  // refreshes on its own schedule or when the refresh button is pressed.
+  function openPluginView() {
+    var info = pluginInfo(route.plugin), views = pluginViews(info);
+    var view = route.pview || (views[0] && views[0].name) || "";
+    var key = route.plugin + "/" + view + "?" + route.params;
+    if (key === pv.key) { if (!pv.data && !pv.err && !pv.ctrl) fetchPluginView(); return; }
+    if (pv.plugin !== route.plugin) releaseImages();
+    if (pv.ctrl) pv.ctrl.abort();
+    clearTimeout(pv.timer);
+    pv = { key: key, plugin: route.plugin, view: view, params: route.params, data: null, err: null, at: 0, ctrl: null, timer: 0 };
+    if (views.some(function (v) { return v.name === view; })) pluginLastView[route.plugin] = view === views[0].name ? "" : view;
+    renderPluginView();
+    if (!PLUGIN_ID.test(route.plugin) || !VIEW_NAME.test(view)) {
+      pv.err = { status: 404, message: "not found" };
+      renderPluginView();
+      return;
+    }
+    fetchPluginView();
+  }
+
+  function fetchPluginView() {
+    if (!pv.key || !VIEW_NAME.test(pv.view) || !PLUGIN_ID.test(pv.plugin)) return;
+    clearTimeout(pv.timer);
+    if (pv.ctrl) pv.ctrl.abort();
+    var ctrl = pv.ctrl = new AbortController();
+    var q = pv.params ? "?" + pv.params : "";
+    api("/plugins/" + encodeURIComponent(pv.plugin) + "/views/" + encodeURIComponent(pv.view) + q, ctrl.signal).then(function (v) {
+      if (pv.ctrl !== ctrl) return;
+      pv.data = v && typeof v === "object" ? v : { blocks: [] };
+      pv.err = null; pv.at = Date.now();
+    }, function (err) {
+      if (pv.ctrl !== ctrl || err.name === "AbortError") return;
+      if (err.unauthorized) { showGate(true); return; }
+      pv.err = err;
+    }).then(function () {
+      if (pv.ctrl !== ctrl) return;
+      pv.ctrl = null;
+      if (!$("app").classList.contains("hidden")) renderPluginView();
+      schedulePluginRefresh();
+    });
+  }
+
+  // refresh_seconds re-fetches the view, and only while the page is visible.
+  // A failed refresh keeps its schedule, so the view comes back on its own.
+  function refreshEvery() {
+    var s = pv.data && +pv.data.refresh_seconds;
+    return s > 0 ? Math.max(5, s) * 1000 : 0;
+  }
+  function schedulePluginRefresh() {
+    clearTimeout(pv.timer);
+    var every = refreshEvery();
+    if (!every || document.hidden || !pv.key || pv.err && pv.err.status === 404) return;
+    var wait = Math.max(0, every - (Date.now() - (pv.at || Date.now())));
+    pv.timer = setTimeout(fetchPluginView, pv.err ? every : wait);
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (route.view !== "plugin" || !pv.key) return;
+    if (document.hidden) { clearTimeout(pv.timer); return; }
+    var every = refreshEvery();
+    if (every && Date.now() - pv.at >= every) fetchPluginView(); else schedulePluginRefresh();
+  });
+
+  function renderPluginView() {
+    var root = $("plugin-body"), info = pluginInfo(pv.plugin), views = pluginViews(info);
+    var name = info ? str(info.tab.title) || str(info.name) : pv.plugin;
+    var inTab = views.some(function (v) { return v.name === pv.view; });
+    var v = pv.data, err = pv.err;
+    // Keep keyboard focus across a refresh: links carry a stable key.
+    var focusKey = document.activeElement && root.contains(document.activeElement) ? document.activeElement.getAttribute("data-fk") : null;
+
+    var head = [];
+    if (!inTab && views.length) {
+      var back = pluginLastView[pv.plugin] || views[0].name;
+      var backTitle = (views.filter(function (x) { return x.name === back; })[0] || views[0]).title || name;
+      head.push(h("button", { class: "back", type: "button", "data-fk": "back", onclick: function () { go(pluginHash(pv.plugin, back === views[0].name ? "" : back, "")); } },
+        [iconNode("back", "sm"), str(backTitle) || name]));
+    }
+    var title = inTab || !v ? name : str(v.title) || name;
+    var bar = [h("h2", { text: title })];
+    if (inTab && views.length > 1) {
+      bar.push(h("div", { class: "seg", role: "group", "aria-label": name + " views" }, views.map(function (x) {
+        return h("button", { class: "btn", type: "button", "aria-pressed": x.name === pv.view ? "true" : "false", "data-fk": "seg-" + x.name,
+          onclick: function () { go(pluginHash(pv.plugin, x.name === views[0].name ? "" : x.name, "")); } }, [str(x.title) || x.name]);
+      })));
+    }
+    if (v) {
+      var when = Date.parse(v.updated_at) || pv.at, every = refreshEvery();
+      var stamp = "Updated " + new Date(when).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      if (err) stamp = "Refresh failed · showing " + new Date(when).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      bar.push(h("span", { class: "pv-stamp" + (err ? " stale" : ""), title: new Date(when).toLocaleString() + (every ? " · refreshes every " + Math.round(every / 1000) + " s" : "") }, [stamp]));
+    }
+    head.push(h("div", { class: "pv-head" }, bar));
+
+    var body;
+    if (!v && !err) {
+      body = h("div"); body.innerHTML = skeleton(3);
+    } else if (!v && err && (err.status === 404)) {
+      body = stateBox(name + " is not enabled", "Enable it in Admin → Plugins to see this view.",
+        h("button", { class: "btn", type: "button", onclick: function () { go("#/admin/plugins"); } }, [iconNode("puzzle", "sm"), "Open plugins"]));
+    } else if (!v && err) {
+      body = stateBox(name + " could not load this view", err.message,
+        h("button", { class: "btn", type: "button", onclick: fetchPluginView }, [iconNode("refresh", "sm"), "Try again"]), true);
+    } else {
+      var blocks = Array.isArray(v.blocks) ? v.blocks : [];
+      body = h("div", { class: "pv-blocks" });
+      if (err) body.appendChild(notice("warn", "Could not refresh: " + err.message + ". Showing the last view that loaded."));
+      if (!blocks.length) body.appendChild(stateBox("Nothing to show yet", name + " returned an empty view."));
+      appendBlocks(body, blocks, 1, "b");
+    }
+    root.replaceChildren.apply(root, head.concat([body]));
+    hydratePluginImages(root);
+    if (focusKey) {
+      var again = root.querySelector('[data-fk="' + CSS.escape(focusKey) + '"]');
+      if (again) again.focus({ preventScroll: true });
+    }
+  }
+
+  function stateBox(big, small, action, bad) {
+    return h("div", { class: "empty" + (bad ? " bad" : ""), role: bad ? "alert" : null }, [
+      h("div", { class: "big" }, [bad ? h("span", { class: "t-crit", "aria-hidden": "true", text: GLYPH.critical }) : null, big]),
+      small ? h("div", { class: bad ? "why-text" : "", text: small }) : null,
+      action ? h("div", { class: "actions" }, [action]) : null]);
+  }
+
+  function notice(t, text) {
+    t = tone(t) || "info";
+    return h("div", { class: "banner pv-notice t-" + t, role: t === "crit" || t === "warn" ? "note" : null }, [
+      iconNode(t === "ok" ? "check" : t === "crit" || t === "warn" ? "shield" : "info", "sm"),
+      TONE_WORD[t] ? h("span", { class: "sr-only", text: TONE_WORD[t] + ": " }) : null,
+      h("span", { text: str(text) })]);
+  }
+
+  // Lists side by side when two or more follow each other; everything else
+  // takes the full width.
+  function appendBlocks(parent, blocks, depth, fk) {
+    var i = 0;
+    while (i < blocks.length) {
+      var j = i;
+      while (j < blocks.length && blocks[j] && blocks[j].type === "list") j++;
+      if (j - i >= 2) {
+        for (var k = i; k < j; k++) {
+          var el = renderBlock(blocks[k], depth, fk + k);
+          if (el) { if (!((j - i) % 2 === 1 && k === j - 1)) el.classList.add("pv-half"); parent.appendChild(el); }
+        }
+        i = j; continue;
+      }
+      var one = renderBlock(blocks[i], depth, fk + i);
+      if (one) parent.appendChild(one);
+      i++;
+    }
+  }
+
+  function renderBlock(b, depth, fk) {
+    if (!b || typeof b !== "object") return null;
+    switch (b.type) {
+      case "stats": return statsBlock(b);
+      case "list": return listBlock(b, fk);
+      case "table": return tableBlock(b);
+      case "posters": return postersBlock(b, fk);
+      case "notice": return notice(b.tone, b.text);
+      case "section":
+        if (depth > 2) return null;
+        var sec = h("section", { class: "pv-section" }, [str(b.title) ? h("h3", { text: str(b.title) }) : null]);
+        var inner = h("div", { class: "pv-blocks" });
+        appendBlocks(inner, Array.isArray(b.blocks) ? b.blocks : [], depth + 1, fk + "-");
+        sec.appendChild(inner);
+        return sec;
+    }
+    return null;
+  }
+
+  function items(b, key) { return Array.isArray(b[key]) ? b[key].filter(function (x) { return x && typeof x === "object"; }) : []; }
+
+  function cardFor(b, n) {
+    var c = h("div", { class: "pv-card" });
+    if (str(b.title)) c.appendChild(h("h3", {}, [str(b.title), n != null ? h("span", { class: "n", text: String(n) }) : null]));
+    return c;
+  }
+
+  function statsBlock(b) {
+    return h("div", { class: "kpis pv-stats" }, items(b, "items").map(function (s) {
+      var t = tone(s.tone), word = TONE_WORD[t];
+      return h("div", { class: "tile" }, [
+        h("div", { class: "label", text: str(s.label) }),
+        h("div", { class: "value" + (t ? " " + t : "") }, [str(s.value) || "—",
+          word && t !== "info" ? h("span", { class: "sr-only", text: " (" + word + ")" }) : null]),
+        str(s.hint) ? h("div", { class: "sub", text: str(s.hint) }) : null]);
+    }));
+  }
+
+  function progressNode(p, t) {
+    if (!p || typeof p !== "object") return null;
+    var v = +p.value;
+    if (!isFinite(v)) return null;
+    v = Math.max(0, Math.min(1, v));
+    var label = str(p.label);
+    var track = h("div", { class: "pv-track" + (tone(t) ? " t-" + tone(t) : ""), role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100",
+      "aria-valuenow": String(Math.round(v * 100)), "aria-valuetext": label || Math.round(v * 100) + "%" }, [h("i")]);
+    track.firstChild.style.width = (v * 100).toFixed(1) + "%";
+    return { track: track, label: label };
+  }
+
+  // A link from a plugin: another of its own views, or an http(s) URL that
+  // opens in a new tab with no opener and no referrer. Anything else is dropped.
+  function linkOf(l) {
+    if (!l || typeof l !== "object") return null;
+    if (typeof l.view === "string" && VIEW_NAME.test(l.view)) {
+      var sp = new URLSearchParams();
+      if (l.params && typeof l.params === "object") Object.keys(l.params).forEach(function (k) {
+        var x = l.params[k];
+        if (x != null && typeof x !== "object") sp.append(k, String(x));
+      });
+      return { href: pluginHash(pv.plugin, l.view, sp.toString()) };
+    }
+    if (typeof l.href === "string") {
+      try {
+        var u = new URL(l.href);
+        if (u.protocol === "http:" || u.protocol === "https:") return { href: u.href, external: true };
+      } catch (e) { /* not a URL */ }
+    }
+    return null;
+  }
+  function wrapLink(link, cls, kids, fk) {
+    if (!link) return h("div", { class: cls }, kids);
+    var a = h("a", { class: cls, "data-fk": fk }, kids);
+    a.href = link.href;
+    if (link.external) { a.target = "_blank"; a.rel = "noopener noreferrer"; a.appendChild(h("span", { class: "sr-only", text: " (opens in a new tab)" })); }
+    return a;
+  }
+
+  function imageNode(ref) {
+    if (typeof ref !== "string" || !IMAGE_REF.test(ref)) return null;
+    var img = h("img", { alt: "", decoding: "async", "data-pimg": ref });
+    if (typeof pvImg.urls[ref] === "string") { img.src = pvImg.urls[ref]; img.removeAttribute("data-pimg"); }
+    return img;
+  }
+
+  function listBlock(b, fk) {
+    var list = items(b, "items"), card = cardFor(b, list.length ? list.length : null);
+    if (!list.length) { card.appendChild(h("div", { class: "pv-empty", text: str(b.empty) || "Nothing to show" })); return card; }
+    list.forEach(function (it, i) {
+      var t = tone(it.tone), link = linkOf(it.link), prog = progressNode(it.progress, t);
+      var img = imageNode(it.image);
+      var badges = items(it, "badges").filter(function (x) { return str(x.text); });
+      var line = h("div", { class: "pv-line" }, [
+        t && t !== "muted" ? h("span", { class: "pv-glyph t-" + t, "aria-hidden": "true", text: TONE_GLYPH[t] }) : null,
+        t && TONE_WORD[t] ? h("span", { class: "sr-only", text: TONE_WORD[t] + ": " }) : null,
+        h("span", { class: "pv-title", title: str(it.title), text: str(it.title) || "—" }),
+        str(it.meta) || (link && link.external) ? h("span", { class: "pv-meta" }, [str(it.meta), link && link.external ? iconNode("external") : null]) : null]);
+      var main = h("div", { class: "pv-main" }, [line,
+        str(it.subtitle) ? h("div", { class: "pv-sub", title: str(it.subtitle), text: str(it.subtitle) }) : null,
+        badges.length ? h("div", { class: "pv-badges" }, badges.map(function (x) { return pill(str(x.text), x.tone); })) : null,
+        prog ? h("div", { class: "pv-prog" }, [prog.track, prog.label ? h("span", { class: "pl", "aria-hidden": "true", text: prog.label }) : null]) : null]);
+      card.appendChild(wrapLink(link, "pv-item", [img || it.image ? h("div", { class: "pv-thumb" }, [img]) : null, main], fk + "." + i));
+    });
+    return card;
+  }
+
+  function postersBlock(b, fk) {
+    var list = items(b, "items"), card = cardFor(b, list.length ? list.length : null);
+    if (!list.length) { card.appendChild(h("div", { class: "pv-empty", text: str(b.empty) || "Nothing to show" })); return card; }
+    card.appendChild(h("div", { class: "pv-posters" }, list.map(function (it, i) {
+      var link = linkOf(it.link), bd = it.badge && typeof it.badge === "object" && str(it.badge.text) ? it.badge : null;
+      var prog = progressNode(it.progress, bd && bd.tone);
+      var art = h("div", { class: "pv-art" }, [imageNode(it.image), h("span", { class: "ini", "aria-hidden": "true", text: str(it.title) }),
+        bd ? pill(str(bd.text), bd.tone) : null, prog ? prog.track : null]);
+      return wrapLink(link, "pv-poster", [art,
+        h("span", { class: "t", title: str(it.title), text: str(it.title) || "—" }),
+        str(it.subtitle) ? h("span", { class: "s", title: str(it.subtitle), text: str(it.subtitle) }) : null,
+        prog && prog.label ? h("span", { class: "s", text: prog.label }) : null], fk + "." + i);
+    })));
+    return card;
+  }
+
+  var NUMERIC = { number: 1, bytes: 1, duration_s: 1, percent: 1 };
+  function durShort(s) {
+    s = Math.round(s);
+    if (s < 60) return s + "s";
+    if (s < 3600) return Math.floor(s / 60) + "m" + (s % 60 && s < 600 ? " " + (s % 60) + "s" : "");
+    return dur(s);
+  }
+  // Table cells by column format. Times read relative within a week and as a
+  // date beyond it, with the exact time on hover.
+  function cellText(v, fmt) {
+    if (v == null || v === "" || typeof v === "object") return { text: "—" };
+    var n = typeof v === "number" ? v : NaN;
+    switch (fmt) {
+      case "number": return { text: isFinite(n) ? n.toLocaleString() : String(v) };
+      case "bytes": return { text: isFinite(n) ? (n === 0 ? "0 B" : bytes(n)) : String(v) };
+      case "duration_s": return { text: isFinite(n) ? (n === 0 ? "0s" : durShort(n)) : String(v) };
+      case "percent": return { text: isFinite(n) ? (Math.abs(n * 100) < 10 && n !== 0 ? (n * 100).toFixed(1) : Math.round(n * 100)) + "%" : String(v) };
+      case "time":
+        var t = typeof v === "number" ? v * 1000 : Date.parse(v);
+        if (!isFinite(t)) return { text: String(v) };
+        var d = new Date(t), diff = Math.abs(Date.now() - t);
+        return { text: diff < 7 * 86400e3 ? (t > Date.now() ? fromNow(d.toISOString()) : ago(d.toISOString()))
+          : d.toLocaleDateString([], { month: "short", day: "numeric", year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric" }),
+          title: d.toLocaleString() };
+    }
+    return { text: String(v) };
+  }
+
+  function tableBlock(b) {
+    var cols = items(b, "columns").filter(function (c) { return typeof c.key === "string"; });
+    var rows = items(b, "rows"), card = cardFor(b, rows.length ? rows.length : null);
+    if (!rows.length || !cols.length) { card.appendChild(h("div", { class: "pv-empty", text: str(b.empty) || "Nothing to show" })); return card; }
+    function align(c) { return c.align === "right" || c.align === "left" ? c.align : NUMERIC[c.format] ? "right" : "left"; }
+    var table = h("table", {}, [
+      h("thead", {}, [h("tr", {}, cols.map(function (c) { return h("th", { class: align(c) === "right" ? "num" : null, scope: "col", text: str(c.label) || c.key }); }))]),
+      h("tbody", {}, rows.map(function (r) {
+        return h("tr", {}, cols.map(function (c) {
+          var ct = cellText(r[c.key], c.format);
+          return h("td", { class: align(c) === "right" ? "num" : (c.format || "text") === "text" ? "txt" : null,
+            title: ct.title || (ct.text.length > 40 ? ct.text : null), text: ct.text });
+        }));
+      }))]);
+    card.appendChild(h("div", { class: "scroll", tabindex: "0", role: "region", "aria-label": str(b.title) || "Table" }, [table]));
+    return card;
+  }
+
+  // Images load as they near the screen, once per page for a given ref, and
+  // are dropped with their blob URLs when the reader leaves the plugin.
+  function hydratePluginImages(root) {
+    var imgs = root.querySelectorAll("img[data-pimg]");
+    if (!imgs.length) return;
+    if (pvImg.plugin !== pv.plugin) { releaseImages(); pvImg.plugin = pv.plugin; }
+    if (!pvImg.ctrl) pvImg.ctrl = new AbortController();
+    if (!pvImg.observer && "IntersectionObserver" in window) {
+      pvImg.observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          pvImg.observer.unobserve(e.target);
+          loadPluginImage(e.target);
+        });
+      }, { rootMargin: "400px 0px" });
+    }
+    Array.prototype.forEach.call(imgs, function (img) {
+      if (pvImg.observer) pvImg.observer.observe(img); else loadPluginImage(img);
+    });
+  }
+
+  function loadPluginImage(img) {
+    var ref = img.getAttribute("data-pimg"), id = pvImg.plugin, urls = pvImg.urls;
+    img.removeAttribute("data-pimg");
+    if (!ref || urls[ref] === null) return;
+    if (typeof urls[ref] === "string") { img.src = urls[ref]; return; }
+    if (pvImg.waiting[ref]) { pvImg.waiting[ref].push(img); return; }
+    pvImg.waiting[ref] = [img];
+    var ctrl = pvImg.ctrl, headers = {};
+    if (token) headers.Authorization = "Bearer " + token;
+    fetch("/plugins/" + encodeURIComponent(id) + "/images/" + encodeURIComponent(ref), { headers: headers, signal: ctrl.signal })
+      .then(function (r) {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.blob();
+      })
+      .then(function (blob) {
+        if (ctrl !== pvImg.ctrl) return;
+        if (!/^image\//.test(blob.type)) throw new Error("not an image");
+        var url = URL.createObjectURL(blob);
+        urls[ref] = url;
+        (pvImg.waiting[ref] || []).forEach(function (el) { if (el.isConnected) el.src = url; });
+      })
+      .catch(function () {
+        // A missing picture is ordinary: the placeholder underneath stays.
+        if (ctrl === pvImg.ctrl) urls[ref] = null;
+      })
+      .then(function () { if (ctrl === pvImg.ctrl) delete pvImg.waiting[ref]; });
+  }
+
+  function releaseImages() {
+    if (pvImg.ctrl) pvImg.ctrl.abort();
+    if (pvImg.observer) pvImg.observer.disconnect();
+    Object.keys(pvImg.urls).forEach(function (k) { if (typeof pvImg.urls[k] === "string") URL.revokeObjectURL(pvImg.urls[k]); });
+    pvImg = { plugin: "", urls: {}, waiting: {}, ctrl: null, observer: null };
+  }
+
+  // ------------------------------------------------------------ Admin → Plugins
+  //
+  // The section lives outside #admin, which is rebuilt on every refresh: a
+  // form someone is typing into must survive the page's own polling. Each
+  // plugin keeps its form state here, and a refresh only rebuilds a form
+  // that is closed, or open but untouched and unfocused.
+
+  var plugins = { list: null, err: "", missing: false, ui: {}, scroll: false };
+  var PLUG_STATE = {
+    disabled: ["", "○", "disabled"], unconfigured: ["warning", GLYPH.warning, "needs setup"],
+    ok: ["good", GLYPH.good, "ok"], error: ["critical", GLYPH.critical, "error"], unavailable: ["", "–", "unavailable"]
+  };
+
+  function loadPlugins(scroll) {
+    if (scroll) plugins.scroll = true;
+    if (!plugins.list && !plugins.err) renderPlugins();
+    return api("/plugins").then(function (list) {
+      plugins.list = (Array.isArray(list) ? list : []).filter(function (p) { return p && PLUGIN_ID.test(p.id); });
+      plugins.err = ""; plugins.missing = false;
+    }, function (err) {
+      if (err.unauthorized) { showGate(true); return; }
+      // An API built before plugins existed: no section at all.
+      if (err.status === 404) plugins.missing = true;
+      else plugins.err = err.message;
+    }).then(renderPlugins);
+  }
+
+  function plugUI(id) {
+    return plugins.ui[id] || (plugins.ui[id] = { open: false, vals: {}, secret: {}, errors: {}, msg: "", bad: false, test: null, busy: "", enable: false, el: null });
+  }
+  function plugByID(id) { return (plugins.list || []).filter(function (p) { return p.id === id; })[0]; }
+
+  function renderPlugins() {
+    var sec = $("plugins");
+    sec.classList.toggle("hidden", plugins.missing);
+    if (plugins.missing) return;
+    var listEl = $("plugins-list");
+    if (!plugins.list) {
+      if (plugins.err) listEl.replaceChildren(h("div", { class: "src plug-status bad", role: "alert", text: "Could not load plugins: " + plugins.err }));
+      else { listEl.innerHTML = skeleton(2); }
+      return;
+    }
+    var list = plugins.list;
+    $("plugins-count").textContent = list.length ? list.filter(function (p) { return p.enabled; }).length + " of " + list.length + " enabled" : "";
+    if (!list.length) { listEl.replaceChildren(h("div", { class: "src", text: "This build has no plugins." })); return; }
+    if (plugins.err) listEl.querySelectorAll(".plug-status.bad[role=alert]").forEach(function (x) { x.remove(); });
+    if (listEl.querySelector(".skel")) listEl.replaceChildren();
+
+    var keep = {};
+    list.forEach(function (p, i) {
+      keep[p.id] = true;
+      var ui = plugUI(p.id);
+      if (!ui.el || !ui.el.row.isConnected) buildPlugRow(p, ui);
+      if (listEl.children[i] !== ui.el.row) listEl.insertBefore(ui.el.row, listEl.children[i] || null);
+      updatePlugRow(p, ui);
+      var b = ui.el.body;
+      if (ui.open && !ui.busy && !plugDirty(p, ui) && !b.contains(document.activeElement)) renderPlugForm(p, ui);
+    });
+    Array.prototype.slice.call(listEl.children).forEach(function (c) { if (!keep[c.getAttribute("data-plug")]) c.remove(); });
+    if (plugins.scroll) { plugins.scroll = false; sec.scrollIntoView({ block: "start" }); }
+  }
+
+  function buildPlugRow(p, ui) {
+    var id = p.id, bodyID = "plug-body-" + id;
+    var el = ui.el = {};
+    el.name = h("span", { class: "plug-title" });
+    el.ver = h("span", { class: "ver" });
+    el.chip = h("span");
+    el.desc = h("div", { class: "plug-desc" });
+    el.msg = h("div", { class: "plug-msg" });
+    el.expand = h("button", { class: "btn", type: "button", "aria-expanded": "false", "aria-controls": bodyID,
+      onclick: function () { ui.open = !ui.open; showPlugBody(plugByID(id), ui); } }, ["Settings", iconNode("chevron", "sm")]);
+    el.sw = h("button", { class: "switch", type: "button", role: "switch", "aria-checked": "false",
+      onclick: function () { togglePlugin(id); } });
+    el.body = h("div", { class: "plug-body hidden", id: bodyID });
+    el.row = h("article", { class: "plug", "data-plug": id, "aria-labelledby": "plug-name-" + id }, [
+      h("div", { class: "plug-head" }, [
+        h("div", { class: "plug-name", id: "plug-name-" + id }, [el.name, el.ver, el.chip]),
+        h("div", { class: "plug-ctl" }, [el.expand, el.sw]),
+        el.desc, el.msg]),
+      el.body]);
+  }
+
+  function updatePlugRow(p, ui) {
+    var el = ui.el, st = PLUG_STATE[p.state] || ["", "•", str(p.state) || "unknown"];
+    var name = str(p.name) || p.id;
+    el.name.textContent = name;
+    el.ver.textContent = str(p.version) ? "v" + str(p.version) : "";
+    el.chip.replaceChildren(pill(st[2], { good: "ok", warning: "warn", critical: "crit" }[st[0]] || "", st[1]));
+    el.desc.textContent = str(p.description);
+    var msg = str(p.message), when = p.checked_at ? ago(p.checked_at) : "";
+    if (p.state === "unavailable" && !msg) msg = "Not in this build. Its saved settings are kept.";
+    if (p.state === "unconfigured" && !msg) msg = "Required settings are missing.";
+    if (p.state === "ok" && !msg && when && when !== "—") msg = "Checked " + when;
+    else if (msg && when && when !== "—" && p.state !== "unavailable") msg += " · " + when;
+    el.msg.textContent = msg;
+    el.msg.classList.toggle("bad", p.state === "error");
+    el.sw.setAttribute("aria-checked", p.enabled ? "true" : "false");
+    el.sw.setAttribute("aria-label", "Enable " + name);
+    el.sw.disabled = p.state === "unavailable" || ui.busy === "toggle";
+    if (ui.busy === "toggle") el.sw.setAttribute("aria-busy", "true"); else el.sw.removeAttribute("aria-busy");
+    var hasForm = (p.settings_schema || []).length > 0 && p.state !== "unavailable";
+    el.expand.classList.toggle("hidden", !hasForm);
+    if (!hasForm) ui.open = false;
+    el.expand.setAttribute("aria-label", name + " settings");
+    showPlugBody(p, ui, true);
+  }
+
+  function showPlugBody(p, ui, quiet) {
+    var el = ui.el;
+    el.expand.setAttribute("aria-expanded", ui.open ? "true" : "false");
+    if (!ui.open) { el.body.classList.add("hidden"); return; }
+    var wasHidden = el.body.classList.contains("hidden");
+    if (wasHidden || !el.body.firstChild) renderPlugForm(p, ui);
+    el.body.classList.remove("hidden");
+    if (wasHidden && !quiet) animateIn(el.body, [{ opacity: 0, transform: "translateY(-4px)" }, { opacity: 1, transform: "none" }], motion.d2);
+  }
+
+  // The value a field shows before anyone edits it: the stored value, else
+  // the schema's default.
+  function fieldInitial(f, p) {
+    var s = (p.settings || {})[f.key];
+    if (f.type === "secret") return "";
+    if (s === undefined || s === null || typeof s === "object") s = f.default;
+    if (f.type === "bool") return s === true;
+    return s == null ? "" : String(s);
+  }
+  function secretSet(f, p) { var s = (p.settings || {})[f.key]; return !!(s && typeof s === "object" && s.set); }
+  function fieldVal(f, p, ui) { return Object.prototype.hasOwnProperty.call(ui.vals, f.key) ? ui.vals[f.key] : fieldInitial(f, p); }
+
+  // Only what changed is sent: an absent key keeps the stored value, null
+  // clears it. A saved secret is sent only when it is replaced or cleared.
+  function plugChanges(p, ui) {
+    var out = {};
+    (p.settings_schema || []).forEach(function (f) {
+      if (f.type === "secret") {
+        var mode = ui.secret[f.key] || "keep", typed = ui.vals[f.key] || "";
+        if (mode === "clear") out[f.key] = null;
+        else if (typed && (mode === "replace" || !secretSet(f, p))) out[f.key] = typed;
+        return;
+      }
+      if (!Object.prototype.hasOwnProperty.call(ui.vals, f.key)) return;
+      var v = ui.vals[f.key];
+      if (v === fieldInitial(f, p)) return;
+      if (f.type === "bool") out[f.key] = !!v;
+      else if (f.type === "number") { var t = String(v).trim(); out[f.key] = t === "" ? null : isFinite(+t) ? +t : t; }
+      else { var s = String(v).trim(); out[f.key] = s === "" ? null : s; }
+    });
+    return out;
+  }
+  function plugDirty(p, ui) { return !!p && Object.keys(plugChanges(p, ui)).length > 0; }
+
+  function renderPlugForm(p, ui) {
+    if (!p) return;
+    var body = ui.el.body, id = p.id, schema = (p.settings_schema || []).filter(function (f) { return f && /^[a-z][a-z0-9_]{0,39}$/.test(f.key); });
+    var groups = [], byName = {};
+    schema.forEach(function (f) {
+      var g = str(f.group);
+      if (!byName[g]) { byName[g] = []; groups.push(g); }
+      byName[g].push(f);
+    });
+    // Ungrouped fields lead, under "General" only when there are groups too.
+    groups.sort(function (a, b) { return (a === "" ? 0 : 1) - (b === "" ? 0 : 1); });
+    var named = groups.some(function (g) { return g; });
+
+    var fieldsets = groups.map(function (g) {
+      return h("fieldset", { class: "plug-group" }, [named ? h("legend", { text: g || "General" }) : null].concat(byName[g].map(function (f) { return plugField(p, ui, f); })));
+    });
+    var saveLabel = ui.enable ? "Save and enable" : "Save";
+    var form = h("form", { class: "form plug-form", novalidate: true, "aria-label": (str(p.name) || id) + " settings",
+      onsubmit: function (e) { e.preventDefault(); savePlugin(id); } }, [
+      ui.enable ? h("div", { class: "plug-note", role: "status" }, [iconNode("info", "sm"), h("span", { text: "Fill in the required settings to enable " + (str(p.name) || id) + "." })]) : null,
+      schema.some(function (f) { return f.required; }) ? h("p", { class: "legend-note", text: "* required" }) : null,
+      h("div", { class: "plug-groups" }, fieldsets),
+      h("div", { class: "plug-actions" }, [
+        h("button", { class: "btn", type: "button", "data-plug-test": id, disabled: !!ui.busy, onclick: function () { testPlugin(id); } },
+          [iconNode("activity", "sm"), ui.busy === "test" ? "Testing…" : "Test"]),
+        h("button", { class: "btn primary", type: "submit", "data-plug-save": id, disabled: !!ui.busy || (!ui.enable && !plugDirty(p, ui)) },
+          [ui.busy === "save" ? "Saving…" : saveLabel]),
+        h("button", { class: "btn" + (plugDirty(p, ui) || ui.enable ? "" : " hidden"), type: "button", "data-plug-revert": id, disabled: !!ui.busy,
+          onclick: function () { ui.vals = {}; ui.secret = {}; ui.errors = {}; ui.msg = ""; ui.enable = false; renderPlugForm(plugByID(id), ui); } }, ["Revert"]),
+        h("span", { class: "src plug-status" + (ui.bad ? " bad" : ""), role: "status", "aria-live": "polite", text: ui.msg })]),
+      h("div", { class: "plug-test", "aria-live": "polite", "aria-busy": ui.busy === "test" ? "true" : null }, plugTestNodes(ui.test))]);
+    body.replaceChildren(form);
+    if (!ui.busy && ui.refocus) {
+      var again = body.querySelector("[data-plug-" + ui.refocus + "]");
+      ui.refocus = "";
+      if (again && again.disabled) again = body.querySelector(".plug-actions button:not([disabled])");
+      if (again) again.focus();
+    }
+  }
+
+  function plugTestNodes(t) {
+    if (!t) return [];
+    var checks = Array.isArray(t.checks) ? t.checks.filter(function (c) { return c && typeof c === "object"; }) : [];
+    var head = h("div", { class: "head" }, [
+      h("span", { class: t.ok ? "t-ok" : "t-crit", "aria-hidden": "true", text: t.ok ? GLYPH.good : GLYPH.critical }),
+      (t.ok ? "Test passed" : "Test failed") + (str(t.message) ? ": " + str(t.message) : "")]);
+    return [head].concat(checks.map(function (c) {
+      return h("div", { class: "chk-row" }, [
+        h("span", { class: "g " + (c.ok ? "t-ok" : "t-crit"), "aria-hidden": "true", text: c.ok ? GLYPH.good : GLYPH.critical }),
+        h("span", {}, [h("span", { class: "sr-only", text: c.ok ? "Passed: " : "Failed: " }), str(c.name)]),
+        h("span", { class: "m", text: str(c.message) })]);
+    }));
+  }
+
+  function plugField(p, ui, f) {
+    var id = p.id, fid = "pf-" + id + "-" + f.key, err = str((ui.errors || {})[f.key]);
+    var helpID = fid + "-help", errID = fid + "-err";
+    var described = [str(f.help) ? helpID : "", err ? errID : ""].filter(Boolean).join(" ") || null;
+    var label = h("label", { for: fid, id: fid + "-label" }, [str(f.label) || f.key,
+      f.required ? h("span", { class: "req", "aria-hidden": "true", text: "*" }) : null,
+      f.required ? h("span", { class: "sr-only", text: " (required)" }) : null]);
+    function changed(v) {
+      ui.vals[f.key] = v;
+      if (ui.errors[f.key]) { delete ui.errors[f.key]; var e = $(errID); if (e) e.textContent = ""; var inp = $(fid); if (inp) inp.removeAttribute("aria-invalid"); }
+      syncPlugActions(id, ui);
+    }
+    var control;
+    var common = { id: fid, "aria-describedby": described, "aria-invalid": err ? "true" : null, "aria-required": f.required ? "true" : null };
+    if (f.type === "bool") {
+      var cb = h("input", Object.assign({ type: "checkbox" }, common, { onchange: function () { changed(cb.checked); } }));
+      cb.checked = fieldVal(f, p, ui) === true;
+      control = h("label", { class: "chk", for: null }, [cb, str(f.label) || f.key]);
+      label = null;
+    } else if (f.type === "select") {
+      var sel = h("select", Object.assign({}, common, { onchange: function () { changed(sel.value); } }));
+      var cur = fieldVal(f, p, ui);
+      sel.appendChild(h("option", { value: "", text: f.required ? "Choose…" : "None" }));
+      (Array.isArray(f.options) ? f.options : []).forEach(function (o) {
+        if (!o || typeof o !== "object") return;
+        var value = str(o.value !== undefined ? o.value : o.Value), text = str(o.label !== undefined ? o.label : o.Label) || value;
+        sel.appendChild(h("option", { value: value, text: text }));
+      });
+      sel.value = cur;
+      control = sel;
+    } else if (f.type === "secret") {
+      control = secretControl(p, ui, f, fid, common, changed);
+    } else {
+      var attrs = { type: f.type === "url" ? "url" : f.type === "number" ? "text" : "text", spellcheck: "false", autocomplete: "off",
+        placeholder: str(f.placeholder) || (f.default != null && typeof f.default !== "object" ? "Default: " + str(f.default) : null) };
+      if (f.type === "url") attrs.inputmode = "url";
+      if (f.type === "number") attrs.inputmode = "decimal";
+      var inp = h("input", Object.assign(attrs, common, { oninput: function () { changed(inp.value); } }));
+      inp.value = fieldVal(f, p, ui);
+      control = inp;
+    }
+    return h("div", { class: "pf" }, [label, control,
+      str(f.help) ? h("div", { class: "help", id: helpID, text: str(f.help) }) : null,
+      h("div", { class: "ferr", id: errID, text: err })]);
+  }
+
+  // A saved secret is never shown. It reads "Saved", with Replace and Clear;
+  // replacing opens an empty password field, clearing sends null on save.
+  function secretControl(p, ui, f, fid, common, changed) {
+    var mode = ui.secret[f.key] || "keep", set = secretSet(f, p);
+    function rerender() { var box = $(fid + "-box"); if (box) box.replaceWith(secretControl(p, ui, f, fid, common, changed)); syncPlugActions(p.id, ui); }
+    function input(extra) {
+      var inp = h("input", Object.assign({ type: "password", autocomplete: "new-password", spellcheck: "false",
+        placeholder: str(f.placeholder) || (set ? "New value" : null) }, common, { oninput: function () { changed(inp.value); } }));
+      inp.value = ui.vals[f.key] || "";
+      return extra ? h("div", { class: "secret-row" }, [inp, extra]) : inp;
+    }
+    var node;
+    if (!set) node = input(null);
+    else if (mode === "replace") {
+      node = input(h("button", { class: "btn", type: "button", onclick: function () { ui.secret[f.key] = "keep"; delete ui.vals[f.key]; rerender(); var b = $(fid + "-replace"); if (b) b.focus(); } }, ["Cancel"]));
+    } else {
+      var clearing = mode === "clear";
+      node = h("div", { class: "secret-saved" + (clearing ? " clearing" : ""), role: "group", "aria-labelledby": fid + "-label",
+        "aria-describedby": common["aria-describedby"], "data-invalid": common["aria-invalid"] ? true : null }, [
+        iconNode("key", "sm"),
+        h("span", { class: "st" }, [clearing ? "Will be cleared on save" : "Saved", h("span", { class: "sr-only", text: clearing ? "" : " (hidden)" })]),
+        clearing
+          ? h("button", { class: "btn", type: "button", onclick: function () { ui.secret[f.key] = "keep"; rerender(); } }, ["Undo"])
+          : h("button", { class: "btn", type: "button", id: fid + "-replace", "aria-label": "Replace " + (str(f.label) || f.key),
+              onclick: function () { ui.secret[f.key] = "replace"; rerender(); var i = $(fid); if (i) i.focus(); } }, ["Replace"]),
+        clearing ? null : h("button", { class: "btn", type: "button", "aria-label": "Clear " + (str(f.label) || f.key),
+              onclick: function () { ui.secret[f.key] = "clear"; delete ui.vals[f.key]; rerender(); } }, ["Clear"])]);
+    }
+    return h("div", { id: fid + "-box" }, [node]);
+  }
+
+  function syncPlugActions(id, ui) {
+    var p = plugByID(id), dirty = plugDirty(p, ui), body = ui.el.body;
+    var save = body.querySelector("[data-plug-save]"), revert = body.querySelector("[data-plug-revert]");
+    if (save) save.disabled = !!ui.busy || (!ui.enable && !dirty);
+    if (revert) revert.classList.toggle("hidden", !dirty && !ui.enable);
+  }
+
+  function plugSetMsg(ui, text, bad) {
+    ui.msg = text; ui.bad = !!bad;
+    var s = ui.el.body.querySelector(".plug-status");
+    if (s) { s.textContent = text; s.classList.toggle("bad", !!bad); }
+  }
+
+  function applyPlugin(item) {
+    if (!item || item.id == null) return;
+    plugins.list = (plugins.list || []).map(function (x) { return x.id === item.id ? item : x; });
+    // The nav follows at once; the next full refresh confirms it.
+    var tabs = (capabilities.plugins || []).filter(function (x) { return x && x.id !== item.id; });
+    if (item.enabled && item.tab) tabs.push({ id: item.id, name: item.name, tab: item.tab });
+    var order = (plugins.list || []).map(function (x) { return x.id; });
+    tabs.sort(function (a, b) { return order.indexOf(a.id) - order.indexOf(b.id); });
+    capabilities.plugins = tabs;
+    renderPluginNav();
+  }
+
+  function plugFail(p, ui, err, verb) {
+    if (err.unauthorized) { showGate(true); return; }
+    ui.errors = err.fields && typeof err.fields === "object" ? err.fields : {};
+    var names = Object.keys(ui.errors);
+    plugSetMsg(ui, names.length ? (err.message && err.message !== "HTTP 422" ? err.message.charAt(0).toUpperCase() + err.message.slice(1).replace(/\.$/, "") + ". " : "") + "Nothing was saved." : "Could not " + verb + ": " + err.message, true);
+    if (names.length) {
+      ui.open = true;
+      renderPlugForm(p, ui);
+      showPlugBody(p, ui);
+      var first = (p.settings_schema || []).filter(function (f) { return ui.errors[f.key]; })[0];
+      var el = first && ($("pf-" + p.id + "-" + first.key) || $("pf-" + p.id + "-" + first.key + "-replace"));
+      if (el) el.focus();
+    }
+  }
+
+  function togglePlugin(id) {
+    var p = plugByID(id), ui = plugUI(id);
+    if (!p || ui.busy) return;
+    var on = !p.enabled, body = { enabled: on };
+    if (on && ui.open && plugDirty(p, ui)) body.settings = plugChanges(p, ui);
+    ui.busy = "toggle"; updatePlugRow(p, ui);
+    write("/plugins/" + encodeURIComponent(id), "PUT", body).then(function (item) {
+      ui.busy = ""; ui.enable = false; ui.errors = {};
+      if (body.settings) { ui.vals = {}; ui.secret = {}; }
+      applyPlugin(item);
+      plugSetMsg(ui, on ? "Enabled." : "Disabled. Settings are kept.");
+      renderPlugins();
+      if (ui.open) renderPlugForm(plugByID(id), ui);
+    }, function (err) {
+      ui.busy = "";
+      if (on && err.status === 422) ui.enable = true;
+      updatePlugRow(p, ui);
+      plugFail(p, ui, err, on ? "enable" : "disable");
+    });
+  }
+
+  function savePlugin(id) {
+    var p = plugByID(id), ui = plugUI(id);
+    if (!p || ui.busy) return;
+    var body = { settings: plugChanges(p, ui) };
+    if (ui.enable) body.enabled = true;
+    ui.busy = "save"; ui.refocus = "save"; plugSetMsg(ui, ""); renderPlugForm(p, ui);
+    write("/plugins/" + encodeURIComponent(id), "PUT", body).then(function (item) {
+      var enabled = ui.enable;
+      ui.busy = ""; ui.vals = {}; ui.secret = {}; ui.errors = {}; ui.enable = false;
+      applyPlugin(item);
+      ui.msg = enabled ? "Saved and enabled." : "Saved."; ui.bad = false;
+      renderPlugins();
+      renderPlugForm(plugByID(id), ui);
+    }, function (err) {
+      ui.busy = "";
+      renderPlugForm(p, ui);
+      plugFail(p, ui, err, "save");
+    });
+  }
+
+  function testPlugin(id) {
+    var p = plugByID(id), ui = plugUI(id);
+    if (!p || ui.busy) return;
+    ui.busy = "test"; ui.test = null; ui.refocus = "test"; plugSetMsg(ui, "");
+    renderPlugForm(p, ui);
+    var ctrl = new AbortController(), timer = setTimeout(function () { ctrl.abort(); }, 30000);
+    write("/plugins/" + encodeURIComponent(id) + "/test", "POST", { settings: plugChanges(p, ui) }, ctrl.signal).then(function (r) {
+      ui.test = r && typeof r === "object" ? r : { ok: false, message: "empty answer" };
+    }, function (err) {
+      if (err.unauthorized) { showGate(true); return; }
+      if (err.fields && typeof err.fields === "object") ui.errors = err.fields;
+      ui.test = { ok: false, message: err.name === "AbortError" ? "no answer within 30 s" : err.message };
+    }).then(function () {
+      clearTimeout(timer);
+      ui.busy = "";
+      renderPlugForm(plugByID(id) || p, ui);
+    });
+  }
+
   // ------------------------------------------------------------ loading
 
   var loading = null, refreshTimer = null;
@@ -4444,7 +5611,7 @@ pre.code {
                         api("/silences"), api("/storage/runs"), api("/capabilities")])
       .then(function (r) {
         data.alerts = r[0]; data.hosts = r[1]; data.ports = r[2];
-        data.services = r[3]; data.silences = r[4]; data.runStorage = r[5]; capabilities = r[6];
+        data.services = r[3]; data.silences = r[4]; data.runStorage = r[5]; capabilities = r[6] || {};
         hostCache = {};   // a refresh must not leave a host page showing an old run
         $("gate").classList.add("hidden");
         $("app").classList.remove("hidden");
@@ -4453,6 +5620,7 @@ pre.code {
         $("meta").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         $("meta").parentNode.title = "Updated " + new Date().toLocaleString();
         renderAll();
+        renderPluginNav();
         refreshAgents();
         applyRoute();
       })
@@ -4984,7 +6152,12 @@ pre.code {
     load();
   });
 
-  $("refresh").addEventListener("click", function () { load(); });
+  $("refresh").addEventListener("click", function () {
+    // The 60-second refresh leaves a plugin view to its own schedule; a
+    // press of the button is a request to reload whatever is on screen.
+    if (route.view === "plugin") fetchPluginView();
+    load();
+  });
   $("home").addEventListener("click", function () { go("#/"); });
   $("host-back").addEventListener("click", function () { go("#/hosts"); });
 
@@ -5007,7 +6180,7 @@ pre.code {
     try { localStorage.setItem("homelab-inventory.theme", next); } catch (e) { /* private mode */ }
   });
 
-  Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (tab) {
+  Array.prototype.forEach.call(document.querySelectorAll(".tab[data-panel]"), function (tab) {
     tab.addEventListener("click", function () { go("#/" + tab.dataset.panel); });
   });
 
