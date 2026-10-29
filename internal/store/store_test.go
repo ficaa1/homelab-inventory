@@ -184,7 +184,7 @@ func TestSaveRejectsUnsafeHostname(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, host := range []string{"../escape", "a/b", "", ".", "..", "agent-offers.jsonl", "actions-audit.jsonl", "settings", "packagesets", "state-notify.json", "state-settings.json", ".actions-temp"} {
+	for _, host := range []string{"../escape", "a/b", "", ".", "..", "agent-offers.jsonl", "actions-audit.jsonl", "settings", "packagesets", "plugins", "state-notify.json", "state-settings.json", ".actions-temp"} {
 		if _, err := s.Save(testInventory(host, time.Now())); err == nil {
 			t.Errorf("Save(hostname=%q): expected error, got nil", host)
 		}

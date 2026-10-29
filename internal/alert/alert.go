@@ -69,7 +69,8 @@ func ParseLevel(s string) (Level, bool) {
 
 // Alert is one thing worth looking at on one host.
 type Alert struct {
-	Host string `json:"host"`
+	Host   string `json:"host"`
+	Source string `json:"source,omitempty"`
 	// Rule is a stable identifier ("zfs.pool.scrub"). It is what a UI groups
 	// on, or what a future silence/acknowledge feature would key off — the
 	// Message is prose and will be reworded, the Rule should not be.
