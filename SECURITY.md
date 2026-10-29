@@ -1,58 +1,43 @@
 # Security
 
-Use GitHub private vulnerability reporting (Security → Report a vulnerability) on this repository.
+Report a vulnerability privately: **Security → Report a vulnerability** on this
+repository.
 
-After setup the API requires `API_TOKEN`, the dashboard/admin and MCP credential.
-`AGENT_TOKEN` only authorizes inventory posts and release manifest/artifact
-reads. `API_TOKEN` also works on those routes; if no agent token is configured,
-startup warns that agents then hold an admin credential. `OPERATOR_TOKEN` only
-authorizes release offers and restart execution; unset disables those routes.
-Every configured token must be at least 32 characters and all three must differ.
-Protect credentials at rest and use HTTPS. Agents refuse HTTP beyond loopback
-unless explicitly permitted with `--allow-http` or `ALLOW_HTTP=1`. Open development
-mode only binds to a literal loopback address.
+## Keep in mind
 
-Agent inventories are untrusted input. Shared agent credentials do not establish
-host identity: a compromised agent can impersonate another host, falsify facts,
-and consume storage, but cannot use its agent token for admin or operator routes.
-Restart resolution only considers `ACTIONS_HOST` inventories and configured exact
-Compose paths, then checks container names against live Docker before execution.
-Inventories and the confirm/hash flow do not authenticate the reporting host.
-Docker socket access grants broad host control even when the socket mount is
-read-only; enable it only on a trusted API host, with protected operator authority.
-The container runs non-root by default; socket access needs the socket group or
-an explicit root override. Restart actions are off by default.
+- **Claim it quickly.** For 10 minutes after first start, whoever opens the
+  dashboard becomes its admin. Keep it on your own network, or behind an SSH
+  tunnel, until you have claimed it.
+- **Use HTTPS** beyond a trusted network. Tokens and Add host codes travel with
+  each request, and the Add host command runs as root.
+- **Three tokens, three jobs.** `API_TOKEN` runs the dashboard, `AGENT_TOKEN` only
+  sends reports, `OPERATOR_TOKEN` only promotes updates and restarts containers.
+  Give hosts the agent token, never the API token.
+- **Hosts are not verified.** Agents share one token, so a compromised host can
+  pretend to be another and send false data. It cannot use the admin features.
+  If one is compromised, change `AGENT_TOKEN` on the API and on every agent.
+- **Restart actions mean Docker access**, and Docker access means control of that
+  host. They are off by default.
+- **Inventories are sensitive.** Secrets are removed when collected, but not every
+  secret can be recognised, and the data maps your network. Protect the data
+  folder and its backups.
+- **Keep signing keys** off the API server.
 
-Keep signing keys outside the API and public release tree; distribute public keys
-through a trusted channel. Redaction happens at collection but cannot recognize
-every secret or sensitive topology detail. Treat inventories, logs and backups
-as sensitive. Restrict network access and preserve private filesystem permissions.
+## Details
 
-First-run setup uses a **first-visitor claim window** lasting 10 minutes after
-process start. Until claimed, inventory/admin routes refuse requests. Anyone
-who can reach the API during that window can become its administrator. Restrict
-access to a trusted network or SSH tunnel until claiming finishes; do not expose
-an unclaimed instance to the Internet. Expiry requires a process restart. A stored
-or environment API token disables claiming. Credentials are shown only in the
-successful claim response, stored at 0600, and never logged. Protect volume backups.
+**Add host codes** are single-use, expire after 15 minutes, are stored hashed,
+and are limited to 20 at a time and 10 tries a minute per address. Redeeming one
+hands out the shared agent token.
 
-Enrollment codes are bearer credentials: nine unambiguous random characters,
-SHA256-hashed at rest, single-use, expire after 15 minutes, and limited to 20
-outstanding codes. Redemption hands out the shared AGENT_TOKEN, not per-host
-identity. Anyone redeeming a stolen code gains agent authority until that token
-is rotated. Protect command history and do not share live codes. Redemption has
-uniform 403 failures and a limit of 10 attempts/minute per socket peer IP (429
-with Retry-After). Proxy clients share the proxy's limit; forwarded client-IP
-headers are ignored. The bounded in-memory rate-limit table resets at restart;
-code use/expiry persists. This is a local abuse bound, not distributed DDoS protection.
+**Behind a reverse proxy**, set `PUBLIC_URL` to your HTTPS address. Set
+`TRUSTED_PROXY=1` only if the proxy overwrites `X-Forwarded-*` headers and the
+API cannot be reached directly.
 
-The served installer runs code with root authority and fetches binaries plus
-SHA256SUMS from the same API origin. Verification detects corruption, not an
-attacker controlling that origin or plaintext transport. A network attacker
-can replace an HTTP installer and checksums, steal enrollment codes/tokens, and
-execute code as root. Prefer HTTPS; the generated HTTP command deliberately
-includes --allow-http for trusted-LAN use. Inspect the script before execution.
-Set PUBLIC_URL to a trusted HTTPS origin behind a proxy. Set TRUSTED_PROXY=1 only
-when the proxy overwrites forwarded headers and direct API access is blocked;
-strict Host validation prevents shell injection but does not authenticate DNS
-or select which otherwise valid hostname a visitor should trust.
+**Plain HTTP** is refused by agents beyond loopback unless you pass
+`--allow-http` or `ALLOW_HTTP=1`. Anyone on that network could then read tokens,
+or swap the installer and its checksums.
+
+**Development mode** (`-allow-unauthenticated`) only listens on loopback.
+
+**Plugins** run inside the API and are trusted code. They can only reach the
+addresses you configured for them, and cannot send HTML or scripts to the page.

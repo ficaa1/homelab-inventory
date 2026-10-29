@@ -1,6 +1,8 @@
 # Alerts
 
-Alerts identify a host, rule and subject. Default thresholds are below. A silence matches those fields and may have an expiry and reason; create or remove one in the dashboard or through `/silences`. Silencing suppresses notification and counts, but leaves the finding visible; it does not resolve the underlying condition.
+The alerts below are built in. To hide one you already know about, **silence** it
+from the alert (optionally until a date, with a reason). A silenced alert stays
+visible but stops counting and notifying; it does not fix anything.
 
 | Rule | Severity | Trigger |
 | --- | --- | --- |
