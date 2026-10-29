@@ -1618,8 +1618,10 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     });
   }
 
+  // Every request names the page (the CSRF check for cookie sessions); the
+  // bearer, when there is one, is what the server goes by.
   function api(path, signal) {
-    var headers = {};
+    var headers = {"X-Requested-By": "homelab-inventory"};
     if (token) headers.Authorization = "Bearer " + token;
     return fetch(path, { headers: headers, cache: "no-store", signal: signal }).then(function (r) {
       if (r.status === 401) { var e = new Error("unauthorized"); e.unauthorized = true; throw e; }
@@ -2868,7 +2870,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     }
     var controller = new AbortController();
     var timer = setTimeout(function () { controller.abort(); }, path.endsWith("/execute") ? 90000 : 10000);
-    var headers = Object.assign({"Content-Type": "application/json"}, extra);
+    var headers = Object.assign({"Content-Type": "application/json", "X-Requested-By": "homelab-inventory"}, extra);
     if (token && !headers.Authorization) headers.Authorization = "Bearer " + token;
     return fetch(path, {method: "POST", headers: headers, body: JSON.stringify(body), signal: controller.signal, cache: "no-store"})
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return {status: r.status, body: j}; }); })
@@ -2947,7 +2949,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   function pollRestartHealth(session, attempt) {
     if (!restartVisible(session) || document.hidden) return;
     var controller = restartHealthController = new AbortController(), timer = setTimeout(function () { controller.abort(); }, 3000);
-    fetch("/healthz", {cache: "no-store", signal: controller.signal}).then(function (r) {
+    fetch("/healthz", {cache: "no-store", signal: controller.signal, headers: {"X-Requested-By": "homelab-inventory"}}).then(function (r) {
       if (!r.ok) throw new Error("offline");
       if (restartVisible(session) && $("restart-health")) $("restart-health").textContent = "API online · check Docker";
       if (restartVisible(session)) loadActionLog();
@@ -3566,7 +3568,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       if (iconURLs[slug] === null) { drop(img); return; }
       if (iconURLs[slug]) { img.src = iconURLs[slug]; return; }
 
-      var headers = {};
+      var headers = {"X-Requested-By": "homelab-inventory"};
       if (token) headers.Authorization = "Bearer " + token;
       fetch("/icons/" + encodeURIComponent(slug), { headers: headers })
         .then(function (r) {
@@ -3708,7 +3710,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   // Every curation endpoint answers with the rebuilt catalog, so the page never
   // has to guess what the server decided — it just re-renders what came back.
   function write(path, method, body, signal, extraHeaders) {
-    var headers = extraHeaders || {};
+    var headers = Object.assign({"X-Requested-By": "homelab-inventory"}, extraHeaders);
     if (token && !headers.Authorization) headers.Authorization = "Bearer " + token;
     if (body !== undefined) headers["Content-Type"] = "application/json";
     return fetch(path, {
@@ -3717,7 +3719,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     }).then(function (r) {
       if (r.status === 401) { var e = new Error("unauthorized"); e.unauthorized = true; throw e; }
       if (!r.ok) return r.json().catch(function () { return {}; }).then(function (j) { var e = new Error(j.error || ("HTTP " + r.status)); e.status = r.status; e.fields = j.fields; if (r.status === 403 && extraHeaders) sessionStorage.removeItem(OPERATOR_KEY); throw e; });
-      return r.json();
+      return r.status === 204 ? null : r.json();
     });
   }
 
@@ -5163,7 +5165,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     if (typeof urls[ref] === "string") { img.src = urls[ref]; return; }
     if (pvImg.waiting[ref]) { pvImg.waiting[ref].push(img); return; }
     pvImg.waiting[ref] = [img];
-    var ctrl = pvImg.ctrl, headers = {};
+    var ctrl = pvImg.ctrl, headers = {"X-Requested-By": "homelab-inventory"};
     if (token) headers.Authorization = "Bearer " + token;
     fetch("/plugins/" + encodeURIComponent(id) + "/images/" + encodeURIComponent(ref), { headers: headers, signal: ctrl.signal })
       .then(function (r) {
