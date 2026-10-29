@@ -43,6 +43,8 @@ even when the browser also carries a session cookie.
 | `GET /capabilities` | Operator/restart configuration and enabled plugin tabs | API token |
 | `GET /plugins` | Built-in plugin status, schemas and masked settings | API token |
 | `PUT /plugins/{id}` | Enable, disable or merge plugin settings | API token |
+| `GET /uploads/targets` | Configured destinations across enabled upload plugins | API token |
+| `POST /plugins/{id}/upload/{target}` | Stream a raw file to a configured destination | API token |
 | `POST /plugins/{id}/test` | Test temporary merged settings without saving | API token |
 | `GET /plugins/{id}/views/{name}` | Validated declarative plugin view | API token |
 | `GET /plugins/{id}/images/{ref}` | Private plugin image | API token |
@@ -283,3 +285,32 @@ issuer and validates authorization/token/userinfo URLs. It returns 200
 (or `ok:false` with a safe error); bad settings return 422. Only one test runs
 at a time; a second returns 429. This checks discovery, not actual credentials
 or a user's access: complete sign-in to check those.
+
+## Upload requests
+
+`GET /uploads/targets` returns a JSON array sorted by plugin ID and then destination
+order. Each entry has `plugin`, `plugin_name`, `id`, `label`, optional `help` and
+`accept` (lower-case extensions with a dot), and `max_bytes`. An empty `accept`
+allows any extension. Only enabled, configured destinations are listed.
+
+`POST /plugins/{id}/upload/{target}` takes the file as the raw body, with a required
+`Content-Length` and `X-Upload-Name: <percent-encoded UTF-8 filename>` (browser
+`encodeURIComponent`). There is no multipart envelope on this API route. Names
+must be a single component, at most 200 bytes, with no control characters, slashes,
+backslashes or leading dot. Success is `200 {"ok":true,"name":"…","message":"…"}`;
+`name` is the actual stored name when known.
+
+Missing name is 400, invalid name 422, missing length 411, excessive length 413,
+unaccepted extension 415, unknown/disabled plugin or target 404, and destination
+failure 502. Size is limited by the destination and a core maximum of 2 GiB, with
+a bounded streaming reader. Only this route extends read/write deadlines to 30
+minutes; ordinary API limits remain unchanged. Reverse proxies may need matching
+body-size and timeout settings.
+
+Before delivery, the API appends an `intent` to `<data>/upload-audit.jsonl` (0600),
+then an `outcome` with time, actor, plugin, target, original name, consumed byte
+count, streaming SHA-256 and result/error. The intent has the declared length and
+an empty digest; a failed outcome's digest covers only bytes consumed. File
+contents and credentials are never written to the audit. If outcome persistence
+fails, the destination may already have accepted the file; inspect it before
+retrying. There is no automatic retry or audit retention policy.

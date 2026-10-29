@@ -360,7 +360,7 @@ func (s *Store) bumpRunEpoch(_ string) {
 // temporary files. Apply before either run or software ingest creates a directory.
 func reservedHost(host string) bool {
 	switch host {
-	case "agent-offers.jsonl", "actions-audit.jsonl", "settings", "packagesets", "plugins":
+	case "upload-audit.jsonl", "agent-offers.jsonl", "actions-audit.jsonl", "settings", "packagesets", "plugins":
 		return true
 	}
 	return strings.HasPrefix(host, "state-") || strings.HasPrefix(host, ".")

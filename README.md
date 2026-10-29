@@ -5,6 +5,9 @@ A read-only inventory agent, API, and single-file dashboard for a Linux homelab.
 Features include packages, drift and trends, transition-only notifications via Apprise, a service launcher, optional signed agent self-update, optional restart actions, and an MCP bridge for assistants.
 
 Optional read-only [Media plugin](docs/plugins.md#media) for Sonarr, Radarr, Tautulli and Overseerr.
+Optional [Uploads](docs/plugins.md#uploads) to a folder, Paperless-ngx or Calibre-Web,
+and read-only [Network](docs/plugins.md#network) traffic and probe views from Prometheus.
+Configure and enable integrations in Admin → Plugins; each starts disabled.
 
 ## Quick start
 

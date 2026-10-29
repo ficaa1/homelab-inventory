@@ -10,17 +10,21 @@ import (
 
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
 	"github.com/ficaa1/homelab-inventory/internal/plugins/media"
+	"github.com/ficaa1/homelab-inventory/internal/plugins/network"
+	"github.com/ficaa1/homelab-inventory/internal/plugins/uploads"
 )
 
 // builtInPlugins is the explicit composition root. No implicit registration or
 // external plugin loading is supported.
 func builtInPlugins() []plugin.Builtin {
-	return []plugin.Builtin{{ID: "media", New: media.New}}
+	return []plugin.Builtin{{ID: "media", New: media.New}, {ID: "uploads", New: uploads.New}, {ID: "network", New: network.New}}
 }
 func openPlugins(data string, logger *log.Logger) (*plugin.Registry, error) {
 	return plugin.Open(data, builtInPlugins(), logger)
 }
 func (s *server) pluginRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /uploads/targets", s.auth(s.handleUploadTargets))
+	mux.HandleFunc("POST /plugins/{id}/upload/{target}", s.auth(s.handlePluginUpload))
 	mux.HandleFunc("GET /plugins", s.auth(s.handlePlugins))
 	mux.HandleFunc("PUT /plugins/{id}", s.auth(s.handlePluginUpdate))
 	mux.HandleFunc("POST /plugins/{id}/test", s.auth(s.handlePluginTest))

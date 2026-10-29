@@ -200,6 +200,10 @@ if [ "$mode" = docker ]; then
   image=${INSTALL_IMAGE:-ghcr.io/ficaa1/homelab-inventory}
   case $image in *[!a-zA-Z0-9./:_-]*|'') die 'unsupported INSTALL_IMAGE';; esac
   chown 10001:10001 "$state"
+  upload_dir=${UPLOAD_DIR:-$install_dir/uploads}
+  check_path "$upload_dir"
+  (umask 022; mkdir -p "$upload_dir")
+  chown 10001:10001 "$upload_dir"
   cat > "$install_dir/compose.yml.new" <<COMPOSE
 services:
   api:
@@ -209,6 +213,7 @@ services:
       - "$port:8080"
     volumes:
       - "$data:/data"
+      - "\${UPLOAD_DIR:-./uploads}:/uploads"
 COMPOSE
   # Pull before replacing a working deployment's configuration.
   docker compose -p homelab-inventory -f "$install_dir/compose.yml.new" pull
