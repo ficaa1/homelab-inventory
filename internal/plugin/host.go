@@ -161,7 +161,11 @@ func (t hostTransport) RoundTrip(req *http.Request) (resp *http.Response, err er
 	// the ten-second deadline through the request context.
 	wire := req.Clone(req.Context())
 	jar, _ := req.Context().Value(cookieJarKey{}).(http.CookieJar)
-	inner := &http.Client{Transport: guardedTransport{t.h}, CheckRedirect: t.h.client.CheckRedirect, Jar: jar}
+	redirect := t.h.client.CheckRedirect
+	if stop, _ := req.Context().Value(noRedirectKey{}).(bool); stop {
+		redirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	}
+	inner := &http.Client{Transport: guardedTransport{t.h}, CheckRedirect: redirect, Jar: jar}
 	resp, err = inner.Do(wire)
 	if err != nil {
 		if resp != nil {

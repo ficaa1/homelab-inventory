@@ -10,13 +10,14 @@ import (
 
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
 	"github.com/ficaa1/homelab-inventory/internal/plugins/media"
+	"github.com/ficaa1/homelab-inventory/internal/plugins/network"
 	"github.com/ficaa1/homelab-inventory/internal/plugins/uploads"
 )
 
 // builtInPlugins is the explicit composition root. No implicit registration or
 // external plugin loading is supported.
 func builtInPlugins() []plugin.Builtin {
-	return []plugin.Builtin{{ID: "media", New: media.New}, {ID: "uploads", New: uploads.New}}
+	return []plugin.Builtin{{ID: "media", New: media.New}, {ID: "uploads", New: uploads.New}, {ID: "network", New: network.New}}
 }
 func openPlugins(data string, logger *log.Logger) (*plugin.Registry, error) {
 	return plugin.Open(data, builtInPlugins(), logger)
