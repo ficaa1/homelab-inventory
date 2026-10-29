@@ -19,7 +19,8 @@ Usage: get.sh [options]
   --help            Show this help
 INSTALL_BASE_URL overrides the release download directory. For a pinned version
 it must contain that version's assets; for latest it must redirect SHA256SUMS
-and the archives to one consistent release.
+and the archives to one consistent release. INSTALL_IMAGE overrides the
+container image repository (default ghcr.io/ficaa1/homelab-inventory).
 HELP
 }
 die() { echo "get: $*" >&2; exit 1; }
@@ -196,11 +197,13 @@ fi
 mkdir -p "$state"
 chmod 700 "$state"
 if [ "$mode" = docker ]; then
+  image=${INSTALL_IMAGE:-ghcr.io/ficaa1/homelab-inventory}
+  case $image in *[!a-zA-Z0-9./:_-]*|'') die 'unsupported INSTALL_IMAGE';; esac
   chown 10001:10001 "$state"
   cat > "$install_dir/compose.yml.new" <<COMPOSE
 services:
   api:
-    image: ghcr.io/ficaa1/homelab-inventory:$version
+    image: $image:$version
     restart: unless-stopped
     ports:
       - "$port:8080"

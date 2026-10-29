@@ -100,7 +100,8 @@ uninstall Docker, delete images, or remove the system account.
 `INSTALL_BASE_URL` is the directory containing `SHA256SUMS` and release archives;
 it replaces the entire GitHub download base. Use HTTPS and a matching pinned
 version for a private mirror. The installer never accepts or prints tokens:
-configure mirror access outside the script.
+configure mirror access outside the script. `INSTALL_IMAGE` does the same for the
+Docker path: it replaces the image repository (the tag is still the version).
 
 ```sh
 sudo env INSTALL_BASE_URL=https://downloads.example.org/inventory/v0.1.0 \
