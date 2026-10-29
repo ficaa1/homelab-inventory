@@ -19,8 +19,12 @@ jobs:
           go-version: '1.25'
           cache: false
       - name: Validate release tag
+        id: kind
         run: |
           printf '%s\n' "$RELEASE_TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
+          # A suffix (v0.2.0-rc.1) is a pre-release: no :latest image, and
+          # releases/latest/download keeps pointing at the last stable release.
+          case $RELEASE_TAG in *-*) echo prerelease=true;; *) echo prerelease=false;; esac >> "$GITHUB_OUTPUT"
       - name: Verify and package release
         run: |
           umask 022
@@ -41,12 +45,15 @@ jobs:
           push: true
           tags: |
             ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-            ghcr.io/${{ github.repository }}:latest
+            ${{ steps.kind.outputs.prerelease == 'false' && format('ghcr.io/{0}:latest', github.repository) || '' }}
       - name: Publish release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRERELEASE: ${{ steps.kind.outputs.prerelease }}
         run: |
-          gh release create "$RELEASE_TAG" \
+          set --
+          if [ "$PRERELEASE" = true ]; then set -- --prerelease; fi
+          gh release create "$RELEASE_TAG" "$@" \
             "dist/homelab-inventory_${RELEASE_TAG}_linux_amd64.tar.gz" \
             "dist/homelab-inventory_${RELEASE_TAG}_linux_arm64.tar.gz" \
             dist/SHA256SUMS dist/get.sh \
