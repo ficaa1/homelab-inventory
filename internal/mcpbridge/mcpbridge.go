@@ -39,6 +39,8 @@ type Tool struct {
 	// (with a {name} placeholder) and query values for the endpoint.
 	Path    func(args map[string]any) (string, url.Values, error)
 	options []Option
+	schema  map[string]any
+	project func([]byte) ([]byte, error)
 }
 
 // NewTool builds a read-only GET tool. options describe the query parameters
@@ -78,6 +80,9 @@ func NewTool(name, description, path string, options ...Option) Tool {
 
 // InputSchema returns the JSON Schema for the tool's arguments.
 func (t Tool) InputSchema() map[string]any {
+	if t.schema != nil {
+		return t.schema
+	}
 	props := map[string]any{
 		"name": map[string]any{
 			"type":        "string",
@@ -151,6 +156,7 @@ func New(baseURL, token string, in io.Reader, out io.Writer) *Server {
 // contract and the repository's read-only discovery invariant.
 func DefaultTools() []Tool {
 	return []Tool{
+		pluginsListTool(), pluginViewTool(),
 		NewTool("hosts", "List every host the dashboard has collected an inventory for.", "/hosts"),
 		NewTool("host",
 			"Full latest inventory JSON for one host (system, storage, network, services, shares, firewall state). May be large.",
@@ -369,6 +375,12 @@ func (s *Server) call(ctx context.Context, id json.RawMessage, name string, args
 	body, status, err := s.fetch(ctx, u)
 	if err != nil {
 		return rpcError{JSONRPC: "2.0", ID: id, Error: rpcErrorBody{Code: -32603, Message: "fetch failed: " + err.Error()}}
+	}
+	if status < 400 && tool.project != nil {
+		body, err = tool.project(body)
+		if err != nil {
+			return rpcError{JSONRPC: "2.0", ID: id, Error: rpcErrorBody{Code: -32603, Message: "invalid plugin list response"}}
+		}
 	}
 	result := map[string]any{
 		"content": []map[string]any{{

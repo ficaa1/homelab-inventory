@@ -23,5 +23,8 @@ func (s *server) evaluateAlerts(invs []*inventory.Inventory, now time.Time) (*al
 		return nil, err
 	}
 	rep := alert.Evaluate(effective, alert.DefaultThresholds(), now)
+	if s.plugins != nil {
+		rep.Add(s.plugins.Alerts()...)
+	}
 	return rep, nil
 }

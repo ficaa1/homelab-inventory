@@ -250,3 +250,43 @@ func TestStorageToolUsesAuthenticatedGET(t *testing.T) {
 		t.Fatal("storage tool failed")
 	}
 }
+
+func TestPluginToolsReadOnlyProjectionAndQueryEscaping(t *testing.T) {
+	var received string
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Error("plugin tool is not a GET")
+		}
+		received = r.URL.RequestURI()
+		if r.URL.Path == "/plugins" {
+			w.Write([]byte(`[{"id":"sample","settings":{"key":{"set":true}},"settings_schema":[{"key":"key"}]}]`))
+		} else {
+			w.Write([]byte(`{"title":"Now","blocks":[]}`))
+		}
+	}))
+	defer api.Close()
+	srv := New(api.URL, "", nil, nil)
+	for _, tc := range []struct {
+		name string
+		args map[string]any
+		path string
+	}{
+		{"plugins_list", map[string]any{}, "/plugins"},
+		{"plugin_view", map[string]any{"plugin": "sample", "view": "main", "params": map[string]any{"q": "a&b"}}, "/plugins/sample/views/main?q=a%26b"},
+	} {
+		resp := call(t, srv, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{"name": tc.name, "arguments": tc.args}})
+		if resp["error"] != nil || received != tc.path {
+			t.Fatal("plugin GET route or escaping failed")
+		}
+		data, _ := json.Marshal(resp)
+		if tc.name == "plugins_list" && bytes.Contains(data, []byte("settings")) {
+			t.Fatal("MCP list includes settings")
+		}
+	}
+	tool := pluginViewTool()
+	for _, args := range []map[string]any{{"plugin": "../sample", "view": "main"}, {"plugin": "sample", "view": "../main"}, {"plugin": "sample", "view": "main", "params": map[string]any{"q": true}}} {
+		if _, _, err := tool.Path(args); err == nil {
+			t.Fatal("invalid plugin arguments accepted")
+		}
+	}
+}

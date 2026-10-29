@@ -121,6 +121,12 @@ func run() error {
 	logger := log.New(os.Stderr, "", log.LstdFlags)
 	srv := &server{store: st, log: logger, token: tokens.API, agentToken: tokens.Agent, operatorToken: tokens.Operator, setup: manager, agentBinDir: envOr("AGENT_BIN_DIR", "/usr/share/homelab-inventory/agent"), publicURL: os.Getenv("PUBLIC_URL"), trustedProxy: os.Getenv("TRUSTED_PROXY") == "1", actionPolicy: execallow.Policy{Host: os.Getenv("ACTIONS_HOST")}}
 
+	srv.plugins, err = openPlugins(*dir, logger)
+	if err != nil {
+		return err
+	}
+	defer srv.plugins.Close()
+
 	// Launcher icons. Fetching is off unless asked for: retrieving one tells a
 	// third-party repository which services run here, which is small but real,
 	// and the dashboard is perfectly usable with lettered tiles instead.
@@ -238,6 +244,7 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	go srv.plugins.Loop(ctx)
 
 	// The notification loop lives here rather than in a `alerts --notify`
 	// timer because this is the only always-on process and it already has the

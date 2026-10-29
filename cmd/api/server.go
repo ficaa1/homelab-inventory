@@ -27,6 +27,7 @@ import (
 	"github.com/ficaa1/homelab-inventory/internal/inventory"
 	"github.com/ficaa1/homelab-inventory/internal/notify"
 	"github.com/ficaa1/homelab-inventory/internal/overview"
+	"github.com/ficaa1/homelab-inventory/internal/plugin"
 	"github.com/ficaa1/homelab-inventory/internal/portmap"
 	"github.com/ficaa1/homelab-inventory/internal/seen"
 	"github.com/ficaa1/homelab-inventory/internal/settings"
@@ -45,6 +46,7 @@ import (
 const maxInventoryBytes = 16 << 20
 
 type server struct {
+	plugins                *plugin.Registry
 	setup                  *setup.Manager
 	agentBinDir, publicURL string
 	trustedProxy           bool
@@ -79,6 +81,7 @@ type server struct {
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
 	s.setupRoutes(mux)
+	s.pluginRoutes(mux)
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.HandleFunc("GET /auth/status", s.handleAuthStatus)
 	mux.HandleFunc("POST /inventory", s.agentAuth(s.handleIngest))
@@ -156,7 +159,7 @@ func (s *server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, map[string]any{"operator_enabled": s.operatorToken != "", "agent_offers_enabled": s.operatorToken != "", "actions_enabled": s.actions != nil && s.operatorToken != "", "actions_host": s.actionPolicy.Host})
+	writeJSON(w, 200, map[string]any{"operator_enabled": s.operatorToken != "", "agent_offers_enabled": s.operatorToken != "", "actions_enabled": s.actions != nil && s.operatorToken != "", "actions_host": s.actionPolicy.Host, "plugins": s.pluginCapabilities()})
 }
 
 func (s *server) handleHealthz(w http.ResponseWriter, r *http.Request) {
