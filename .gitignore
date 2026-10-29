@@ -28,3 +28,5 @@ session-*.md
 
 # Local contributor notes
 *.local.md
+
+/dist/
