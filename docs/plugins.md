@@ -3,8 +3,8 @@
 Plugins are optional integrations compiled into the API. Open **Admin → Plugins**
 to enable an available plugin, enter its settings, run **Test**, then save. Enabled
 plugins with a tab appear in navigation. Disabling removes the tab and resolves
-its cached alerts through the usual notification transitions. This backend ships
-with an empty built-in list; integrations must be included in the server build.
+its cached alerts through the usual notification transitions. The Media integration
+is included in the server build and starts disabled.
 
 Secret fields show only whether a value is set. Leave a field out of an update
 to keep its saved value; send `null` to clear it. A failed settings validation or
@@ -140,3 +140,64 @@ must have an `image/*` content type and fit in 4 MiB. Links either target a
 manifest view with string params, or contain an http/https href. The dashboard
 opens external links in a new tab with noopener/noreferrer. Bad refs, links,
 tones, block types, HTML or limits produce 502 rather than unvalidated JSON.
+
+## Media
+
+Enable **Media** in Admin → Plugins to add **Now** and **Library** views. Each
+service is optional; configure at least one complete URL/API key pair. Use the
+service's base URL, including any reverse-proxy path prefix, without credentials,
+query parameters or fragments. Configure Upcoming days as a whole number from
+1 to 30 (default 7). Saving configuration makes no upstream requests; **Test**
+checks the name and version of each configured service.
+
+| Service | API key location | What it adds |
+| --- | --- | --- |
+| Sonarr | Settings → General → Security → API Key | Series downloads, upcoming episodes, recent imports and library counts |
+| Radarr | Settings → General → Security → API Key | Movie downloads, upcoming releases, recent imports and library counts |
+| Tautulli | Settings → Web Interface → API → API Key | Stream/transcode counts, bandwidth, playback progress and library counts |
+| Overseerr | Settings → General → API Key | Request counts and pending request titles with requested times |
+
+The integration is read-only: every upstream request is a GET, including Test
+and image fetches. It cannot grab releases, search indexers, submit requests,
+change monitoring or delete files. Arr and Overseerr keys travel in `X-Api-Key`;
+Tautulli requires the `apikey` query parameter. Request URLs, transport errors
+and upstream diagnostic bodies are never logged or displayed.
+
+Now merges downloads by series or movie and counts a Sonarr season pack's bytes
+once. Warning/error items use the warning tone; ETA uses the longest remaining
+download for a title. Upcoming contains monitored episodes and movie releases in
+the selected window, with UTC day badges; a scheduled release is not evidence
+of availability. Library shows the latest 50 imports across both Arr services,
+then one section per configured service. Disk use comes from Arr's library
+statistics, when available. Overseerr displays up to the latest 50 pending
+requests and reports when more are omitted.
+
+Usernames, IP addresses, devices, requester identities, download identifiers,
+filesystem paths, tracker URLs and raw upstream diagnostic messages are
+deliberately not shown. Each playback session says **a user**. Poster images
+come from constructed Arr MediaCover paths through the configured service and
+the authenticated plugin image route; the browser gets an opaque random ref,
+never an upstream URL. Unknown or evicted refs are refused. No external
+image host is contacted.
+
+Responses, including failures, are cached for 20 seconds in a bounded in-memory
+cache (64 entries, 16 MiB). Image mappings are bounded at 2,048 refs. Each service
+has a two-second budget so a failure produces a notice while other services can
+still render; a complete upstream outage can render a notice-only view. Large
+queues are read completely up to 2,000 rows; incomplete or changing pagination
+produces a notice instead of a partial count. Lists/posters show at most 500
+items. All of this state is cleared on disable, configuration changes or restart.
+
+Stable plugin-local alert rules (the core prefixes each with `media.`):
+
+| Rule | Subject | Severity |
+| --- | --- | --- |
+| `sonarr.health` | Sonarr health check source | warning for warning-level; critical only for error-level |
+| `radarr.health` | Radarr health check source | warning for warning-level; critical only for error-level |
+| `queue.stuck` | Series or movie title | warning after a warning/error condition has been observed for more than one hour |
+
+Queue warning age is tracked in memory from the first observed warning, not the
+item's download age. Recovery or removal clears the observation. A restart or
+configuration change starts observation again. Failed alert reads return an
+error so the core keeps the last good alerts and applies its normal unreachable
+rule after three failed polls; they never falsely resolve a partially read queue.
