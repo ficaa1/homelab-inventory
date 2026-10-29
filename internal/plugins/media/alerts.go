@@ -10,7 +10,7 @@ import (
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
 )
 
-// Rule names are durable notification keys; see docs/plugins.md.
+// Rule names are durable notification keys; see the alert table in docs/plugins.md.
 func (m *Media) Alerts(ctx context.Context) ([]plugin.Alert, error) {
 	alerts := []plugin.Alert{}
 	for _, s := range m.services {
