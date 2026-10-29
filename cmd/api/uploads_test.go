@@ -6,12 +6,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
 )
@@ -103,5 +105,47 @@ func TestUploadsValidationAndAudit(t *testing.T) {
 	}
 	if _, err := plugin.UploadName(strings.Repeat("x", 201)); err == nil {
 		t.Fatal("long file name accepted")
+	}
+	// An empty POST without Content-Length differs from an explicit zero-byte file.
+	req := httptest.NewRequest("POST", "/plugins/sample/upload/docs", nil)
+	req.Header.Set("Authorization", "Bearer "+s.token)
+	req.Header.Set("X-Upload-Name", "empty.pdf")
+	rec := httptest.NewRecorder()
+	s.routes().ServeHTTP(rec, req)
+	if rec.Code != 411 {
+		t.Fatal("missing zero-byte Content-Length accepted")
+	}
+	req.Header.Set("Content-Length", "0")
+	rec = httptest.NewRecorder()
+	s.routes().ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatal("explicit zero-byte file refused")
+	}
+
+	// A real server with short ordinary deadlines must still accept a slow file.
+	live := httptest.NewUnstartedServer(s.routes())
+	live.Config.ReadTimeout = 50 * time.Millisecond
+	live.Config.WriteTimeout = 50 * time.Millisecond
+	live.Start()
+	defer live.Close()
+	reader, writer := io.Pipe()
+	go func() { time.Sleep(150 * time.Millisecond); _, _ = io.WriteString(writer, "pdf"); _ = writer.Close() }()
+	upload, err := http.NewRequest("POST", live.URL+"/plugins/sample/upload/docs", reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	upload.ContentLength = 3
+	upload.Header.Set("Authorization", "Bearer "+s.token)
+	upload.Header.Set("X-Upload-Name", "slow.pdf")
+	upload.Header.Set("Expect", "100-continue")
+	client := live.Client()
+	client.Timeout = 3 * time.Second
+	response, err := client.Do(upload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != 200 {
+		t.Fatal("upload inherited the short server deadline")
 	}
 }

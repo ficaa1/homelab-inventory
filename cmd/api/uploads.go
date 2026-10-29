@@ -35,6 +35,10 @@ func (s *server) handlePluginUpload(w http.ResponseWriter, r *http.Request) {
 		fail(err)
 		return
 	}
+	if r.ContentLength == 0 && r.Header.Get("Content-Length") == "" {
+		writeError(w, 411, "Content-Length is required")
+		return
+	}
 	// Both deadlines are per request: ordinary routes retain the server limits.
 	controller := http.NewResponseController(w)
 	_ = controller.SetReadDeadline(time.Now().Add(plugin.UploadTimeout))
