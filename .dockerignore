@@ -1,0 +1,9 @@
+**/.env*
+deploy/api/.env
+data/
+inventories/
+bin/
+.git
+**/.git
+*.local.md
+**/*.local.md

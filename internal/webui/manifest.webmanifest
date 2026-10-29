@@ -1,0 +1,14 @@
+{
+  "name": "homelab-inventory",
+  "short_name": "homelab-inventory",
+  "description": "What is running, what is wrong, and what changed.",
+  "start_url": "/#/home",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0d0d0d",
+  "theme_color": "#0d0d0d",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

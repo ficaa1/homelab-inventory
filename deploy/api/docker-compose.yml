@@ -1,0 +1,23 @@
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/api/Dockerfile
+    image: homelab-inventory:local
+    restart: unless-stopped
+    # Optional restarts: add the Docker socket GID via group_add, or explicitly
+    # override user to "0:0". See docs/restarts.md.
+    ports:
+      - "${API_PORT:-8080}:8080"
+    volumes:
+      - inventory-data:/data
+      # Optional restarts: read docs/restarts.md before enabling.
+      # - /var/run/docker.sock:/var/run/docker.sock
+      # Optional signed updates: mount only the public release tree, never keys.
+      # - /srv/inventory-releases:/agent-releases:ro
+    # Manual setup only: copy .env.example to .env, then uncomment.
+    # env_file:
+    #   - .env
+
+volumes:
+  inventory-data:

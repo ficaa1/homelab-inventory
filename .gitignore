@@ -1,0 +1,30 @@
+# Build output
+/bin/
+/dist/
+
+# Collected inventories. Deliberately not tracked: even after redaction an
+# inventory is a map of every open port, mount, share and container on the
+# network, tied to real hostnames and addresses. It is operational data, not
+# source, and it changes on every run. Phase 2 gives it a proper home.
+/inventories/
+*.json
+!testdata/**/*.json
+!**/testdata/*.json
+
+*.out
+.DS_Store
+
+# Runtime state and operator configuration
+/data/
+.env
+.env.*
+!.env.example
+
+# Windows metadata junk
+*.Zone.Identifier
+
+# Local session transcripts
+session-*.md
+
+# Local contributor notes
+*.local.md

@@ -1,0 +1,26 @@
+Package: base-utils
+Status: install ok installed
+Architecture: amd64
+Source: base (1:2.0-1)
+Version: 1:2.0-1
+Description: Example package
+ continuation line
+
+Package: libexample
+Status: install ok installed
+Architecture: amd64
+Source: example
+Version: 2.0-1
+
+Package: helper
+Status: install ok installed
+Architecture: amd64
+Version: 1.0
+
+Package: held
+Status: hold ok installed
+Version: 1.0
+
+Package: broken
+Status: install reinstreq half-installed
+Version: 1.0
