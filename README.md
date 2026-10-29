@@ -2,59 +2,54 @@
 
 ![homelab-inventory: overview, launcher, alerts, disk forecast, network chart, media and uploads, running on a demo fleet](docs/images/demo.gif)
 
-A read-only inventory agent, API, and single-file dashboard for a Linux homelab. It collects hosts, Docker, Proxmox, ZFS, ports and storage, and presents alerts and history.
+A dashboard for your homelab. A small agent on each Linux host reads what is
+running (containers, disks, ZFS, Proxmox, ports, packages) and reports it every
+15 minutes. The dashboard shows it all in one place, warns you before things
+break, and links to every service it finds.
 
-Features include packages, drift and trends, transition-only notifications via Apprise, a service launcher, optional signed agent self-update, optional restart actions, and an MCP bridge for assistants.
+The agent only reads. It never changes anything on your hosts.
 
-Optional read-only [Media plugin](docs/plugins.md#media) for Sonarr, Radarr, Tautulli and Overseerr.
-Optional [Uploads](docs/plugins.md#uploads) to a folder, Paperless-ngx or Calibre-Web,
-and read-only [Network](docs/plugins.md#network) traffic and probe views from Prometheus.
-Configure and enable integrations in Admin → Plugins; each starts disabled.
+## Install
 
-## Quick start
-
-On a Linux server:
+On a Linux server, as root:
 
 ```sh
 curl -fsSL https://github.com/ficaa1/homelab-inventory/releases/latest/download/get.sh | sh
 ```
 
-What it does:
+Then:
 
-- Uses Docker Compose when available; otherwise installs a static binary and a hardened systemd service.
-- Downloads the release, verifies binary checksums, and keeps persistent data in `/var/lib/homelab-inventory`.
-- Starts the API on port 8080 and prints the server's LAN URL and setup time remaining.
-- Opens a wizard where you claim the instance, save your API token, and copy commands to add Linux hosts.
+1. Open the address it prints **within 10 minutes**. The first person to open it
+   becomes the admin, so keep it on your own network until you have.
+2. Save the API token it shows you. It is shown once.
+3. Copy the **Add host** command and run it on each Linux host.
 
-Run as root. If you run it as an ordinary user, it prints the exact command to
-rerun through sudo. Open the printed URL **within 10 minutes**; the first visitor
-becomes the administrator, so restrict access until setup is complete. Use
-Admin → Add a host for later additions. See [installation](docs/install.md) for
-flags, upgrades, removal and the manual Compose option.
+It uses Docker if you have it, otherwise a single binary with a systemd service.
+More options, upgrades and removal: [Install](docs/install.md).
 
-Use HTTPS for untrusted networks. HTTP installer commands explicitly opt in to
-plaintext credential transport. Signed updates and restart actions remain opt-in.
+## What you get
 
-See [installation](docs/install.md), [configuration](docs/configuration.md), [self-update](docs/self-update.md), and [restart actions](docs/restarts.md).
-
-| Program | Purpose |
-| --- | --- |
-| discover | Collect a host inventory |
-| agentupdate | Post inventories; optionally supervise signed discover updates |
-| agentsign | Sign agent releases |
-| api | Ingest inventories and serve the dashboard and API |
-| mcpbridge | Expose inventory reads over MCP |
-| portmap | Summarize listening ports |
-| alerts | Evaluate inventory alerts |
-
-Discover uses allowlisted read-only commands and redacts sensitive data at collection. A null section means unavailable or not collected; an empty section means collected with no results. Alert notifications fire on transitions.
-
-Linux agents are supported. A FreeBSD build exists with thinner collection. Proxmox, TrueNAS and ZFS are detected when present.
-
-Status: v0.1, early. Licensed under [AGPL-3.0](LICENSE).
+- **Overview** of every host, with what needs attention.
+- **Alerts** for full disks, failed units, unhealthy containers, ZFS and backup
+  problems. Notifications (through [Apprise](https://github.com/caronc/apprise))
+  only fire when something changes. [All alerts](docs/alerts.md)
+- **Forecasts** of when a disk will fill up.
+- **Launcher** tiles for every web service it finds.
+- **History**: what changed on a host, and package versions.
+- **Plugins** for media (Sonarr, Radarr, Tautulli, Overseerr), uploads (folder,
+  Paperless-ngx, Calibre-Web) and network traffic from Prometheus.
+  [Plugins](docs/plugins.md)
+- Optional: [sign-in](docs/configuration.md#browser-sign-in-oidc) with Google,
+  Authentik, Authelia or Keycloak, [signed agent updates](docs/self-update.md),
+  [container restarts](docs/restarts.md), and an MCP server for AI assistants.
 
 ![Fleet overview with synthetic hosts](docs/images/home.png)
 
-![Host details and containers with synthetic data](docs/images/host.png)
+## Good to know
 
-![Port map with synthetic hosts](docs/images/ports.png)
+- Linux hosts (amd64, arm64). Proxmox, TrueNAS and ZFS are picked up when present.
+- Use HTTPS (through your own reverse proxy) beyond a trusted network.
+- Docs: [install](docs/install.md), [configuration](docs/configuration.md),
+  [plugins](docs/plugins.md), [alerts](docs/alerts.md), [API](docs/api.md),
+  [security](SECURITY.md), [contributing](CONTRIBUTING.md).
+- Status: v0.1, early. Licensed under [AGPL-3.0](LICENSE).
