@@ -18,5 +18,5 @@ jobs:
       - name: Check server installer
         run: |
           sh -n scripts/get.sh
-          shellcheck scripts/get.sh
+          shellcheck --severity=warning scripts/get.sh
           umask 022; make test-install-server

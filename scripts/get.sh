@@ -25,7 +25,7 @@ HELP
 }
 die() { echo "get: $*" >&2; exit 1; }
 port=8080 dir=/opt/homelab-inventory data=/var/lib/homelab-inventory
-version=latest mode=auto from= prefix= uninstall=0 purge=0 yes=0
+version=latest mode=auto from='' prefix='' uninstall=0 purge=0 yes=0
 port_set=0 data_set=0
 # Preserve arguments only for a copyable sudo command; never eval shell text.
 sudo_args=
