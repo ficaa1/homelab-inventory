@@ -4,7 +4,131 @@ Linux amd64 and arm64 agents are supported. Missing Docker, ZFS or Proxmox tools
 produce partial inventories and diagnostics. `discover` only reads the host;
 posting and optional executable replacement belong to `agentupdate`.
 
-## Quick start
+## Server installer
+
+On a Linux amd64 or arm64 server:
+
+```sh
+curl -fsSL https://github.com/ficaa1/homelab-inventory/releases/latest/download/get.sh | sh
+```
+
+The installer needs root. For an ordinary account it exits with the exact
+`curl … | sudo sh -s -- …` command, preserving flags. This works when piped,
+without trying to re-execute a script from an already-consumed standard input.
+Review the script before granting root authority if you prefer:
+
+```sh
+curl -fsSL https://github.com/ficaa1/homelab-inventory/releases/latest/download/get.sh -o get.sh
+sudo sh ./get.sh --port 8080
+```
+
+It waits up to 30 seconds for `/healthz`, reads `/setup/status`, and prints the
+server's LAN URL and the minutes left to claim it. Open the URL within that
+window and save the API token shown once. The first visitor becomes the
+administrator; keep the port on a trusted network during setup. After claiming,
+reruns say “already set up” and preserve your stored credentials. The wizard
+can configure notifications and supplies Add host commands. Restart the service
+with the command printed by the installer to reopen an expired setup window.
+
+| Option | Default / effect |
+| --- | --- |
+| `--port N` | 8080; published Docker port or binary listen port |
+| `--dir DIR` | `/opt/homelab-inventory`; Compose file and installer metadata |
+| `--data DIR` | `/var/lib/homelab-inventory`; persistent private data |
+| `--version vX.Y.Z` | Latest release; also accepts prerelease tags |
+| `--docker` / `--no-docker` | Auto-detect working `docker compose version`, or require a backend |
+| `--from DIR` | Use local release artifacts with no downloads; selects binary mode |
+| `--prefix DIR` | Stage a disposable binary installation beneath DIR without root or service changes |
+| `--uninstall` | Remove server service and installed files; retain data and system account |
+| `--purge` | With `--uninstall`, delete data after typing `DELETE` at the terminal |
+| `--yes` | Confirm purge without an interactive prompt |
+| `--help` | Show usage |
+
+Paths must be absolute, dedicated directories using letters, digits, `/`, `_`,
+`.` or `-`, with no spaces, traversal components or trailing slash. Keep data
+separate from installer files. Reruns using the same `--dir` retain the recorded
+backend, data directory and port unless explicitly overridden. To change the
+backend, uninstall first; check ownership before reusing existing data. Copy
+existing data yourself before changing `--data`; the installer does not migrate it.
+
+### Docker or binary
+
+With Docker Compose, the installer pulls
+`ghcr.io/ficaa1/homelab-inventory:<release-tag>`, writes `compose.yml` under
+`--dir`, and runs it as project `homelab-inventory` with `restart: unless-stopped`.
+It bind-mounts `--data` at `/data`, mode 0700, owned by image UID/GID 10001.
+No Docker socket is mounted. Docker and the Compose plugin must already be
+installed; the installer does not install a container engine.
+
+Without Compose (or with `--no-docker`), it verifies the archive against the
+release `SHA256SUMS` before changing installed files. It installs:
+
+- `/usr/local/bin/homelab-inventory` and `homelab-inventory.service`.
+- Both agent architectures and their checksums under `/usr/share/homelab-inventory/agent`, so wizard enrollment works without a checkout.
+- A system account `homelab-inventory` and a mode-0700 data directory it owns.
+
+The unit limits writes to the data directory, uses a private temporary directory,
+and forbids privilege escalation. Ports below 1024 receive only the bind-service
+capability. Binary installs require systemd, `useradd`, `curl`, `tar` and
+`sha256sum` (or BusyBox's sha256sum), plus system CA certificates for HTTPS.
+Docker installs require `curl`. The shell script works with dash and BusyBox sh.
+
+### Upgrade and uninstall
+
+Rerun the one-liner to install the latest release, or pin a version:
+
+```sh
+sudo sh ./get.sh --version v0.1.0
+```
+
+Repeat a custom `--dir` on every invocation. Docker pulls the selected image and
+recreates the container; binary installs replace executables and restart the
+service. Both retain data and authentication state. Back up the data directory
+before upgrading; checksums detect download corruption, not a compromised release.
+
+```sh
+sudo sh ./get.sh --uninstall
+sudo sh ./get.sh --uninstall --purge
+```
+
+Uninstall keeps data by default. Purge requires the explicit typed confirmation
+(or `--yes`) and permanently removes the chosen data directory. It does not
+uninstall Docker, delete images, or remove the system account.
+
+### Mirrors and offline staging
+
+`INSTALL_BASE_URL` is the directory containing `SHA256SUMS` and release archives;
+it replaces the entire GitHub download base. Use HTTPS and a matching pinned
+version for a private mirror. The installer never accepts or prints tokens:
+configure mirror access outside the script.
+
+```sh
+sudo env INSTALL_BASE_URL=https://downloads.example.org/inventory/v0.1.0 \
+  sh ./get.sh --version v0.1.0 --no-docker
+```
+
+For latest, the manifest must name exactly one amd64 release, and its matching
+archives must stay available at the same base. On GitHub the version is resolved
+from that manifest; no GitHub API call is needed. Docker uses the GHCR image even
+when binary downloads use a mirror. While the repository and package are private,
+anonymous downloads will not work; use a configured mirror or copied artifacts.
+
+Build exactly the files shipped by the release workflow with Go 1.25:
+
+```sh
+umask 022
+make release-artifacts VERSION=v0.1.0
+sh scripts/get.sh --from "$PWD/dist" --prefix /tmp/inventory-test --no-docker
+```
+
+`--prefix` stages the binary, unit and agent tree without `useradd`, `systemctl`,
+or starting a background service. It prints the command to launch the staged API
+manually. Paths from `--dir` and `--data` are also placed under the prefix. The
+health/setup wait applies to real service installs. Use `--from` on a real host
+without `--prefix` to install copied release artifacts with no downloads. The
+script still makes local HTTP health checks after starting that service.
+
+## Manual Compose option
 
 1. From a checkout, run Compose. No `.env` or hand-written tokens are needed:
 
@@ -39,7 +163,7 @@ are required. Never publish an unclaimed instance to an untrusted network.
 
 If `/install.sh` returns 404, its response explains that agent binaries are
 missing. Use the packaged image, set `AGENT_BIN_DIR` to the expected tree, or use
-manual setup below. Binary-only local API builds do not include those files.
+manual setup below. The server installer includes those files; an unpackaged local API build does not.
 
 ## Manual setup
 

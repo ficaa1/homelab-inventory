@@ -6,19 +6,24 @@ Features include packages, drift and trends, transition-only notifications via A
 
 ## Quick start
 
-1. Clone and start the API; no `.env` is needed:
+On a Linux server:
 
-   ```sh
-   git clone https://github.com/ficaa1/homelab-inventory
-   cd homelab-inventory/deploy/api
-   docker compose up -d
-   ```
+```sh
+curl -fsSL https://github.com/ficaa1/homelab-inventory/releases/latest/download/get.sh | sh
+```
 
-2. Open `http://localhost:8080` (or your server's address) within **10 minutes**.
-   Claim the instance and save the API token shown by the setup wizard. Restrict
-   access during setup: the first visitor becomes the administrator.
-3. Paste the wizard's Add host command on each Linux host. It installs the agent
-   and sends the first report. Use Admin → Add a host for later additions.
+What it does:
+
+- Uses Docker Compose when available; otherwise installs a static binary and a hardened systemd service.
+- Downloads the release, verifies binary checksums, and keeps persistent data in `/var/lib/homelab-inventory`.
+- Starts the API on port 8080 and prints the server's LAN URL and setup time remaining.
+- Opens a wizard where you claim the instance, save your API token, and copy commands to add Linux hosts.
+
+Run as root. If you run it as an ordinary user, it prints the exact command to
+rerun through sudo. Open the printed URL **within 10 minutes**; the first visitor
+becomes the administrator, so restrict access until setup is complete. Use
+Admin → Add a host for later additions. See [installation](docs/install.md) for
+flags, upgrades, removal and the manual Compose option.
 
 Use HTTPS for untrusted networks. HTTP installer commands explicitly opt in to
 plaintext credential transport. Signed updates and restart actions remain opt-in.
