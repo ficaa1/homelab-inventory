@@ -184,7 +184,12 @@ loopback-only development mode (`make api`); it does not run the claim flow.
 
 Use HTTPS through your own reverse proxy for access beyond a trusted local
 machine. Tokens travel in an Authorization header and must not cross plaintext
-untrusted networks. There is no browser login provider.
+untrusted networks. After claiming, configure optional browser sign-in in
+Admin → Sign-in using an OpenID provider. Register the displayed callback URI,
+keep the API token for administration and MCP, and keep separate agent/operator
+tokens. See [Browser sign-in (OIDC)](configuration.md#browser-sign-in-oidc) for
+Google, Authentik, Authelia and Keycloak setup. Include the private session key
+and settings in secure data backups.
 
 **Token scope:** keep `API_TOKEN` for the dashboard/admin and MCP. Give agents
 `AGENT_TOKEN`, which only permits posting inventories and downloading signed

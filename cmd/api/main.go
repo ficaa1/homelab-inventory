@@ -187,6 +187,7 @@ func run() error {
 		return err
 	}
 	srv.defaults = settings.Defaults{
+		Auth:             settings.AuthEnv(os.LookupEnv),
 		RunRetention:     &policy,
 		NotifyLevel:      minLevel,
 		NotifyInterval:   *notifyEvery,
@@ -231,6 +232,10 @@ func run() error {
 	} else {
 		logger.Println("notifications are off: no apprise endpoint is set. " +
 			"Set one in the dashboard's Admin tab, or APPRISE_URL in the environment")
+	}
+
+	if _, err := srv.oidc(); err != nil {
+		return fmt.Errorf("opening browser session key: %w", err)
 	}
 
 	httpSrv := &http.Server{

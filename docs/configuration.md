@@ -67,3 +67,66 @@ runner flag configuration except an explicit HTTP opt-in, which also applies wit
 The token remains in its separate private file. See [install](install.md) and
 [self-update](self-update.md) for flags and enrollment. Standard shell `PATH`,
 `HOME` and build-tool variables retain their ordinary meanings.
+
+## Browser sign-in (OIDC)
+
+After claiming the instance, configure Sign-in in Admin. Use any OpenID provider
+with discovery, authorization-code flow, S256 PKCE and an email userinfo endpoint.
+Enter its exact issuer, client ID and client secret, the external dashboard base
+URL, and allowed email addresses or `@example.org` domains. Matching is
+case-insensitive and domain matching is exact (subdomains are separate).
+An empty allowed list cannot enable sign-in. Verified email is required by
+default; providers must return boolean `email_verified:true` in userinfo.
+
+Register the displayed redirect URI with the provider:
+`https://dash.example.org/auth/callback`. Public URL accepts only an http(s)
+base URL with no path other than `/`, no credentials, query or fragment. Use
+HTTPS for remote browser access. Provider issuer and discovered endpoints
+require HTTPS; HTTP is accepted only for loopback development. Discovery's
+issuer must exactly match the configured value, including any trailing slash.
+Request scopes are always `openid email profile`.
+
+- **Google:** create a Web application OAuth client, register the exact callback
+  URI, and use issuer `https://accounts.google.com`. Configure the consent screen
+  and any test-user restriction in the provider console.
+- **Authentik:** create an OAuth2/OpenID provider and application with the exact
+  callback URI, authorization-code flow and email/profile scope mappings. Copy
+  the issuer from its discovery document (it normally includes the application
+  path). Ensure userinfo includes an email and the verified-email policy you need.
+- **Authelia:** register a confidential OpenID client with authorization-code
+  grant, PKCE S256, scopes `openid email profile`, and the callback URI. Use the
+  deployment's discovery issuer and allow its userinfo endpoint.
+- **Keycloak:** use the realm issuer, such as
+  `https://id.example.org/realms/home`, a confidential client with Standard flow,
+  and the exact valid redirect URI. Enable email/profile scopes and verify the
+  account's email, or deliberately change the verified-email requirement.
+
+The client uses `client_secret_basic` by default, and `client_secret_post` only
+when discovery lists that as its sole supported authentication method. It
+obtains identity directly from userinfo over TLS and does not parse ID tokens.
+The Test button checks discovery and endpoint URLs; sign in to verify the
+client credentials and userinfo policy. PUT/Save itself does no network work.
+
+Optional environment seeds (stored settings win; `sources` identifies each):
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `OIDC_ENABLED` | false | Enable sign-in after configuration is complete. |
+| `OIDC_ISSUER` | empty | Exact discovery issuer. |
+| `OIDC_CLIENT_ID` | empty | Confidential client ID. |
+| `OIDC_CLIENT_SECRET` | empty | Write-only client secret. |
+| `OIDC_ALLOWED` | empty | Comma-separated email addresses or `@domain` entries. |
+| `OIDC_PUBLIC_URL` | empty | External dashboard base URL; separate from enrollment's PUBLIC_URL. |
+| `OIDC_PROVIDER_NAME` | issuer host | Sign-in button label. |
+| `OIDC_SESSION_HOURS` | 168 | Integer session lifetime from 1 through 720 hours. |
+
+`require_verified` defaults to true and is stored through the settings API.
+Clearing a field suppresses its environment seed; absent updates keep it.
+Auth overrides and a generation counter live in private `state-settings.json`.
+Each successful sign-in settings save invalidates all sessions. The separate
+32-byte signing key is atomically created as `<data>/state-session-key`, mode
+0600; keep it private and include it in secure backups. Sessions survive server
+restarts; expiry, generation, enabled state and allowlist are rechecked on every
+request. Notification/retention reset leaves sign-in configuration intact.
+API tokens remain available; agent and operator authority still require their
+own credentials. Unclaimed instances do not allow provider sign-in.

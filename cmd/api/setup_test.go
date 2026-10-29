@@ -31,12 +31,12 @@ func TestSetupRoutes(t *testing.T) {
 		h.ServeHTTP(w, r)
 		return w
 	}
-	for _, path := range []string{"/hosts", "/auth/status", "/agent/enroll", "/settings", "/missing"} {
+	for _, path := range []string{"/hosts", "/agent/enroll", "/settings", "/missing"} {
 		if w := call("GET", path, "", ""); w.Code != 503 || !strings.Contains(w.Body.String(), "setup required") {
 			t.Fatalf("setup gate: %s status %d", path, w.Code)
 		}
 	}
-	for _, path := range []string{"/", "/healthz", "/setup/status", "/icon.svg"} {
+	for _, path := range []string{"/", "/healthz", "/setup/status", "/auth/status", "/icon.svg"} {
 		if w := call("GET", path, "", ""); w.Code != 200 {
 			t.Fatalf("public setup path %s: %d", path, w.Code)
 		}

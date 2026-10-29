@@ -16,9 +16,14 @@ import (
 // error: it means nothing has been configured from the page yet, and every
 // field falls through to the environment.
 func (s *server) stored() settings.Stored {
-	var st settings.Stored
-	_ = s.store.ReadState(settings.StateName, &st)
+	st, _ := s.readSettings()
 	return st
+}
+
+func (s *server) readSettings() (settings.Stored, error) {
+	var st settings.Stored
+	err := s.store.ReadState(settings.StateName, &st)
+	return st, err
 }
 
 // effective is the configuration in force: the environment, with anything
@@ -183,7 +188,8 @@ func (s *server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleResetSettings(w http.ResponseWriter, r *http.Request) {
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
-	if err := s.store.WriteState(settings.StateName, settings.Stored{}); err != nil {
+	st := s.stored()
+	if err := s.store.WriteState(settings.StateName, settings.Stored{Auth: st.Auth, AuthGeneration: st.AuthGeneration}); err != nil {
 		s.log.Printf("settings reset: %v", err)
 		writeError(w, http.StatusInternalServerError, "resetting settings")
 		return

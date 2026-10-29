@@ -159,3 +159,20 @@ func TestAppendReportsOpenFailure(t *testing.T) {
 		t.Fatal("append into a missing directory succeeded")
 	}
 }
+
+func TestCreateAtomicNeverReplacesExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "session-key")
+	if err := CreateAtomic(path, []byte("first"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateAtomic(path, []byte("second"), 0600); !errors.Is(err, os.ErrExist) {
+		t.Fatalf("second create: %v", err)
+	}
+	b, err := os.ReadFile(path)
+	info, statErr := os.Stat(path)
+	if err != nil || statErr != nil || string(b) != "first" || info.Mode().Perm() != 0600 {
+		t.Fatal("atomic create replaced content or permissions")
+	}
+	assertOnly(t, dir, "session-key")
+}

@@ -33,7 +33,7 @@ const SchemaVersion = "5"
 // whenever the agent source changes, then refresh agentSourceHash as directed
 // by TestAgentSourceRevision. Older agents omit it and report revision zero.
 // Revision 1 starts the extracted project after the collector and module cut.
-const AgentRevision = 2
+const AgentRevision = 3
 
 // Inventory is the root document emitted by one run of the discovery binary on
 // one machine.

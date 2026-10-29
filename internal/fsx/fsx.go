@@ -106,3 +106,21 @@ func syncDirPath(dir string) error {
 	}
 	return err
 }
+
+// CreateAtomic publishes a complete new file without replacing an existing one.
+// A concurrent creator gets os.ErrExist; readers never see a partially written key.
+func CreateAtomic(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	f, err := os.CreateTemp(dir, tempPattern(path))
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	if err := writeClose(f, data, perm); err != nil {
+		return err
+	}
+	if err := os.Link(f.Name(), path); err != nil {
+		return err
+	}
+	return syncDir(dir)
+}
