@@ -234,6 +234,13 @@ code {
 
 .wrap { max-width: 1240px; margin: 0 auto; padding: var(--s5) var(--s4) calc(104px + var(--safe-b)); }
 
+/* Four or more plugin tabs leave no room for the search field's label. */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .row1:has(.tab[data-plugin] ~ .tab[data-plugin] ~ .tab[data-plugin] ~ .tab[data-plugin]) .ibtn.search-btn {
+    min-width: 0; width: 36px; padding: 0; justify-content: center; border-color: transparent; background: none;
+  }
+  .row1:has(.tab[data-plugin] ~ .tab[data-plugin] ~ .tab[data-plugin] ~ .tab[data-plugin]) .ibtn.search-btn :is(.lab, kbd) { display: none; }
+}
 @media (max-width: 900px) {
   .ibtn.search-btn { min-width: 0; }
   .ibtn.search-btn .lab, .ibtn.search-btn kbd { display: none; }
@@ -1362,6 +1369,39 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   .plug-actions .src { flex-basis: 100%; }
 }
 
+/* A plugin's chart: lines on the card's own surface, axes in the table's
+   small caps colour, and a legend that doubles as the readout. */
+.pv-chart > h3 { justify-content: space-between; }
+.pv-chart > h3 .when { font-weight: 500; color: var(--text-3); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 4px 18px; padding: 10px 16px 0; margin: 0; list-style: none; font-size: var(--fs-xs); color: var(--text-2); }
+.chart-legend li { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.chart-legend .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chart-legend .v { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chart-legend svg { width: 18px; height: 8px; flex: none; overflow: visible; }
+.chart-plot { position: relative; height: 220px; margin: 4px 8px 8px; touch-action: pan-y; cursor: crosshair; border-radius: var(--r-sm); }
+.chart-plot:focus-visible { outline-offset: 0; }
+.chart-plot svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.chart .grid { stroke: var(--line); stroke-width: 1; shape-rendering: crispEdges; }
+.chart .grid.base { stroke: var(--line-2); }
+.chart .tick { fill: var(--text-3); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.chart .gap { fill: var(--track); }
+.chart .gap-label { fill: var(--text-3); font-size: 10px; }
+.chart .ln { fill: none; stroke-width: 1.75; stroke-linejoin: round; stroke-linecap: round; }
+.chart .ln.dash { stroke-dasharray: 5 4; }
+.chart .ln.dot { stroke-dasharray: 1.5 3.5; }
+.chart .cursor { stroke: var(--text-3); stroke-width: 1; shape-rendering: crispEdges; }
+.chart .pt { stroke: var(--surface); stroke-width: 2; }
+.chart .c-ok { stroke: var(--ok); } .chart .c-info { stroke: var(--info); } .chart .c-warn { stroke: var(--warn); }
+.chart .c-crit { stroke: var(--crit); } .chart .c-muted { stroke: var(--text-3); } .chart .c-accent { stroke: var(--accent); } .chart .c-text { stroke: var(--text-2); }
+.chart .pt.c-ok, .chart .solo.c-ok { fill: var(--ok); } .chart .pt.c-info, .chart .solo.c-info { fill: var(--info); }
+.chart .pt.c-warn, .chart .solo.c-warn { fill: var(--warn); } .chart .pt.c-crit, .chart .solo.c-crit { fill: var(--crit); }
+.chart .pt.c-muted, .chart .solo.c-muted { fill: var(--text-3); } .chart .pt.c-accent, .chart .solo.c-accent { fill: var(--accent); }
+.chart .pt.c-text, .chart .solo.c-text { fill: var(--text-2); }
+@media (max-width: 640px) {
+  .chart-legend { padding: 10px 12px 0; gap: 4px 14px; }
+  .chart-plot { height: 180px; margin: 4px 4px 6px; }
+}
+
 </style>
 </head>
 <body>
@@ -1402,6 +1442,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
   <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></symbol>
   <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-network" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/></symbol>
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
 </svg>
 
@@ -4881,6 +4922,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 
   function renderPluginView() {
     var root = $("plugin-body"), info = pluginInfo(pv.plugin), views = pluginViews(info);
+    if (chartRO) chartRO.disconnect();   // the charts being replaced; new ones observe themselves
     var name = info ? str(info.tab.title) || str(info.name) : pv.plugin;
     var inTab = views.some(function (v) { return v.name === pv.view; });
     var v = pv.data, err = pv.err;
@@ -4949,13 +4991,14 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       h("span", { text: str(text) })]);
   }
 
-  // Lists side by side when two or more follow each other; everything else
-  // takes the full width.
+  // Lists, or charts, side by side when two or more of a kind follow each
+  // other; everything else takes the full width.
   function appendBlocks(parent, blocks, depth, fk) {
     var i = 0;
     while (i < blocks.length) {
       var j = i;
-      while (j < blocks.length && blocks[j] && blocks[j].type === "list") j++;
+      var kind = blocks[i] && (blocks[i].type === "list" || blocks[i].type === "chart") ? blocks[i].type : null;
+      while (kind && j < blocks.length && blocks[j] && blocks[j].type === kind) j++;
       if (j - i >= 2) {
         for (var k = i; k < j; k++) {
           var el = renderBlock(blocks[k], depth, fk + k);
@@ -4975,6 +5018,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       case "stats": return statsBlock(b);
       case "list": return listBlock(b, fk);
       case "table": return tableBlock(b);
+      case "chart": return chartBlock(b, fk);
       case "posters": return postersBlock(b, fk);
       case "notice": return notice(b.tone, b.text);
       case "section":
@@ -5091,7 +5135,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     return card;
   }
 
-  var NUMERIC = { number: 1, bytes: 1, duration_s: 1, percent: 1 };
+  var NUMERIC = { number: 1, bytes: 1, bytes_s: 1, duration_s: 1, percent: 1 };
   function durShort(s) {
     s = Math.round(s);
     if (s < 60) return s + "s";
@@ -5106,6 +5150,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     switch (fmt) {
       case "number": return { text: isFinite(n) ? n.toLocaleString() : String(v) };
       case "bytes": return { text: isFinite(n) ? (n === 0 ? "0 B" : bytes(n)) : String(v) };
+      case "bytes_s": return { text: isFinite(n) ? (n === 0 ? "0 B/s" : bytes(n) + "/s") : String(v) };
       case "duration_s": return { text: isFinite(n) ? (n === 0 ? "0s" : durShort(n)) : String(v) };
       case "percent": return { text: isFinite(n) ? (Math.abs(n * 100) < 10 && n !== 0 ? (n * 100).toFixed(1) : Math.round(n * 100)) + "%" : String(v) };
       case "time":
@@ -5134,6 +5179,263 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
         }));
       }))]);
     card.appendChild(h("div", { class: "scroll", tabindex: "0", role: "region", "aria-label": str(b.title) || "Table" }, [table]));
+    return card;
+  }
+
+  // ------------------------------------------------------------ charts
+  //
+  // A line per series, drawn from numbers only. Width comes from the card, so
+  // drawing waits for a ResizeObserver; a refresh redraws at the same cursor.
+  // A null point breaks its line, and a stretch where no series has data is
+  // shaded and labelled rather than bridged.
+
+  var chartRO = null, chartAt = {};
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  function svgEl(tag, attrs) {
+    var el = document.createElementNS(SVG_NS, tag);
+    Object.keys(attrs || {}).forEach(function (k) { if (attrs[k] != null) el.setAttribute(k, String(attrs[k])); });
+    return el;
+  }
+
+  // How a unit reads: a scale picked from the largest value, so the axis says
+  // "40 MiB/s" rather than "41943040", and the exact value for the readout.
+  var BIN = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
+  function chartScale(unit, hi) {
+    hi = Math.abs(hi);
+    if (unit === "bytes" || unit === "bytes_s") {
+      var i = 0;
+      while (hi >= 1024 && i < BIN.length - 1) { hi /= 1024; i++; }
+      return { div: Math.pow(1024, i), suffix: " " + BIN[i] + (unit === "bytes_s" ? "/s" : "") };
+    }
+    if (unit === "percent") return { div: 0.01, suffix: "%" };
+    if (unit === "ms") return hi >= 1000 ? { div: 1000, suffix: " s" } : { div: 1, suffix: " ms" };
+    if (hi >= 1e9) return { div: 1e9, suffix: "G" };
+    if (hi >= 1e6) return { div: 1e6, suffix: "M" };
+    if (hi >= 1e4) return { div: 1e3, suffix: "k" };
+    return { div: 1, suffix: "" };
+  }
+  function chartValue(unit, v) {
+    if (v == null || !isFinite(v)) return "no data";
+    if (v === 0) return { bytes: "0 B", bytes_s: "0 B/s", ms: "0 ms", percent: "0%" }[unit] || "0";
+    var s = chartScale(unit, v), x = v / s.div, ax = Math.abs(x);
+    return (ax >= 100 ? Math.round(x) : ax >= 10 ? x.toFixed(1).replace(/\.0$/, "") : x.toFixed(2).replace(/\.?0+$/, "")) + s.suffix;
+  }
+  function niceStep(raw) {
+    var p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+  }
+  var TIME_STEPS = [60, 120, 300, 600, 900, 1800, 3600, 7200, 10800, 21600, 43200, 86400, 172800, 604800, 2592000];
+  function clock(t) { return new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+  function dayLabel(t) { return new Date(t * 1000).toLocaleDateString([], { month: "short", day: "numeric" }); }
+  function chartWhen(t, span) {
+    var d = new Date(t * 1000);
+    return (span > 86400 || d.toDateString() !== new Date().toDateString() ? d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) + " " : "") + clock(t);
+  }
+
+  // The usable shape of a chart block: series with sorted finite points, the
+  // union of their timestamps, and each series' colour and dash.
+  function chartModel(b) {
+    var raw = items(b, "series").slice(0, 8), toned = {};
+    raw.forEach(function (s) { if (tone(s.tone)) toned[tone(s.tone)] = 1; });
+    var spare = toned.info ? ["text", "accent"] : ["accent", "text"], uses = {}, n = 0;
+    var series = raw.map(function (s) {
+      var pts = (Array.isArray(s.points) ? s.points : []).filter(function (p) {
+        return Array.isArray(p) && typeof p[0] === "number" && isFinite(p[0]) && (p[1] === null || (typeof p[1] === "number" && isFinite(p[1])));
+      }).slice(0, 500).sort(function (a, c) { return a[0] - c[0]; });
+      var key = tone(s.tone) || spare[n++ % spare.length];
+      var k = uses[key] = (uses[key] || 0) + 1;
+      return { name: str(s.name) || "Series", tone: tone(s.tone), cls: "c-" + key, dash: ["", "dash", "dot"][(k - 1) % 3], points: pts };
+    });
+    var seen = {}, ts = [];
+    series.forEach(function (s) { s.points.forEach(function (p) { if (!seen[p[0]]) { seen[p[0]] = 1; ts.push(p[0]); } }); });
+    ts.sort(function (a, c) { return a - c; });
+    var vals = [];
+    series.forEach(function (s) { s.points.forEach(function (p) { if (p[1] !== null) vals.push(p[1]); }); });
+    // The usual spacing, so a missing stretch does not widen what counts as "at t".
+    var diffs = ts.slice(1).map(function (t, i) { return t - ts[i]; }).sort(function (a, c) { return a - c; });
+    var step = diffs.length ? diffs[diffs.length >> 1] : 0;
+    return { unit: str(b.unit) || "number", series: series, ts: ts, vals: vals, step: step };
+  }
+
+  // The value a series has at time t: its nearest point, if that point is
+  // close enough to count as "at t".
+  function valueAt(s, t, step) {
+    var p = s.points, lo = 0, hi = p.length - 1;
+    if (!p.length) return null;
+    while (lo < hi) { var mid = (lo + hi) >> 1; if (p[mid][0] < t) lo = mid + 1; else hi = mid; }
+    var best = p[lo];
+    if (lo > 0 && Math.abs(p[lo - 1][0] - t) < Math.abs(best[0] - t)) best = p[lo - 1];
+    return Math.abs(best[0] - t) <= Math.max(step, 1) * 0.75 ? best[1] : null;
+  }
+  function latest(s) {
+    for (var i = s.points.length - 1; i >= 0; i--) if (s.points[i][1] !== null) return s.points[i];
+    return null;
+  }
+
+  function chartBlock(b, fk) {
+    var m = chartModel(b), card = cardFor(b, null), title = str(b.title) || "Chart";
+    card.classList.add("pv-chart", "chart");
+    if (!m.vals.length) { card.appendChild(h("div", { class: "pv-empty", text: str(b.empty) || "No data yet" })); return card; }
+    var when = h("span", { class: "when" });
+    var head = card.querySelector("h3");
+    if (head) head.appendChild(when); else card.appendChild(h("h3", {}, [title, when]));
+
+    var legend = h("ul", { class: "chart-legend" }), cells = m.series.map(function (s) {
+      var sw = svgEl("svg", { viewBox: "0 0 18 8", "aria-hidden": "true" });
+      sw.appendChild(svgEl("line", { x1: 0, y1: 4, x2: 18, y2: 4, class: "ln " + s.cls + (s.dash ? " " + s.dash : "") }));
+      var v = h("span", { class: "v" });
+      legend.appendChild(h("li", {}, [sw, h("span", { class: "nm", title: s.name, text: s.name }), v]));
+      return v;
+    });
+
+    var span = m.ts[m.ts.length - 1] - m.ts[0];
+    var plot = h("div", { class: "chart-plot", tabindex: "0", role: "slider", "data-fk": fk + ".chart",
+      "aria-label": title + ". Arrow keys move through time.", "aria-valuemin": "0", "aria-valuemax": String(m.ts.length - 1) });
+    var summary = h("p", { class: "sr-only", text: m.series.map(function (s) {
+      var last = latest(s), peak = null;
+      s.points.forEach(function (p) { if (p[1] !== null && (!peak || p[1] > peak[1])) peak = p; });
+      return s.name + ": " + (last ? "latest " + chartValue(m.unit, last[1]) + ", peak " + chartValue(m.unit, peak[1]) + " at " + chartWhen(peak[0], span) : "no data") + ".";
+    }).join(" ") });
+    card.appendChild(legend);
+    card.appendChild(plot);
+    card.appendChild(summary);
+
+    var geo = null, cursor = null, dots = [], at = pv.plugin + "/" + pv.view + "/" + fk;
+    var idx = chartAt[at] != null ? m.ts.indexOf(chartAt[at]) : -1;
+
+    function readout() {
+      var t = idx >= 0 ? m.ts[idx] : null, parts = [];
+      m.series.forEach(function (s, i) {
+        var v = t == null ? (latest(s) || [0, null])[1] : valueAt(s, t, m.step);
+        cells[i].textContent = chartValue(m.unit, v);
+        parts.push(s.name + " " + chartValue(m.unit, v));
+      });
+      var lt = m.ts[m.ts.length - 1];
+      when.textContent = t == null ? "Latest · " + clock(lt) : chartWhen(t, span);
+      plot.setAttribute("aria-valuenow", String(idx >= 0 ? idx : m.ts.length - 1));
+      plot.setAttribute("aria-valuetext", (t == null ? "Latest, " + chartWhen(lt, span) : chartWhen(t, span)) + ": " + parts.join(", "));
+      if (!geo) return;
+      if (t == null) { cursor.setAttribute("visibility", "hidden"); dots.forEach(function (d) { d.setAttribute("visibility", "hidden"); }); return; }
+      var x = geo.x(t);
+      cursor.setAttribute("x1", x); cursor.setAttribute("x2", x); cursor.setAttribute("visibility", "visible");
+      m.series.forEach(function (s, i) {
+        var v = valueAt(s, t, m.step);
+        if (v == null) { dots[i].setAttribute("visibility", "hidden"); return; }
+        dots[i].setAttribute("cx", x); dots[i].setAttribute("cy", geo.y(v)); dots[i].setAttribute("visibility", "visible");
+      });
+    }
+    function setIdx(i) {
+      idx = i;
+      if (i < 0) delete chartAt[at]; else chartAt[at] = m.ts[i];
+      readout();
+    }
+
+    function draw() {
+      var W = plot.clientWidth, H = plot.clientHeight;
+      if (W < 40 || H < 40) return;
+      var lo = Math.min.apply(null, m.vals), hi = Math.max.apply(null, m.vals);
+      lo = Math.min(lo, 0);
+      if (m.unit === "percent" && hi <= 1 && hi > 0.6) hi = 1;
+      var sc = chartScale(m.unit, Math.max(Math.abs(hi), Math.abs(lo)));
+      var slo = lo / sc.div, shi = hi / sc.div;
+      if (shi === slo) shi = slo + 1;
+      var rows = H < 200 ? 3 : 4, ys = niceStep((shi - slo) / rows);
+      var y0 = Math.floor(slo / ys) * ys, y1 = Math.ceil(shi / ys - 1e-9) * ys, yt = [];
+      for (var v = y0; v <= y1 + ys / 2; v += ys) yt.push(+v.toFixed(10));
+      var label = function (x) { return (Math.abs(x) >= 100 || x === Math.round(x) ? String(Math.round(x)) : String(+x.toFixed(ys < 1 ? 2 : 1))) + sc.suffix; };
+      var labels = yt.map(label), lw = Math.max.apply(null, labels.map(function (s) { return s.length; })) * 6.2 + 10;
+      var L = Math.round(lw), R = 10, T = 8, B = 22, pw = W - L - R, ph = H - T - B;
+      var t0 = m.ts[0], t1 = Math.max(m.ts[m.ts.length - 1], t0 + 60);
+      var X = function (t) { return L + (t - t0) / (t1 - t0) * pw; };
+      var Y = function (val) { return T + ph - (val / sc.div - y0) / (y1 - y0) * ph; };
+      geo = { x: X, y: Y };
+
+      var svg = svgEl("svg", { width: W, height: H, viewBox: "0 0 " + W + " " + H, "aria-hidden": "true" });
+      yt.forEach(function (tv, i) {
+        var y = Math.round(T + ph - (tv - y0) / (y1 - y0) * ph) + 0.5;
+        svg.appendChild(svgEl("line", { x1: L, x2: W - R, y1: y, y2: y, class: "grid" + (tv === 0 ? " base" : "") }));
+        var tx = svgEl("text", { x: L - 8, y: y + 3.5, "text-anchor": "end", class: "tick" });
+        tx.textContent = labels[i];
+        svg.appendChild(tx);
+      });
+
+      // Time ticks on a round step, aligned to local time.
+      var want = Math.max(2, Math.floor(pw / 92)), tstep = TIME_STEPS[TIME_STEPS.length - 1];
+      for (var k = 0; k < TIME_STEPS.length; k++) if ((t1 - t0) / TIME_STEPS[k] <= want) { tstep = TIME_STEPS[k]; break; }
+      var off = -new Date(t0 * 1000).getTimezoneOffset() * 60;
+      for (var tt = Math.ceil((t0 + off) / tstep) * tstep - off; tt <= t1; tt += tstep) {
+        var x = X(tt), midnight = (tt + off) % 86400 === 0;
+        var lab = svgEl("text", { x: x, y: H - 6, "text-anchor": x < L + 24 ? "start" : x > W - R - 24 ? "end" : "middle", class: "tick" });
+        lab.textContent = tstep >= 86400 || midnight ? dayLabel(tt) : clock(tt);
+        svg.appendChild(lab);
+        svg.appendChild(svgEl("line", { x1: Math.round(x) + 0.5, x2: Math.round(x) + 0.5, y1: T + ph, y2: T + ph + 4, class: "grid base" }));
+      }
+
+      // Stretches where no series has a value: shaded, not bridged.
+      var run = -1;
+      for (var i = 0; i <= m.ts.length; i++) {
+        var empty = i < m.ts.length && m.series.every(function (s) { return valueAt(s, m.ts[i], m.step) == null; });
+        if (empty && run < 0) run = i;
+        if (!empty && run >= 0) {
+          var ga = X(m.ts[Math.max(run - 1, 0)]), gb = X(m.ts[Math.min(i, m.ts.length - 1)]);
+          svg.appendChild(svgEl("rect", { x: ga, y: T, width: Math.max(gb - ga, 1), height: ph, class: "gap" }));
+          if (gb - ga > 52) {
+            var gl = svgEl("text", { x: (ga + gb) / 2, y: T + 14, "text-anchor": "middle", class: "gap-label" });
+            gl.textContent = "no data";
+            svg.appendChild(gl);
+          }
+          run = -1;
+        }
+      }
+
+      m.series.forEach(function (s) {
+        var d = "", seg = [];
+        function flush() {
+          if (seg.length === 1) svg.appendChild(svgEl("circle", { cx: seg[0][0], cy: seg[0][1], r: 2, class: "solo " + s.cls }));
+          else if (seg.length) d += "M" + seg.map(function (p) { return p[0].toFixed(1) + " " + p[1].toFixed(1); }).join("L");
+          seg = [];
+        }
+        s.points.forEach(function (p) { if (p[1] === null) flush(); else seg.push([X(p[0]), Y(p[1])]); });
+        flush();
+        if (d) svg.appendChild(svgEl("path", { d: d, class: "ln " + s.cls + (s.dash ? " " + s.dash : "") }));
+      });
+
+      cursor = svgEl("line", { y1: T, y2: T + ph, class: "cursor", visibility: "hidden" });
+      svg.appendChild(cursor);
+      dots = m.series.map(function (s) { var c = svgEl("circle", { r: 3.5, class: "pt " + s.cls, visibility: "hidden" }); svg.appendChild(c); return c; });
+      plot.replaceChildren(svg);
+      readout();
+    }
+
+    function fromPointer(e) {
+      if (!geo) return;
+      var r = plot.getBoundingClientRect(), x = e.clientX - r.left, best = 0, bd = Infinity;
+      for (var i = 0; i < m.ts.length; i++) { var dd = Math.abs(geo.x(m.ts[i]) - x); if (dd < bd) { bd = dd; best = i; } }
+      setIdx(best);
+    }
+    plot.addEventListener("pointermove", fromPointer);
+    plot.addEventListener("pointerdown", fromPointer);
+    plot.addEventListener("pointerleave", function (e) { if (e.pointerType === "mouse") setIdx(-1); });
+    plot.addEventListener("keydown", function (e) {
+      var last = m.ts.length - 1, cur = idx < 0 ? last : idx, big = Math.max(1, Math.round(m.ts.length / 10)), next = null;
+      if (e.key === "ArrowLeft" || e.key === "ArrowDown") next = Math.max(0, cur - 1);
+      else if (e.key === "ArrowRight" || e.key === "ArrowUp") next = Math.min(last, cur + 1);
+      else if (e.key === "PageDown") next = Math.max(0, cur - big);
+      else if (e.key === "PageUp") next = Math.min(last, cur + big);
+      else if (e.key === "Home") next = 0;
+      else if (e.key === "End") next = last;
+      else if (e.key === "Escape" && idx >= 0) next = -1;
+      if (next === null) return;
+      e.preventDefault();
+      setIdx(next);
+    });
+
+    plot._draw = draw;
+    if (!chartRO && "ResizeObserver" in window) {
+      chartRO = new ResizeObserver(function (entries) { entries.forEach(function (en) { if (en.target._draw) en.target._draw(); }); });
+    }
+    if (chartRO) chartRO.observe(plot); else setTimeout(draw, 0);
+    readout();
     return card;
   }
 
