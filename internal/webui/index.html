@@ -234,12 +234,13 @@ code {
 
 .wrap { max-width: 1240px; margin: 0 auto; padding: var(--s5) var(--s4) calc(104px + var(--safe-b)); }
 
-/* Four or more plugin tabs leave no room for the search field's label. */
-@media (min-width: 641px) and (max-width: 1400px) {
-  .row1:has(.tab[data-plugin] ~ .tab[data-plugin] ~ .tab[data-plugin] ~ .tab[data-plugin]) .ibtn.search-btn {
-    min-width: 0; width: 36px; padding: 0; justify-content: center; border-color: transparent; background: none;
-  }
-  .row1:has(.tab[data-plugin] ~ .tab[data-plugin] ~ .tab[data-plugin] ~ .tab[data-plugin]) .ibtn.search-btn :is(.lab, kbd) { display: none; }
+/* When the top row overflows (many plugin tabs, a narrow window), fitTopbar()
+   first folds search into an icon, then drops the tab labels to icons. */
+@media (min-width: 641px) {
+  .row1.fit-search .ibtn.search-btn { min-width: 0; width: 36px; padding: 0; justify-content: center; border-color: transparent; background: none; }
+  .row1.fit-search .ibtn.search-btn :is(.lab, kbd) { display: none; }
+  .row1.fit-tabs .tab .tl { display: none; }
+  .row1.fit-tabs .tab { padding: 8px 10px; }
 }
 @media (max-width: 900px) {
   .ibtn.search-btn { min-width: 0; }
@@ -4931,7 +4932,21 @@ body.has-up-bubble main.wrap { padding-bottom: 88px; }
     });
     nav.classList.toggle("has-more", tabs.length > 0);
     syncNavSelection();
+    fitTopbar();
   }
+
+  // Measured, not counted: tab labels vary in length, so fold the top row one
+  // step at a time until it fits.
+  function fitTopbar() {
+    var row = document.querySelector(".topbar .row1");
+    if (!row) return;
+    row.classList.remove("fit-search", "fit-tabs");
+    if (row.scrollWidth <= row.clientWidth) return;
+    row.classList.add("fit-search");
+    if (row.scrollWidth > row.clientWidth) row.classList.add("fit-tabs");
+  }
+  if ("ResizeObserver" in window) new ResizeObserver(function () { fitTopbar(); }).observe(document.querySelector(".topbar .row1"));
+  else window.addEventListener("resize", fitTopbar);
 
   function syncNavSelection() {
     var overflowOn = false;
