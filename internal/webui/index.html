@@ -1419,6 +1419,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 .session-line .ic { color: var(--text-3); }
 .session-line b { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
 .session-line .btn { margin-left: auto; }
+.session-line > span { flex: 1 1 14em; min-width: 0; }
 .signin-body { margin-top: 12px; padding: 16px; background: var(--surface-2); border-radius: var(--r); }
 .signin-toggle { display: flex; align-items: center; gap: 8px; }
 .signin-toggle .lab { font-size: var(--fs-sm); font-weight: 600; color: var(--text); cursor: pointer; margin: 0; display: inline; }
@@ -1443,6 +1444,91 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 .signin-warn { display: flex; gap: 7px; align-items: baseline; font-size: var(--fs-xs); color: var(--text-2); margin: 0; }
 .signin-warn .g { color: var(--warn); font-size: 9px; }
 
+/* Uploads: the bubble, the drop target and the sheet. */
+.up-bubble {
+  position: fixed; z-index: 42; right: max(20px, env(safe-area-inset-right, 0px)); bottom: calc(20px + var(--safe-b));
+  width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  background: var(--surface-3); color: var(--text); border: 1px solid var(--line-2); box-shadow: var(--shadow);
+  transition: transform var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out);
+}
+.up-bubble:hover { background: color-mix(in srgb, var(--surface-3) 85%, var(--text)); }
+.up-bubble:active { transform: scale(0.95); }
+.up-bubble .ic { width: 22px; height: 22px; position: relative; }
+.up-bubble.busy::before {
+  content: ""; position: absolute; inset: -1px; border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--p, 0) * 1%), transparent 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+}
+.up-badge {
+  position: absolute; top: -3px; right: -3px; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 999px;
+  font-size: 11px; font-weight: 650; line-height: 19px; text-align: center; font-variant-numeric: tabular-nums;
+  background: var(--accent); color: var(--accent-ink); box-shadow: 0 0 0 2px var(--bg);
+}
+.up-badge.bad { background: var(--crit); color: #fff; }
+.up-badge.ok { background: var(--ok); color: #fff; }
+.up-badge:empty { display: none; }
+.up-drop { position: fixed; inset: 0; z-index: 80; padding: 16px; background: var(--scrim); display: grid; pointer-events: none; }
+.up-drop-box {
+  display: grid; place-content: center; justify-items: center; gap: 8px; text-align: center;
+  border: 2px dashed var(--accent); border-radius: var(--r-lg); background: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: var(--text-2); font-size: var(--fs-sm);
+}
+.up-drop-box .ic { width: 40px; height: 40px; color: var(--accent); stroke-width: 1.5; margin-bottom: 4px; }
+.up-drop-box b { font-size: var(--fs-xl); color: var(--text); font-weight: 650; letter-spacing: -0.015em; }
+.up-sheet h3 { margin-bottom: 14px; }
+.up-sheet h4 { font-size: var(--fs-xs); font-weight: 650; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin: 20px 0 8px; }
+.up-pick {
+  display: grid; justify-items: center; gap: 10px; padding: 26px 16px; text-align: center;
+  border: 1px dashed var(--line-2); border-radius: var(--r-lg); background: var(--surface-2); color: var(--text-3); font-size: var(--fs-sm);
+}
+.up-pick > .ic { width: 28px; height: 28px; color: var(--text-3); stroke-width: 1.5; }
+.up-files { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
+.up-files li { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--line); font-size: var(--fs-sm); min-width: 0; }
+.up-files li:first-child { border-top: 0; }
+.up-files .ic { color: var(--text-3); }
+.up-files .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.up-files .sz { color: var(--text-3); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.up-targets { display: grid; gap: 8px; }
+.up-target {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; width: 100%;
+  text-align: left; padding: 12px 14px; min-height: 56px; cursor: pointer; color: var(--text);
+  background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r);
+  transition: border-color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out);
+}
+.up-target:hover:not(:disabled, .info) { border-color: var(--accent); background: var(--accent-soft); }
+.up-target.info { cursor: default; min-height: 0; padding: 10px 14px; border-color: var(--line); }
+.up-dests { margin: 0; padding: 0; list-style: none; }
+.up-target:disabled { cursor: default; background: none; border-style: dashed; }
+.up-target .lb { font-weight: 600; font-size: var(--fs-md); overflow-wrap: anywhere; }
+.up-target .lb small { font-weight: 500; font-size: var(--fs-xs); color: var(--text-3); margin-left: 6px; }
+.up-target .hp, .up-target .ac { grid-column: 1; font-size: var(--fs-xs); color: var(--text-3); overflow-wrap: anywhere; }
+.up-target:disabled .lb { color: var(--text-3); }
+.up-target .why { grid-column: 1; font-size: var(--fs-xs); color: var(--warn); border: 0; cursor: inherit; text-transform: none; letter-spacing: 0; }
+.up-target .go { grid-column: 2; grid-row: 1 / span 3; color: var(--text-3); }
+.up-target:hover:not(:disabled) .go { color: var(--accent); }
+.up-queue { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
+.up-row { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 3px 10px; padding: 11px 12px; border-top: 1px solid var(--line); font-size: var(--fs-sm); }
+.up-row:first-child { border-top: 0; }
+.up-row .g { font-size: 9px; align-self: center; text-align: center; color: var(--text-3); }
+.up-row.done .g { color: var(--ok); font-size: 13px; font-weight: 700; }
+.up-row.failed .g { color: var(--crit); }
+.up-row.sending .g { color: var(--info); }
+.up-row .nm { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.up-row .to { font-weight: 400; color: var(--text-3); }
+.up-row .st { grid-column: 2; font-size: var(--fs-xs); color: var(--text-2); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.up-row.failed .st { color: var(--crit); }
+.up-row .pv-track { grid-column: 2; margin: 4px 0 2px; height: 5px; }
+.up-row .pv-track i { transition: width 0.2s linear; }
+.up-sheet .actions { margin-top: 16px; }
+.up-sheet .sub { margin-top: 10px; }
+@media (max-width: 640px) {
+  .up-bubble { right: 14px; bottom: calc(var(--nav-h) + var(--safe-b) + 14px); width: 48px; height: 48px; }
+  .up-sheet .actions .btn { flex: 1 1 auto; min-height: 44px; }
+  .session-line > span { flex-basis: calc(100% - 26px); }
+  .session-line .btn { margin-left: 26px; }
+}
+@media (prefers-reduced-motion: reduce) { .up-row .pv-track i { transition: none; } }
 </style>
 </head>
 <body>
@@ -1483,6 +1569,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
   <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></symbol>
   <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></symbol>
   <symbol id="i-network" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/></symbol>
   <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></symbol>
   <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
@@ -1684,6 +1771,10 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 <div id="more-scrim" class="more-scrim hidden"></div>
 <div id="more-sheet" class="more-sheet hidden" role="menu" aria-label="More sections"></div>
 <div id="tip" class="tip hidden" role="status" aria-live="polite"></div>
+<!-- Uploads: shown only when some plugin offers a destination. -->
+<button id="up-bubble" class="up-bubble hidden" type="button" aria-label="Upload files"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg><span id="up-badge" class="up-badge"></span></button>
+<input id="up-input" type="file" multiple hidden>
+<div id="up-drop" class="up-drop hidden" aria-hidden="true"><div class="up-drop-box"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg><b>Drop to upload</b><span id="up-drop-sub">Choose where it goes next.</span></div></div>
 <div id="scrim" class="scrim hidden"></div>
 <aside id="drawer" class="drawer hidden" role="dialog" aria-modal="true" aria-label="Details">
   <button class="close" id="drawer-close" type="button" aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
@@ -4167,9 +4258,10 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 
   var drawerReturnFocus = null;
 
-  function openDrawer(html) {
+  function openDrawer(html, label) {
     var opening = $("drawer").classList.contains("hidden") || !!$("drawer").motionOut;
     if (opening) drawerReturnFocus = document.activeElement;
+    $("drawer").setAttribute("aria-label", label || "Details");
     $("drawer-body").innerHTML = html;
     reveal($("drawer"), opening && (phone() ? [{ opacity: 0, transform: "translateY(40px)" }, { opacity: 1, transform: "none" }]
       : [{ opacity: 0, transform: "translateX(28px)" }, { opacity: 1, transform: "none" }]), motion.d3);
@@ -5894,6 +5986,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       if (body.settings) { ui.vals = {}; ui.secret = {}; }
       applyPlugin(item);
       plugSetMsg(ui, on ? "Enabled." : "Disabled. Settings are kept.");
+      loadUploadTargets();
       renderPlugins();
       if (ui.open) renderPlugForm(plugByID(id), ui);
     }, function (err) {
@@ -5915,6 +6008,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       ui.busy = ""; ui.vals = {}; ui.secret = {}; ui.errors = {}; ui.enable = false;
       applyPlugin(item);
       ui.msg = enabled ? "Saved and enabled." : "Saved."; ui.bad = false;
+      loadUploadTargets();
       renderPlugins();
       renderPlugForm(plugByID(id), ui);
     }, function (err) {
@@ -6292,6 +6386,285 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     });
   }
 
+  // ------------------------------------------------------------ uploads
+  //
+  // Plugins that can take a file list their destinations at GET
+  // /uploads/targets. With at least one, a bubble sits bottom right and a
+  // file dropped anywhere opens the sheet. Files go one at a time, as raw
+  // bodies over XHR (fetch cannot report upload progress), named in
+  // X-Upload-Name. The server decides; the checks here only explain early
+  // what it would refuse.
+
+  var up = { targets: [], files: [], queue: [], xhr: null, drag: 0, seen: true };
+
+  function loadUploadTargets() {
+    return api("/uploads/targets").then(function (list) {
+      up.targets = (Array.isArray(list) ? list : []).filter(function (t) {
+        return t && PLUGIN_ID.test(t.plugin) && VIEW_NAME.test(t.id);
+      });
+    }, function (err) {
+      if (err.unauthorized) return;
+      up.targets = [];
+    }).then(function () { renderUpBubble(); if (!up.queue.length) renderUpSheet(); });
+  }
+
+  function appShown() { return !$("app").classList.contains("hidden"); }
+  function upActive() { return up.queue.filter(function (q) { return q.state === "waiting" || q.state === "sending"; }); }
+
+  function renderUpBubble() {
+    var b = $("up-bubble"), active = upActive(), show = appShown() && (up.targets.length > 0 || up.queue.length > 0);
+    b.classList.toggle("hidden", !show);
+    var badge = $("up-badge"), failed = up.queue.filter(function (q) { return q.state === "failed"; }).length;
+    var done = up.queue.filter(function (q) { return q.state === "done"; }).length;
+    badge.className = "up-badge";
+    if (active.length) badge.textContent = String(active.length);
+    else if (!up.seen && failed) { badge.textContent = "!"; badge.classList.add("bad"); }
+    else if (!up.seen && done) { badge.textContent = String(done); badge.classList.add("ok"); }
+    else badge.textContent = "";
+    var cur = up.queue.filter(function (q) { return q.state === "sending"; })[0];
+    b.classList.toggle("busy", !!cur);
+    b.style.setProperty("--p", cur && cur.file.size ? Math.round(cur.loaded / cur.file.size * 100) : 0);
+    b.setAttribute("aria-label", active.length ? "Uploads: " + active.length + " to go" :
+      !up.seen && failed ? "Uploads: " + failed + " failed" : !up.seen && done ? "Uploads: " + done + " finished" : "Upload files");
+  }
+
+  function upSheetOpen() {
+    var s = $("drawer-body").firstChild;
+    return !$("drawer").classList.contains("hidden") && !$("drawer").motionOut && !!s && s.classList && s.classList.contains("up-sheet");
+  }
+
+  function extOf(name) {
+    var i = name.lastIndexOf(".");
+    return i > 0 ? name.slice(i).toLowerCase() : "";
+  }
+  function acceptList(t) { return Array.isArray(t.accept) ? t.accept.filter(function (x) { return typeof x === "string"; }) : []; }
+  // Why a destination cannot take these files, or "" when it can.
+  function upReason(t, files) {
+    var acc = acceptList(t), max = +t.max_bytes || 0;
+    var wrong = acc.length ? files.filter(function (f) { return acc.indexOf(extOf(f.name)) < 0; }) : [];
+    if (wrong.length === 1) return "Does not take " + (files.length > 1 ? wrong[0].name : extOf(wrong[0].name) || "files without an extension") + ". Takes " + acc.join(" ");
+    if (wrong.length) return "Does not take " + wrong.length + " of these files. Takes " + acc.join(" ");
+    var big = max ? files.filter(function (f) { return f.size > max; }) : [];
+    if (big.length === 1) return (files.length > 1 ? big[0].name + " is" : "This file is") + " over its " + bytes(max) + " limit";
+    if (big.length) return big.length + " of these files are over its " + bytes(max) + " limit";
+    return "";
+  }
+
+  function openUpSheet(files) {
+    if (files && files.length) up.files = Array.prototype.slice.call(files);
+    up.seen = true;
+    if (!upSheetOpen()) openDrawer("", "Upload");
+    renderUpSheet(true);
+    renderUpBubble();
+  }
+
+  function sizeOf(n) { return n === 0 ? "0 B" : bytes(n); }
+  function upSeveralPlugins() { return up.targets.some(function (t) { return t.plugin !== up.targets[0].plugin; }); }
+  function upTerms(t) {
+    var acc = acceptList(t);
+    return (acc.length ? acc.join(" ") : "Any file") + (+t.max_bytes ? " · up to " + bytes(+t.max_bytes) : "");
+  }
+
+  function renderUpSheet(opening) {
+    if (!opening && !upSheetOpen()) return;
+    var focusKey = document.activeElement && document.activeElement.getAttribute ? document.activeElement.getAttribute("data-up") : null;
+    var kids = [], active = upActive();
+    if (up.files.length) {
+      var files = up.files;
+      kids.push(h("h3", { id: "up-title", text: files.length === 1 ? "Upload a file" : "Upload " + files.length + " files" }));
+      kids.push(h("ul", { class: "up-files", "aria-label": "Files" }, files.map(function (f) {
+        return h("li", {}, [iconNode("file", "sm"), h("span", { class: "nm", title: f.name, text: f.name }), h("span", { class: "sz", text: sizeOf(f.size) })]);
+      })));
+      kids.push(h("h4", { id: "up-to", text: "Send to" }));
+      var ok = 0, several = upSeveralPlugins();
+      kids.push(h("div", { class: "up-targets", role: "group", "aria-labelledby": "up-to" }, up.targets.map(function (t, i) {
+        var why = upReason(t, files), whyID = "up-why-" + i;
+        if (!why) ok++;
+        return h("button", { class: "up-target", type: "button", disabled: !!why, "data-up": "t" + i, "aria-describedby": why ? whyID : null,
+          onclick: function () { upEnqueue(t); } }, [
+          h("span", { class: "lb" }, [str(t.label) || t.id, several && str(t.plugin_name) ? h("small", { text: str(t.plugin_name) }) : null]),
+          str(t.help) ? h("span", { class: "hp", text: str(t.help) }) : null,
+          why ? h("span", { class: "why", id: whyID, text: why }) : h("span", { class: "ac", text: upTerms(t) }),
+          why ? null : iconNode("send", "go")]);
+      })));
+      if (!up.targets.length) kids.push(h("p", { class: "sub", text: "No destination is set up any more. Configure one in Admin → Plugins." }));
+      else if (!ok) kids.push(h("p", { class: "sub", text: files.length > 1 ? "No destination takes all of these files. Upload them in smaller groups." : "No destination takes this file." }));
+      kids.push(h("div", { class: "actions" }, [h("button", { class: "btn", type: "button", "data-up": "cancel-pick", onclick: function () { up.files = []; renderUpSheet(); } }, ["Cancel"])]));
+      if (active.length) kids.push(h("p", { class: "sub", text: active.length + " earlier upload" + (active.length > 1 ? "s are" : " is") + " still going; these join the queue." }));
+    } else if (up.queue.length) {
+      kids.push(h("h3", { id: "up-title", text: active.length ? "Uploading" : "Uploads" }));
+      kids.push(h("ul", { class: "up-queue", "aria-label": "Uploads" }, up.queue.map(upRow)));
+      kids.push(h("div", { class: "actions" }, active.length ? [
+        h("button", { class: "btn", type: "button", "data-up": "stop", onclick: upCancel }, [iconNode("x", "sm"), active.length > 1 ? "Cancel the rest" : "Cancel"])
+      ] : [
+        h("button", { class: "btn primary", type: "button", "data-up": "more", onclick: function () { up.queue = []; renderUpBubble(); $("up-input").click(); } }, [iconNode("upload", "sm"), "Upload more"]),
+        h("button", { class: "btn", type: "button", "data-up": "clear", onclick: function () { up.queue = []; renderUpBubble(); renderUpSheet(); } }, ["Clear list"])
+      ]));
+    } else {
+      kids.push(h("h3", { id: "up-title", text: "Upload" }));
+      kids.push(h("div", { class: "up-pick" }, [iconNode("upload"),
+        h("span", { text: "Drop files anywhere on the page, or" }),
+        h("button", { class: "btn primary", type: "button", "data-up": "choose", onclick: function () { $("up-input").click(); } }, ["Choose files"])]));
+      kids.push(h("h4", { id: "up-dest", text: "Destinations" }));
+      var several2 = upSeveralPlugins();
+      kids.push(h("ul", { class: "up-targets up-dests", "aria-labelledby": "up-dest" }, up.targets.map(function (t) {
+        return h("li", { class: "up-target info" }, [
+          h("span", { class: "lb" }, [str(t.label) || t.id, several2 && str(t.plugin_name) ? h("small", { text: str(t.plugin_name) }) : null]),
+          str(t.help) ? h("span", { class: "hp", text: str(t.help) }) : null,
+          h("span", { class: "ac", text: upTerms(t) })]);
+      })));
+    }
+    var sheet = h("div", { class: "up-sheet" }, kids);
+    $("drawer-body").replaceChildren(sheet);
+    var again = focusKey && sheet.querySelector('[data-up="' + focusKey + '"]');
+    if (!again && focusKey) again = sheet.querySelector(".actions .btn, .up-target:not([disabled])");
+    if (again) again.focus();
+  }
+
+  var UP_GLYPH = { waiting: "○", sending: "●", done: "✓", failed: GLYPH.critical, cancelled: "–" };
+  function upRow(q) {
+    var t = q.target, cls = "up-row " + q.state;
+    var g = h("span", { class: "g", "aria-hidden": "true", text: UP_GLYPH[q.state] });
+    var name = h("span", { class: "nm", title: q.file.name }, [q.file.name, h("span", { class: "to", text: " → " + (str(t.label) || t.id) })]);
+    var row = h("li", { class: cls }, [g, name]);
+    if (q.state === "sending") {
+      var pct = q.file.size ? Math.min(100, Math.round(q.loaded / q.file.size * 100)) : 0;
+      var track = h("div", { class: "pv-track t-info", role: "progressbar", "aria-label": "Uploading " + q.file.name, "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(pct) }, [h("i")]);
+      track.firstChild.style.width = pct + "%";
+      q.el = { track: track, st: h("span", { class: "st", text: pct + "% · " + sizeOf(q.loaded) + " of " + sizeOf(q.file.size) }) };
+      row.appendChild(track);
+      row.appendChild(q.el.st);
+    } else {
+      q.el = null;
+      row.appendChild(h("span", { class: "st", text: q.state === "waiting" ? "Waiting · " + sizeOf(q.file.size) : q.message }));
+    }
+    return row;
+  }
+
+  // Progress moves the bar and the numbers only; the sheet is not rebuilt.
+  function upProgress(q) {
+    renderUpBubble();
+    if (!q.el || !q.el.track.isConnected) return;
+    var pct = q.file.size ? Math.min(100, Math.round(q.loaded / q.file.size * 100)) : 0;
+    q.el.track.firstChild.style.width = pct + "%";
+    q.el.track.setAttribute("aria-valuenow", String(pct));
+    q.el.st.textContent = (pct >= 100 ? "Sent · waiting for " + (str(q.target.label) || q.target.id) : pct + "% · " + sizeOf(q.loaded) + " of " + sizeOf(q.file.size));
+  }
+
+  function upEnqueue(t) {
+    up.files.forEach(function (f) { up.queue.push({ file: f, target: t, state: "waiting", loaded: 0, message: "" }); });
+    up.files = [];
+    up.seen = upSheetOpen();
+    renderUpSheet();
+    renderUpBubble();
+    upNext();
+  }
+
+  // Plain words for what the server answered.
+  function upError(q, status, j) {
+    var t = q.target, label = str(t.label) || t.id, why = str(j && j.error);
+    switch (status) {
+      case 0: return "The connection dropped before the upload finished.";
+      case 400: return "The upload was refused" + (why ? ": " + why : ".");
+      case 401: return "Your session has ended. Sign in again and retry.";
+      case 403: return "Not allowed" + (why ? ": " + why : ".");
+      case 404: return label + " is no longer available.";
+      case 411: return "The browser did not send the file's size.";
+      case 413: return "Too large for " + label + (+t.max_bytes ? " (the limit is " + bytes(+t.max_bytes) + ")." : ".");
+      case 415: return label + " does not take this kind of file" + (acceptList(t).length ? " (it takes " + acceptList(t).join(" ") + ")." : ".");
+      case 422: return "The file name cannot be used" + (why ? " (" + why + ")" : "") + ". Rename the file and try again.";
+      case 502: return label + " refused it" + (why ? ": " + why : ".");
+    }
+    return "Failed (HTTP " + status + ")" + (why ? ": " + why : ".");
+  }
+
+  function upNext() {
+    if (up.xhr) return;
+    var q = up.queue.filter(function (x) { return x.state === "waiting"; })[0];
+    if (!q) {
+      renderUpBubble();
+      if (upSheetOpen()) up.seen = true;
+      renderUpSheet();
+      renderUpBubble();
+      return;
+    }
+    q.state = "sending"; q.loaded = 0;
+    var xhr = up.xhr = new XMLHttpRequest();
+    xhr.open("POST", "/plugins/" + encodeURIComponent(q.target.plugin) + "/upload/" + encodeURIComponent(q.target.id));
+    xhr.setRequestHeader("X-Requested-By", "homelab-inventory");
+    xhr.setRequestHeader("X-Upload-Name", encodeURIComponent(q.file.name));
+    if (token) xhr.setRequestHeader("Authorization", "Bearer " + token);
+    xhr.upload.onprogress = function (e) { if (e.lengthComputable) { q.loaded = e.loaded; upProgress(q); } };
+    function settle(state, message) {
+      if (up.xhr !== xhr) return;
+      up.xhr = null;
+      q.state = state; q.message = message;
+      if (!upSheetOpen()) up.seen = false;
+      announce((state === "done" ? "Uploaded " : state === "failed" ? "Failed: " : "Cancelled: ") + q.file.name + (state === "failed" ? ". " + message : ""));
+      renderUpSheet();
+      if (xhr.status === 404) loadUploadTargets();
+      if (xhr.status === 401) { up.queue.forEach(function (x) { if (x.state === "waiting") { x.state = "cancelled"; x.message = "Not sent"; } }); renderUpBubble(); showGate(!!token); return; }
+      upNext();
+    }
+    xhr.onload = function () {
+      var j = null;
+      try { j = JSON.parse(xhr.responseText); } catch (e) { j = null; }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        var stored = str(j && j.name), msg = str(j && j.message) || "Uploaded.";
+        settle("done", msg + (stored && stored !== q.file.name ? " Saved as " + stored + "." : ""));
+      } else settle("failed", upError(q, xhr.status, j));
+    };
+    xhr.onerror = function () { settle("failed", upError(q, 0, null)); };
+    xhr.onabort = function () { settle("cancelled", "Cancelled"); };
+    renderUpSheet();
+    upProgress(q);
+    xhr.send(q.file);
+  }
+
+  function upCancel() {
+    up.queue.forEach(function (x) { if (x.state === "waiting") { x.state = "cancelled"; x.message = "Not sent"; } });
+    if (up.xhr) up.xhr.abort(); else { renderUpSheet(); renderUpBubble(); }
+  }
+
+  $("up-bubble").addEventListener("click", function () { openUpSheet(); });
+  $("up-input").addEventListener("change", function () {
+    var files = this.files;
+    if (files && files.length) openUpSheet(files);
+    this.value = "";
+  });
+
+  // Drop anywhere: only files, only while a destination exists and the app
+  // (not the gate or setup) is on screen.
+  function dragsFiles(e) {
+    var types = e.dataTransfer && e.dataTransfer.types;
+    return !!types && Array.prototype.indexOf.call(types, "Files") >= 0 && up.targets.length > 0 && appShown();
+  }
+  function hideDrop() { up.drag = 0; $("up-drop").classList.add("hidden"); }
+  document.addEventListener("dragenter", function (e) {
+    if (!dragsFiles(e)) return;
+    e.preventDefault();
+    up.drag++;
+    $("up-drop").classList.remove("hidden");
+  });
+  document.addEventListener("dragover", function (e) {
+    if (!dragsFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  });
+  document.addEventListener("dragleave", function (e) {
+    if (!dragsFiles(e)) return;
+    if (--up.drag <= 0) hideDrop();
+  });
+  document.addEventListener("drop", function (e) {
+    if (!dragsFiles(e)) return;
+    e.preventDefault();
+    hideDrop();
+    if (e.dataTransfer.files && e.dataTransfer.files.length) openUpSheet(e.dataTransfer.files);
+  });
+  window.addEventListener("beforeunload", function (e) {
+    if (up.xhr) { e.preventDefault(); e.returnValue = ""; }
+  });
+
   // ------------------------------------------------------------ loading
 
   var loading = null, refreshTimer = null;
@@ -6343,6 +6716,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
         refreshAgents();
         applyRoute();
         loadAuthStatus();
+        loadUploadTargets();
       })
       .catch(function (err) {
         if (err.unauthorized) { showGate(!!token); return; }
@@ -6364,6 +6738,8 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     clearTimeout(refreshTimer);
     $("app").classList.add("hidden");
     $("gate").classList.remove("hidden");
+    hideDrop();
+    renderUpBubble();
     renderGate(failed, note);
     loadAuthStatus().then(function (s) {
       if ($("gate").classList.contains("hidden")) return;
