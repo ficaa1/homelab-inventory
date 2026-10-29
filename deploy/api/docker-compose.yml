@@ -11,6 +11,7 @@ services:
       - "${API_PORT:-8080}:8080"
     volumes:
       - inventory-data:/data
+      - "${UPLOAD_DIR:-./uploads}:/uploads"
       # Optional restarts: read docs/restarts.md before enabling.
       # - /var/run/docker.sock:/var/run/docker.sock
       # Optional signed updates: mount only the public release tree, never keys.

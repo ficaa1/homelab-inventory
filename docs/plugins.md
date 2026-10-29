@@ -3,8 +3,8 @@
 Plugins are optional integrations compiled into the API. Open **Admin → Plugins**
 to enable an available plugin, enter its settings, run **Test**, then save. Enabled
 plugins with a tab appear in navigation. Disabling removes the tab and resolves
-its cached alerts through the usual notification transitions. The Media integration
-is included in the server build and starts disabled.
+its cached alerts through the usual notification transitions. Media, Uploads and
+Network are included in the server build and start disabled.
 
 Secret fields show only whether a value is set. Leave a field out of an update
 to keep its saved value; send `null` to clear it. A failed settings validation or
@@ -71,7 +71,9 @@ Use the provided Host for dependencies:
   a failed request's URL is scrubbed before Go wraps the error. Do not reuse a
   failed request to recover its query parameters.
 - `CacheDir()` is `<data>/plugins/<id>/`, mode 0700. Restrict plugin writes to
-  that directory; built-ins run in-process and are trusted code, not a sandbox.
+  that directory, except for an explicitly configured upload destination folder
+  (the destination-folder amendment below). Built-ins run in-process and are
+  trusted code, not a sandbox.
 - `Logf` prefixes lines with `plugin <id>:` and scrubs configured secrets and
   URL queries. Never include credentials in logs, views, alerts or error messages.
 - `Now()` supplies the current time.
@@ -81,6 +83,8 @@ Optional interfaces are detected with type assertions:
 ```go
 Alerts(context.Context) ([]plugin.Alert, error)
 Image(context.Context, string) (contentType string, body []byte, err error)
+UploadTargets() []plugin.UploadTarget
+Upload(context.Context, string, string, int64, io.Reader) (plugin.UploadResult, error)
 ```
 
 Alert has Rule, Subject, Severity (`critical`, `warning`, `info`), Summary and
@@ -124,6 +128,7 @@ is the union of these types:
 | `list` | title, empty; `items`: title, subtitle, meta, tone, image, progress, badges, link |
 | `table` | title, empty, columns, rows |
 | `posters` | title, empty; `items`: title, subtitle, image, badge, progress, link |
+| `chart` | title, unit, empty; series: name, tone, points |
 | `notice` | tone, text |
 | `section` | title, blocks |
 
@@ -131,7 +136,7 @@ There are at most 50 blocks total, 500 items or rows per block, and two block
 levels (top-level blocks and children of a section). Only sections nest.
 Tones are `ok`, `info`, `warn`, `crit`, `muted`, or omitted. Progress value is
 between 0 and 1. Table columns have key, label, optional format (`text`, `number`,
-`bytes`, `duration_s`, `time`, `percent`) and align (`left`, `right`). Rows map
+`bytes`, `bytes_s`, `duration_s`, `time`, `percent`) and align (`left`, `right`). Rows map
 column keys to scalar values.
 
 Images use opaque refs matching `[A-Za-z0-9._-]{1,128}`, never external image
@@ -140,6 +145,16 @@ must have an `image/*` content type and fit in 4 MiB. Links either target a
 manifest view with string params, or contain an http/https href. The dashboard
 opens external links in a new tab with noopener/noreferrer. Bad refs, links,
 tones, block types, HTML or limits produce 502 rather than unvalidated JSON.
+
+### Chart blocks
+
+`chart` may appear at the top level or inside a section. `unit` is `bytes_s`
+(bytes/second), `bytes`, `ms`, `percent` (a 0–1 fraction), or `number`. There are
+at most eight series, each with `name`, optional `tone`, and at most 500 `points`.
+Each point is `[unix_seconds, value]`, with strictly ascending finite timestamps
+and a finite value or `null` for a gap. NaN/Infinity are refused by core validation.
+The per-series point allowance applies to charts rather than a combined 500-point
+budget across all series. `bytes_s` is also a table column format.
 
 ## Media
 
@@ -201,3 +216,113 @@ item's download age. Recovery or removal clears the observation. A restart or
 configuration change starts observation again. Failed alert reads return an
 error so the core keeps the last good alerts and applies its normal unreachable
 rule after three failed polls; they never falsely resolve a partially read queue.
+
+## Uploads
+
+Configure at least one destination, run Test, then enable **Uploads**. Destinations
+are independent; incomplete URL/credential groups are refused. Folder and remote
+file limits default to 100 MiB, configurable as whole numbers from 1 to 2048.
+The API additionally enforces a 2 GiB maximum. All file bodies stream; nothing
+is buffered wholesale in memory or in the API data directory.
+
+- **Folder:** enter a clean absolute existing directory outside the API's data
+  directory. Configure checks filesystem metadata without writing; Test creates
+  and removes a temporary file. Delivery writes `.hi-upload-*.part` at mode 0644,
+  syncs it, then hard-links it to the final name. Existing names are preserved;
+  `a.pdf` becomes `a (1).pdf` through `a (99).pdf`, after which delivery fails.
+  The filesystem must support hard links. Temporary files are removed on normal
+  success and failure; a process crash may leave a hidden partial file.
+- **Paperless-ngx:** enter its base URL and an API token for a user permitted to
+  add documents. Test uses `GET /api/`; delivery uses
+  `POST /api/documents/post_document/`, multipart field `document`, with
+  `Authorization: Token …`. Accepted extensions: `.pdf .png .jpg .jpeg .tif .tiff
+  .webp .gif .txt`. Success says **queued task <id>**; it does not mean document
+  consumption has completed. No token exchange or task polling is performed.
+- **Calibre-Web:** enter the base URL, username and password for an account with
+  upload permission. Test performs a form login. Delivery obtains CSRF tokens
+  from `/login` and `/`, uses a fresh cookie jar per upload, and posts multipart
+  field `btn-upload` to `/upload`. Accepted extensions: `.epub .pdf .mobi .azw3
+  .cbz .fb2`. Refusals show the plain flash error with configured secrets removed.
+  Only new books are submitted; existing-book/format actions are not exposed.
+
+All remote requests use the host's configured-authority guard and capped
+responses, including redirects and login. Remote file transfers extend the
+client timeout to 30 minutes while retaining those guards. Connection, TLS and
+response-header timeouts remain short. Upstream diagnostic bodies are not
+reported, except for the bounded, plain Calibre-Web flash message.
+
+For Docker, the supplied Compose files mount
+`${UPLOAD_DIR:-./uploads}:/uploads`; configure `folder_path` as `/uploads` in the
+GUI. The installer creates that host directory owned by container UID/GID
+10001. For a manual Compose install, prepare it before starting:
+
+```sh
+mkdir -p deploy/api/uploads
+sudo chown 10001:10001 deploy/api/uploads
+```
+
+Alternatively set `UPLOAD_DIR` to a dedicated absolute host path, create it with
+that ownership, and keep the variable set for subsequent Compose commands.
+The installer's default is `uploads/` beside its generated `compose.yml`.
+
+For systemd, create a dedicated directory writable by the `homelab-inventory`
+service user. The installed service uses `ProtectSystem=strict`; also add a
+systemd drop-in granting `ReadWritePaths=/srv/inventory-uploads` (use your actual
+path), then reload and restart the service. Paths hidden by `ProtectHome` need
+an explicit bind mount as well; prefer a dedicated directory under `/srv`.
+
+Recent shows the last 100 handled uploads (including delivery errors), persisted
+atomically in `<data>/plugins/uploads/recent.json` (0600). It stores only time,
+destination, name, declared size and result; no contents or credentials. The core
+also maintains its separate append-only upload audit described in [API](api.md).
+There are no upload alerts, directory browsing, file downloads, deletion actions,
+automatic retries, file-server dependencies or malware/content inspection.
+
+### Destination-folder amendment
+
+The original plugin write boundary is extended solely for file uploads: a plugin
+may write in its `Host.CacheDir()` **or in a destination folder explicitly
+configured by the owner**. Uploads refuses the API data directory and its
+subdirectories, including symlink aliases. This grants no general filesystem API;
+clients choose a sanitized single filename and an advertised destination ID.
+Publication never overwrites a destination entry.
+
+## Network
+
+Enable **Network** with the base URL of an existing Prometheus. A Bearer token
+is optional. The plugin makes only GET requests to `/api/v1/query`,
+`/api/v1/query_range` and, for Test, `/api/v1/status/buildinfo`. Redirects are refused so requests stay
+on those fixed paths. A reverse-proxy
+path prefix is supported. There are no user-supplied PromQL queries.
+
+**node_exporter** supplies per-host receive/transmit bytes per second, network
+errors and drops. `node_uname_info` supplies readable nodenames where available;
+otherwise the instance name is shown without its port. Device exclusions are
+anchored to the complete interface name; the default excludes loopback,
+container bridges, virtual interfaces and common VPN interfaces. The setting
+must compile as a regular expression and cannot contain quotes, line breaks or
+backticks. Backslashes are escaped inside the server-owned PromQL literal.
+
+**blackbox_exporter** supplies `probe_success` and `probe_duration_seconds` by
+instance/job. **cAdvisor** supplies the ten busiest named containers by combined
+receive/transmit rate. Each exporter is optional: missing data produces a notice,
+and Test calls it `not found — optional` with a successful check. Failed source
+requests produce notices while available sources still render.
+
+Overview contains fleet receive/transmit, probe availability and error rate,
+a fleet traffic chart, host rates, probes with latency, and busiest containers.
+Traffic shows receive/transmit history for up to 20 hosts sorted by current
+traffic. History windows are 1h, 6h (default) or 24h; step sizes keep ranges at
+most 300 points. Responses and failures are cached for 30 seconds in bounded
+memory. Non-finite metric values become null chart gaps; malformed responses
+are refused. Prometheus remains responsible for scraping and retention.
+
+The stable local alert rule is `probe.down` (core rule `network.probe.down`),
+severity warning, subject equal to the probe instance. It fires when
+`max_over_time(probe_success[10m]) == 0`; absent probes do not generate alerts.
+Alert delivery uses the core's normal cached polling and transition behaviour.
+
+This integration does not install exporters, discover targets, probe from the API,
+change Prometheus, run arbitrary queries, restart services or capture packets.
+It reads exporter labels for host, probe and container names; keep sensitive
+labels out of those metrics if dashboard readers should not see them.
