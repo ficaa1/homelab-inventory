@@ -124,7 +124,7 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode([]any{map[string]any{"id": 12, "title": "Example movie", "monitored": true, "digitalRelease": at}, map[string]any{"id": 13, "title": "Outside window", "monitored": true, "digitalRelease": f.now.AddDate(0, 0, 40).Format(time.RFC3339)}})
 		}
 	case "/api/v3/history":
-		if r.URL.Query().Get("eventType") != "3" || r.URL.Query().Get("pageSize") != "50" {
+		if r.URL.Query().Get("eventType") != "3" || r.URL.Query().Get("pageSize") != "100" {
 			f.t.Error("unbounded or unfiltered import history")
 		}
 		rows := []any{}
@@ -136,7 +136,7 @@ func (f *fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			row := map[string]any{"eventType": "downloadFolderImported", "date": at.Format(time.RFC3339), "quality": map[string]any{"quality": map[string]any{"name": "HD"}}, "data": map[string]any{"importedSize": "1024", "droppedPath": "private-path"}}
 			if svc == "sonarr" {
 				row["series"] = map[string]any{"title": "Example series"}
-				row["episode"] = map[string]any{"title": fmt.Sprintf("Episode %d", i)}
+				row["episode"] = map[string]any{"title": fmt.Sprintf("Episode %d", i), "seasonNumber": i / 2, "episodeNumber": i}
 			} else {
 				row["movie"] = map[string]any{"title": "Example movie"}
 			}
@@ -242,7 +242,7 @@ func TestViewsChecksCacheAndImages(t *testing.T) {
 	}
 	library := view(t, r, "library")
 	imports := block(t, library, "Recently imported")
-	if len(imports.Rows) != 50 || imports.Rows[0]["size"].(float64) != 1024 || imports.Rows[0]["title"] != "Example series · Episode 0" {
+	if len(imports.Rows) != 50 || imports.Rows[0]["size"].(float64) != 2048 || imports.Rows[0]["title"] != "Example series · S00 · 2 episodes" {
 		t.Fatal("recent import projection/sort/cap failed")
 	}
 	if len(library.Blocks) != 5 {
@@ -327,7 +327,7 @@ func TestDegradationPaginationAndAlertTransitions(t *testing.T) {
 	}
 	f.pageTwo.Store(true)
 	initial, err := m.Alerts(context.Background())
-	if err != nil || len(initial) != 2 || initial[0].Rule != "sonarr.health" || initial[0].Subject != "DownloadClientCheck" || initial[0].Severity != "warning" || initial[1].Severity != "critical" {
+	if err != nil || len(initial) != 2 || initial[0].Rule != "sonarr.health" || initial[0].Subject != "DownloadClientCheck" || initial[0].Severity != "info" || initial[1].Severity != "warning" || strings.Contains(initial[0].Summary, "fixture-key") {
 		t.Fatal("health rule projection failed")
 	}
 	if f.count("/sonarr/api/v3/queue") < 2 {

@@ -192,8 +192,8 @@ Stable plugin-local alert rules (the core prefixes each with `media.`):
 
 | Rule | Subject | Severity |
 | --- | --- | --- |
-| `sonarr.health` | Sonarr health check source | warning for warning-level; critical only for error-level |
-| `radarr.health` | Radarr health check source | warning for warning-level; critical only for error-level |
+| `sonarr.health` | Sonarr health check source | info for warning-level, warning for error-level (never critical); the summary carries Arr's own message |
+| `radarr.health` | Radarr health check source | info for warning-level, warning for error-level (never critical); the summary carries Arr's own message |
 | `queue.stuck` | Series or movie title | warning after a warning/error condition has been observed for more than one hour |
 
 Queue warning age is tracked in memory from the first observed warning, not the

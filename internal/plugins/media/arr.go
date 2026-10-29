@@ -249,15 +249,21 @@ func (m *Media) upcoming(ctx context.Context, s service) ([]scheduled, error) {
 	return out, nil
 }
 func (m *Media) history(ctx context.Context, s service) ([]map[string]any, error) {
-	q := url.Values{"page": {"1"}, "pageSize": {"50"}, "sortKey": {"date"}, "sortDirection": {"descending"}, "eventType": {"3"}, include(s): {"true"}}
+	q := url.Values{"page": {"1"}, "pageSize": {"100"}, "sortKey": {"date"}, "sortDirection": {"descending"}, "eventType": {"3"}, include(s): {"true"}}
+	if s.id == "sonarr" {
+		q.Set("includeEpisode", "true")
+	}
 	var page struct {
 		TotalRecords *int
 		Records      []struct {
 			EventType, Date string
 			Series, Movie   *mediaTitle
-			Episode         struct{ Title string }
-			Quality         struct{ Quality struct{ Name string } }
-			Data            struct {
+			Episode         *struct {
+				Title                       string
+				SeasonNumber, EpisodeNumber int
+			}
+			Quality struct{ Quality struct{ Name string } }
+			Data    struct {
 				Size         number
 				ImportedSize number
 			}
@@ -269,20 +275,19 @@ func (m *Media) history(ctx context.Context, s service) ([]map[string]any, error
 	if page.TotalRecords == nil || *page.TotalRecords < 0 || page.Records == nil {
 		return nil, errors.New(s.name + ": incomplete import history")
 	}
-	rows := []map[string]any{}
+	// Consecutive episodes of one season imported within six hours collapse into
+	// one row, so a season pack reads as one import rather than a wall of repeats.
+	type importRow struct {
+		title, season, quality string
+		episodes               int
+		episode                string
+		size                   number
+		at                     time.Time
+	}
+	var imports []*importRow
 	for _, r := range page.Records {
 		if r.EventType != "downloadFolderImported" {
 			continue
-		}
-		title := "Unknown title"
-		if r.Series != nil {
-			title = r.Series.Title
-			if r.Episode.Title != "" {
-				title += " · " + r.Episode.Title
-			}
-		}
-		if r.Movie != nil {
-			title = r.Movie.Title
 		}
 		at, err := time.Parse(time.RFC3339, r.Date)
 		if err != nil {
@@ -292,7 +297,43 @@ func (m *Media) history(ctx context.Context, s service) ([]map[string]any, error
 		if size == 0 {
 			size = r.Data.Size
 		}
-		rows = append(rows, map[string]any{"title": m.text(title), "quality": m.text(r.Quality.Quality.Name), "size": float64(size), "time": at.UTC().Format(time.RFC3339)})
+		row := &importRow{title: "Unknown title", quality: r.Quality.Quality.Name, episodes: 1, size: size, at: at}
+		if r.Movie != nil {
+			row.title = r.Movie.Title
+		}
+		if r.Series != nil {
+			row.title = r.Series.Title
+			if e := r.Episode; e != nil {
+				row.season = fmt.Sprintf("S%02d", e.SeasonNumber)
+				row.episode = fmt.Sprintf("S%02dE%02d", e.SeasonNumber, e.EpisodeNumber)
+				if e.Title != "" {
+					row.episode += " · " + e.Title
+				}
+			}
+		}
+		if n := len(imports); n > 0 && r.Series != nil && row.season != "" {
+			last := imports[n-1]
+			if last.title == row.title && last.season == row.season && last.at.Sub(at) < 6*time.Hour {
+				last.episodes++
+				last.size += size
+				if last.quality != row.quality {
+					last.quality = "Mixed"
+				}
+				continue
+			}
+		}
+		imports = append(imports, row)
+	}
+	rows := []map[string]any{}
+	for _, r := range imports {
+		title := r.title
+		switch {
+		case r.episodes > 1:
+			title += fmt.Sprintf(" · %s · %d episodes", r.season, r.episodes)
+		case r.episode != "":
+			title += " · " + r.episode
+		}
+		rows = append(rows, map[string]any{"title": m.text(title), "quality": m.text(r.quality), "size": float64(r.size), "time": r.at.UTC().Format(time.RFC3339)})
 	}
 	return rows, nil
 }

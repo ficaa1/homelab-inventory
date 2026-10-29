@@ -18,7 +18,7 @@ func (m *Media) Alerts(ctx context.Context) ([]plugin.Alert, error) {
 			continue
 		}
 		serviceCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-		var health []struct{ Source, Type string }
+		var health []struct{ Source, Type, Message string }
 		err := m.get(serviceCtx, s, "/api/v3/health", nil, &health, true)
 		if err != nil || health == nil {
 			cancel()
@@ -29,15 +29,22 @@ func (m *Media) Alerts(ctx context.Context) ([]plugin.Alert, error) {
 				cancel()
 				return nil, errors.New(s.name + ": incomplete health response")
 			}
+			// Arr health is housekeeping (indexers, updates, removed titles), not an
+			// outage: its errors are warnings and its warnings are info, so the
+			// default critical notification floor stays quiet about them.
 			severity := ""
 			switch strings.ToLower(h.Type) {
 			case "warning":
-				severity = "warning"
+				severity = "info"
 			case "error":
-				severity = "critical"
+				severity = "warning"
 			}
 			if severity != "" {
-				alerts = append(alerts, plugin.Alert{Rule: s.id + ".health", Subject: m.text(h.Source), Severity: severity, Summary: s.name + " health needs attention"})
+				summary := s.name + " health needs attention"
+				if msg := m.text(h.Message); msg != "" {
+					summary = s.name + ": " + msg
+				}
+				alerts = append(alerts, plugin.Alert{Rule: s.id + ".health", Subject: m.text(h.Source), Severity: severity, Summary: summary})
 			}
 		}
 		queue, err := m.queue(serviceCtx, s)
