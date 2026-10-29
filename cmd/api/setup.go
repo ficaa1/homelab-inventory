@@ -62,7 +62,7 @@ func (s *server) setupGate(next http.Handler) http.Handler {
 			state, _ := s.setup.Status()
 			if state != "claimed" {
 				p := r.URL.Path
-				public := p == "/" || p == "/healthz" || p == "/manifest.webmanifest" || p == "/sw.js" || p == "/icon.svg" || strings.HasPrefix(p, "/setup/") || p == "/install.sh" || strings.HasPrefix(p, "/agent/bin/")
+				public := p == "/auth/status" || p == "/auth/login" || p == "/auth/callback" || p == "/auth/logout" || p == "/" || p == "/healthz" || p == "/manifest.webmanifest" || p == "/sw.js" || p == "/icon.svg" || strings.HasPrefix(p, "/setup/") || p == "/install.sh" || strings.HasPrefix(p, "/agent/bin/")
 				if !public {
 					writeError(w, 503, "setup required")
 					return

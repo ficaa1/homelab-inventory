@@ -10,11 +10,13 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/actions"
 	"github.com/ficaa1/homelab-inventory/internal/agentrelease"
 	"github.com/ficaa1/homelab-inventory/internal/alert"
+	"github.com/ficaa1/homelab-inventory/internal/auth"
 	"github.com/ficaa1/homelab-inventory/internal/catalog"
 	"github.com/ficaa1/homelab-inventory/internal/composelog"
 	"github.com/ficaa1/homelab-inventory/internal/deps"
@@ -46,6 +48,13 @@ import (
 const maxInventoryBytes = 16 << 20
 
 type server struct {
+	authOnce               sync.Once
+	browserAuth            *auth.Manager
+	authErr                error
+	authTesting            atomic.Bool
+	authTestMu             sync.Mutex
+	authTestGeneration     uint64
+	authTestMessage        string
 	plugins                *plugin.Registry
 	setup                  *setup.Manager
 	agentBinDir, publicURL string
@@ -81,9 +90,9 @@ type server struct {
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
 	s.setupRoutes(mux)
+	s.authRoutes(mux)
 	s.pluginRoutes(mux)
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
-	mux.HandleFunc("GET /auth/status", s.handleAuthStatus)
 	mux.HandleFunc("POST /inventory", s.agentAuth(s.handleIngest))
 	mux.HandleFunc("GET /agent/manifest", s.agentAuth(s.handleAgentManifest))
 	mux.HandleFunc("GET /agent/artifacts/{sequence}/{name}", s.agentAuth(s.handleAgentArtifact))
@@ -134,28 +143,41 @@ func (s *server) routes() http.Handler {
 
 func (s *server) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if httpx.BearerOK(r, s.apiToken(), httpx.OpenWhenUnset) {
-			next(w, r)
-			return
+		// Any supplied Authorization header takes precedence over a session.
+		if len(r.Header.Values("Authorization")) > 0 {
+			if httpx.BearerOK(r, s.apiToken(), httpx.OpenWhenUnset) {
+				next(w, withActor(r, "bearer"))
+				return
+			}
+		} else {
+			if s.browserAuth != nil {
+				if session, ok := s.browserAuth.Session(r); ok {
+					if !auth.CSRF(r, s.authConfig()) {
+						writeError(w, 403, "missing CSRF header")
+						return
+					}
+					next(w, withActor(r, session.Email))
+					return
+				}
+			}
+			if httpx.BearerOK(r, s.apiToken(), httpx.OpenWhenUnset) {
+				next(w, withActor(r, "bearer"))
+				return
+			}
 		}
 		writeError(w, http.StatusUnauthorized, "missing or invalid bearer token")
 	}
 }
 
-// agentAuth permits only the narrowly scoped routes registered with it.
+// agentAuth preserves the API-token fallback, but never accepts browser sessions.
 func (s *server) agentAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if httpx.BearerOK(r, s.agentCredential(), httpx.DenyWhenUnset) {
-			next(w, r)
+		if httpx.BearerOK(r, s.agentCredential(), httpx.DenyWhenUnset) || httpx.BearerOK(r, s.apiToken(), httpx.OpenWhenUnset) {
+			next(w, withActor(r, "bearer"))
 			return
 		}
-		s.auth(next)(w, r)
+		writeError(w, http.StatusUnauthorized, "missing or invalid bearer token")
 	}
-}
-
-// Browser login is disabled; the dashboard uses bearer authentication.
-func (s *server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"enabled": false})
 }
 
 func (s *server) handleCapabilities(w http.ResponseWriter, r *http.Request) {

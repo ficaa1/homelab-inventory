@@ -546,8 +546,8 @@ func TestRemovedFeatureRoutesAreNotServed(t *testing.T) {
 	h := s.routes()
 	for _, path := range []string{
 		"/ext/tautulli/activity", "/tv/media", "/taste/picks", "/tdarr/status",
-		"/archive", "/upload", "/network", "/seasongate", "/auth/login",
-		"/auth/callback", "/digest/send", "/exec",
+		"/archive", "/upload", "/network", "/seasongate",
+		"/digest/send", "/exec",
 	} {
 		for _, method := range []string{"GET", "POST"} {
 			req := httptest.NewRequest(method, path, nil)
@@ -565,7 +565,7 @@ func TestBrowserLoginStatusIsDisabled(t *testing.T) {
 	s := testServer(t, "test-token")
 	rec := doRequest(t, s.routes(), "GET", "/auth/status", nil)
 	var status map[string]any
-	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &status) != nil || len(status) != 1 || status["enabled"] != false {
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &status) != nil || status["enabled"] != false || status["signed_in"] != false {
 		t.Fatalf("login status: %d %s", rec.Code, rec.Body)
 	}
 }

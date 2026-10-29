@@ -17,8 +17,10 @@ the agent download routes. JSON errors use `{"error":"..."}`. Only a successful 
 returns only the agent token. Both responses use Cache-Control: no-store.
 
 `-allow-unauthenticated` is for loopback development only; startup refuses any
-non-loopback listen address with that flag. `/auth/status` is always
-`{"enabled":false}` (no browser login provider); it does not describe bearer enforcement.
+non-loopback listen address with that flag. Browser sessions can authorize the
+same dashboard/admin routes as the API token, but cannot authorize agent,
+operator or setup routes. A supplied Authorization header decides authority,
+even when the browser also carries a session cookie.
 
 | Route | Purpose | Authentication |
 | --- | --- | --- |
@@ -31,7 +33,13 @@ non-loopback listen address with that flag. `/auth/status` is always
 | `GET /agent/bin/SHA256SUMS` | Packaged agent checksums | Public |
 | `GET /agent/bin/{linux-amd64,linux-arm64}/{discover,agentupdate}` | Packaged agent binaries | Public |
 | `GET /healthz` | Health check | Public |
-| `GET /auth/status` | Authentication status | Public |
+| `GET /auth/status` | Browser sign-in status (no-store) | Public |
+| `GET /auth/login?next=<path>` | Begin provider sign-in | Public; 404 when disabled |
+| `GET /auth/callback` | Complete provider sign-in | Public; signed state, rate limited |
+| `POST /auth/logout` | Clear browser session, 204 | CSRF header when a session cookie is present |
+| `GET /settings/auth` | Sign-in settings, masked secret and sources | API token or session |
+| `PUT /settings/auth` | Merge and validate sign-in settings, invalidate sessions | API token or session + CSRF |
+| `POST /settings/auth/test` | Test temporary discovery without saving | API token or session + CSRF |
 | `GET /capabilities` | Operator/restart configuration and enabled plugin tabs | API token |
 | `GET /plugins` | Built-in plugin status, schemas and masked settings | API token |
 | `PUT /plugins/{id}` | Enable, disable or merge plugin settings | API token |
@@ -89,8 +97,9 @@ non-loopback listen address with that flag. `/auth/status` is always
 ## First-run setup and enrollment
 
 While unclaimed or expired, all routes return 503 `{"error":"setup required"}`
-except `/`, dashboard static assets, `/healthz`, `/setup/*`, `/install.sh` and
-`/agent/bin/*`. Development open mode is separate. Setup enrollment still
+except `/`, dashboard static assets, `/healthz`, `/setup/*`, `/install.sh`,
+`/agent/bin/*` and the public `/auth/*` routes. While unclaimed, auth status says
+`enabled:false`, login returns 404, and callback redirects with `disabled`. Development open mode is separate. Setup enrollment still
 requires API bearer authority. `/agent/enroll` is usable only after claiming.
 
 `GET /setup/status` returns one of:
@@ -219,3 +228,58 @@ for enabled plugins with tabs. The MCP bridge adds two GET tools:
 `plugins_list` reads `/plugins` and removes settings and their schemas before
 returning the list; `plugin_view` takes `plugin`, `view` and optional string-valued
 `params`, reading the corresponding view route. Neither can change settings.
+
+## Browser sign-in
+
+`GET /auth/status` is public with `Cache-Control: no-store`. It returns
+`enabled`, `provider` (configured name or issuer host), and `signed_in`.
+A valid browser session adds `email` and `expires_at` (UTC RFC3339); otherwise
+both are omitted. `enabled` requires complete, enabled configuration and a
+claimed instance. It does not describe bearer-token enforcement.
+
+Login redirects to discovery's authorization endpoint with scopes
+`openid email profile`, state, nonce and S256 PKCE. The signed `hi_oidc` cookie
+lasts ten minutes, is HttpOnly, SameSite=Lax and scoped to `/auth/`. `next` must
+start with a single `/`; external URLs and ambiguous paths fall back to `/`.
+A successful callback sets `hi_session` (HttpOnly, SameSite=Lax, Path=/,
+Secure when the public URL uses HTTPS) and redirects to `next`. A failed
+callback redirects to `/#/login?error=<code>`: `state`, `denied`, `provider`,
+`unverified`, `not_allowed` or `disabled`. Callback attempts are limited to
+20/minute per socket peer IP (not forwarding headers); excess requests return
+429 with Retry-After: 60. The short-lived state cookie is cleared on callback.
+
+`POST /auth/logout` clears the session and returns 204. When a session cookie
+is present it requires `X-Requested-By: homelab-inventory`. All unsafe methods
+(other than GET/HEAD) authenticated by cookie require the same header; if
+Origin is supplied it must equal the configured public URL's origin. Failure
+returns 403 `{"error":"missing CSRF header"}`. Bearer-authenticated requests
+are exempt. A session never authorizes inventory POSTs, release downloads,
+enrollment/setup, release offers or restart execution. The public packaged
+installer downloads remain public.
+
+`GET /settings/auth` returns `enabled`, `state`, `message`, `issuer`,
+`client_id`, `client_secret:{"set":true|false}`, `allowed`, `public_url`,
+`provider_name`, `session_hours`, `require_verified`, derived `redirect_uri`
+and `sources`. Each source is `stored`, `env` or `default`. State is
+`unconfigured` when fields are missing, `disabled` when configured but off,
+`ok` when enabled and configured, or `error` after a failed test of the saved
+configuration. Provider name falls back to the issuer host.
+
+PUT accepts a partial object of those editable fields. Values replace, null
+clears (suppressing environment seeds), and omitted fields keep their values.
+Clearing session hours or verified-email policy restores its default; clearing
+enabled stores false. Secrets never need re-entry. Invalid fields or enabling
+without issuer, client ID, secret, public URL or an allowed address/domain
+returns 422 `{"error":"invalid sign-in settings","fields":{"allowed":"add at least one address or @domain"}}`
+and saves nothing. Validation does no network I/O. Every successful PUT, even
+an unchanged save, increments the stored generation and signs everyone out;
+200 returns the GET shape. Notification/retention reset preserves auth settings.
+
+`POST /settings/auth/test` accepts no body, `{}`, or
+`{"settings":{"issuer":"https://accounts.example.org"}}`. It merges settings
+without saving, fetches discovery within ten seconds, verifies the exact
+issuer and validates authorization/token/userinfo URLs. It returns 200
+`{"ok":true,"message":"Discovery and endpoints are valid","checks":[{"name":"Discovery","ok":true,"message":"Discovery and endpoints are valid"}]}`
+(or `ok:false` with a safe error); bad settings return 422. Only one test runs
+at a time; a second returns 429. This checks discovery, not actual credentials
+or a user's access: complete sign-in to check those.
