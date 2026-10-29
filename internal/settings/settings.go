@@ -43,6 +43,8 @@ const StateName = "settings"
 // Stored is what a person has explicitly set. Absent means "never set", which
 // falls through to the environment — see the package comment.
 type Stored struct {
+	Auth           AuthStored `json:"auth"`
+	AuthGeneration uint64     `json:"auth_generation,omitempty"`
 	RunRetention   *Retention `json:"run_retention,omitempty"`
 	NotifyLevel    *string    `json:"notify_level,omitempty"`
 	NotifyInterval *string    `json:"notify_interval,omitempty"`
@@ -62,6 +64,7 @@ type Stored struct {
 // Defaults are the values from the environment, used wherever Stored is
 // silent.
 type Defaults struct {
+	Auth             AuthStored
 	RunRetention     *store.Policy
 	NotifyLevel      alert.Level
 	NotifyInterval   time.Duration
