@@ -32,7 +32,12 @@ non-loopback listen address with that flag. `/auth/status` is always
 | `GET /agent/bin/{linux-amd64,linux-arm64}/{discover,agentupdate}` | Packaged agent binaries | Public |
 | `GET /healthz` | Health check | Public |
 | `GET /auth/status` | Authentication status | Public |
-| `GET /capabilities` | Operator/restart configuration | API token |
+| `GET /capabilities` | Operator/restart configuration and enabled plugin tabs | API token |
+| `GET /plugins` | Built-in plugin status, schemas and masked settings | API token |
+| `PUT /plugins/{id}` | Enable, disable or merge plugin settings | API token |
+| `POST /plugins/{id}/test` | Test temporary merged settings without saving | API token |
+| `GET /plugins/{id}/views/{name}` | Validated declarative plugin view | API token |
+| `GET /plugins/{id}/images/{ref}` | Private plugin image | API token |
 | `POST /inventory` | Submit inventory | Agent or API token |
 | `GET /agent/manifest` | Read update manifest | Agent or API token |
 | `GET /agent/artifacts/{sequence}/{name}` | Download update artifact | Agent or API token |
@@ -136,7 +141,7 @@ Linux command instead prints setup guidance and exits unsuccessfully. SHA256SUMS
 `GET /capabilities` uses the API token and returns, for example:
 
 ```json
-{"operator_enabled":true,"agent_offers_enabled":true,"actions_enabled":true,"actions_host":"host-a"}
+{"operator_enabled":true,"agent_offers_enabled":true,"actions_enabled":true,"actions_host":"host-a","plugins":[]}
 ```
 
 Offers require configured operator authority; status can still return 503 when no
@@ -175,3 +180,42 @@ The dashboard prompts for the operator token and keeps it only in sessionStorage
 under `homelab-inventory.operator-token`. A 403 clears it. Offer 403s show
 “Promotion is disabled — set OPERATOR_TOKEN or use the signer CLI”; restart
 403/404/503 responses disable controls for that page session.
+
+## Plugins
+
+All plugin routes use normal API authentication. Agent and operator tokens are
+refused; unclaimed setup mode returns 503. See [plugins](plugins.md) for the Go
+contract, configuration layering and declarative block formats.
+
+`GET /plugins` returns an array of objects containing `id`, `name`, `description`,
+`version`, `enabled`, `state`, `message`, `checked_at`, `tab`, `settings_schema` and
+`settings`. State is `disabled`, `unconfigured`, `ok`, `error` or `unavailable`.
+Secret settings return only `{"set":true}` or `{"set":false}`. The list is empty
+when the build contains no plugins and there are no retained plugin entries.
+
+`PUT /plugins/{id}` accepts `{"enabled":true,"settings":{"endpoint":"https://example.org"}}`.
+Both fields are optional. Present setting values replace stored values; `null`
+clears a key, including its environment fallback; absent keys keep stored values.
+Validation and Configure failures return 422
+`{"error":"invalid plugin settings","fields":{"endpoint":"must be an http(s) URL"}}`
+and save nothing. Success returns one updated list item. Disabling calls Close,
+removes the capability tab and clears plugin alerts.
+
+`POST /plugins/{id}/test` accepts an optional body
+`{"settings":{"endpoint":"https://example.org"}}`. It applies the same merge
+without saving and returns `{"ok":true,"message":"Connected","checks":[]}`.
+It has a ten-second context deadline and permits one concurrent test per plugin;
+a concurrent request returns 429. Invalid settings return 422.
+
+`GET /plugins/{id}/views/{name}` forwards query parameters and returns at most
+1 MiB of validated View JSON. Unknown/disabled plugins or views return 404;
+plugin failures or invalid views return 502 `{"error":"..."}`.
+`GET /plugins/{id}/images/{ref}` requires an enabled ImageSource and a valid ref,
+returns only `image/*`, caps bytes at 4 MiB, and sets
+`Cache-Control: private, max-age=3600` and `X-Content-Type-Options: nosniff`.
+
+`GET /capabilities` includes `plugins:[{"id":"sample","name":"Sample","tab":{...}}]`
+for enabled plugins with tabs. The MCP bridge adds two GET tools:
+`plugins_list` reads `/plugins` and removes settings and their schemas before
+returning the list; `plugin_view` takes `plugin`, `view` and optional string-valued
+`params`, reading the corresponding view route. Neither can change settings.
