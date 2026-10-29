@@ -234,6 +234,13 @@ code {
 
 .wrap { max-width: 1240px; margin: 0 auto; padding: var(--s5) var(--s4) calc(104px + var(--safe-b)); }
 
+/* Four or more plugin tabs leave no room for the search field's label. */
+@media (min-width: 641px) and (max-width: 1400px) {
+  .row1:has(.tab[data-plugin] ~ .tab[data-plugin] ~ .tab[data-plugin] ~ .tab[data-plugin]) .ibtn.search-btn {
+    min-width: 0; width: 36px; padding: 0; justify-content: center; border-color: transparent; background: none;
+  }
+  .row1:has(.tab[data-plugin] ~ .tab[data-plugin] ~ .tab[data-plugin] ~ .tab[data-plugin]) .ibtn.search-btn :is(.lab, kbd) { display: none; }
+}
 @media (max-width: 900px) {
   .ibtn.search-btn { min-width: 0; }
   .ibtn.search-btn .lab, .ibtn.search-btn kbd { display: none; }
@@ -1362,6 +1369,166 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   .plug-actions .src { flex-basis: 100%; }
 }
 
+/* A plugin's chart: lines on the card's own surface, axes in the table's
+   small caps colour, and a legend that doubles as the readout. */
+.pv-chart > h3 { justify-content: space-between; }
+.pv-chart > h3 .when { font-weight: 500; color: var(--text-3); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 4px 18px; padding: 10px 16px 0; margin: 0; list-style: none; font-size: var(--fs-xs); color: var(--text-2); }
+.chart-legend li { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.chart-legend .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chart-legend .v { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chart-legend svg { width: 18px; height: 8px; flex: none; overflow: visible; }
+.chart-plot { position: relative; height: 220px; margin: 4px 8px 8px; touch-action: pan-y; cursor: crosshair; border-radius: var(--r-sm); }
+.chart-plot:focus-visible { outline-offset: 0; }
+.chart-plot svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.chart .grid { stroke: var(--line); stroke-width: 1; shape-rendering: crispEdges; }
+.chart .grid.base { stroke: var(--line-2); }
+.chart .tick { fill: var(--text-3); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.chart .gap { fill: var(--track); }
+.chart .gap-label { fill: var(--text-3); font-size: 10px; }
+.chart .ln { fill: none; stroke-width: 1.75; stroke-linejoin: round; stroke-linecap: round; }
+.chart .ln.dash { stroke-dasharray: 5 4; }
+.chart .ln.dot { stroke-dasharray: 1.5 3.5; }
+.chart .cursor { stroke: var(--text-3); stroke-width: 1; shape-rendering: crispEdges; }
+.chart .pt { stroke: var(--surface); stroke-width: 2; }
+.chart .c-ok { stroke: var(--ok); } .chart .c-info { stroke: var(--info); } .chart .c-warn { stroke: var(--warn); }
+.chart .c-crit { stroke: var(--crit); } .chart .c-muted { stroke: var(--text-3); } .chart .c-accent { stroke: var(--accent); } .chart .c-text { stroke: var(--text-2); }
+.chart .pt.c-ok, .chart .solo.c-ok { fill: var(--ok); } .chart .pt.c-info, .chart .solo.c-info { fill: var(--info); }
+.chart .pt.c-warn, .chart .solo.c-warn { fill: var(--warn); } .chart .pt.c-crit, .chart .solo.c-crit { fill: var(--crit); }
+.chart .pt.c-muted, .chart .solo.c-muted { fill: var(--text-3); } .chart .pt.c-accent, .chart .solo.c-accent { fill: var(--accent); }
+.chart .pt.c-text, .chart .solo.c-text { fill: var(--text-2); }
+@media (max-width: 640px) {
+  .chart-legend { padding: 10px 12px 0; gap: 4px 14px; }
+  .chart-plot { height: 180px; margin: 4px 4px 6px; }
+}
+
+/* Sign-in on the token gate. */
+.gate-note { font-size: var(--fs-sm); text-align: left; padding: 10px 12px; border-radius: var(--r-sm); margin: 0 0 16px; background: var(--surface-2); color: var(--text-2); overflow-wrap: anywhere; }
+.gate-note.bad { background: var(--crit-soft); color: var(--text); }
+.gate-note.bad::before { content: "◆"; color: var(--crit); font-size: 9px; margin-right: 7px; vertical-align: 1px; }
+.gate-sso { display: grid; gap: 10px; margin-bottom: 4px; }
+.gate-sso .btn { min-height: 42px; font-size: var(--fs-md); }
+.gate-alt { background: none; border: 0; color: var(--text-3); font-size: var(--fs-sm); cursor: pointer; padding: 6px; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-2); }
+.gate-alt:hover { color: var(--text); }
+.gate-sso + #gate-token-box { margin-top: 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+
+/* Admin → Sign-in, and who is signed in. */
+#signin { scroll-margin-top: calc(var(--top-h) + 56px); }
+#signin h4 .pill { margin-left: auto; }
+.session-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 16px; font-size: var(--fs-sm); color: var(--text-2); }
+.session-line .ic { color: var(--text-3); }
+.session-line b { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+.session-line .btn { margin-left: auto; }
+.session-line > span { flex: 1 1 14em; min-width: 0; }
+.signin-body { margin-top: 12px; padding: 16px; background: var(--surface-2); border-radius: var(--r); }
+.signin-toggle { display: flex; align-items: center; gap: 8px; }
+.signin-toggle .lab { font-size: var(--fs-sm); font-weight: 600; color: var(--text); cursor: pointer; margin: 0; display: inline; }
+.signin-toggle .src { margin: 0; }
+.signin-toggle .src.bad { color: var(--crit); }
+.plug-form .flab { font-size: var(--fs-xs); color: var(--text-3); display: block; margin-bottom: 4px; font-weight: 550; }
+.signin-toggle .switch { margin-left: -6px; }
+.plug-form textarea {
+  width: 100%; min-height: 84px; resize: vertical; font: var(--fs-md)/1.45 var(--mono); font-size: 13px; color: var(--text);
+  background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--r-sm); padding: 9px 10px;
+}
+.plug-form textarea:focus { outline: none; border-color: var(--accent); }
+.plug-form textarea[aria-invalid="true"] { border-color: var(--crit); }
+.plug-form .from { font-size: var(--fs-xs); color: var(--text-3); margin-top: 4px; display: flex; align-items: center; gap: 5px; }
+.plug-form .from .ic { width: 12px; height: 12px; }
+.redirect { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 2px 4px 2px 10px; background: var(--bg); border: 1px dashed var(--line-2); border-radius: var(--r-sm); }
+.redirect code { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text); user-select: all; overflow-wrap: anywhere; }
+.redirect .btn { min-height: 30px; padding: 3px 9px; background: none; border-color: transparent; color: var(--text-2); }
+.redirect .btn:hover { background: var(--hover); color: var(--text); }
+.redirect .btn.ok { color: var(--ok); }
+.redirect.none code { color: var(--text-3); font-family: inherit; }
+.signin-warn { display: flex; gap: 7px; align-items: baseline; font-size: var(--fs-xs); color: var(--text-2); margin: 0; }
+.signin-warn .g { color: var(--warn); font-size: 9px; }
+
+/* Uploads: the bubble, the drop target and the sheet. */
+.up-bubble {
+  position: fixed; z-index: 42; right: max(20px, env(safe-area-inset-right, 0px)); bottom: calc(20px + var(--safe-b));
+  width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  background: var(--surface-3); color: var(--text); border: 1px solid var(--line-2); box-shadow: var(--shadow);
+  transition: transform var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out);
+}
+.up-bubble:hover { background: color-mix(in srgb, var(--surface-3) 85%, var(--text)); }
+.up-bubble:active { transform: scale(0.95); }
+.up-bubble .ic { width: 22px; height: 22px; position: relative; }
+.up-bubble.busy::before {
+  content: ""; position: absolute; inset: -1px; border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--p, 0) * 1%), transparent 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+}
+.up-badge {
+  position: absolute; top: -3px; right: -3px; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 999px;
+  font-size: 11px; font-weight: 650; line-height: 19px; text-align: center; font-variant-numeric: tabular-nums;
+  background: var(--accent); color: var(--accent-ink); box-shadow: 0 0 0 2px var(--bg);
+}
+.up-badge.bad { background: var(--crit); color: #fff; }
+.up-badge.ok { background: var(--ok); color: #fff; }
+.up-badge:empty { display: none; }
+.up-drop { position: fixed; inset: 0; z-index: 80; padding: 16px; background: var(--scrim); display: grid; pointer-events: none; }
+.up-drop-box {
+  display: grid; place-content: center; justify-items: center; gap: 8px; text-align: center;
+  border: 2px dashed var(--accent); border-radius: var(--r-lg); background: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: var(--text-2); font-size: var(--fs-sm);
+}
+.up-drop-box .ic { width: 40px; height: 40px; color: var(--accent); stroke-width: 1.5; margin-bottom: 4px; }
+.up-drop-box b { font-size: var(--fs-xl); color: var(--text); font-weight: 650; letter-spacing: -0.015em; }
+.up-sheet h3 { margin-bottom: 14px; }
+.up-sheet h4 { font-size: var(--fs-xs); font-weight: 650; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin: 20px 0 8px; }
+.up-pick {
+  display: grid; justify-items: center; gap: 10px; padding: 26px 16px; text-align: center;
+  border: 1px dashed var(--line-2); border-radius: var(--r-lg); background: var(--surface-2); color: var(--text-3); font-size: var(--fs-sm);
+}
+.up-pick > .ic { width: 28px; height: 28px; color: var(--text-3); stroke-width: 1.5; }
+.up-files { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
+.up-files li { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--line); font-size: var(--fs-sm); min-width: 0; }
+.up-files li:first-child { border-top: 0; }
+.up-files .ic { color: var(--text-3); }
+.up-files .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.up-files .sz { color: var(--text-3); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.up-targets { display: grid; gap: 8px; }
+.up-target {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; width: 100%;
+  text-align: left; padding: 12px 14px; min-height: 56px; cursor: pointer; color: var(--text);
+  background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r);
+  transition: border-color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out);
+}
+.up-target:hover:not(:disabled, .info) { border-color: var(--accent); background: var(--accent-soft); }
+.up-target.info { cursor: default; min-height: 0; padding: 10px 14px; border-color: var(--line); }
+.up-dests { margin: 0; padding: 0; list-style: none; }
+.up-target:disabled { cursor: default; background: none; border-style: dashed; }
+.up-target .lb { font-weight: 600; font-size: var(--fs-md); overflow-wrap: anywhere; }
+.up-target .lb small { font-weight: 500; font-size: var(--fs-xs); color: var(--text-3); margin-left: 6px; }
+.up-target .hp, .up-target .ac { grid-column: 1; font-size: var(--fs-xs); color: var(--text-3); overflow-wrap: anywhere; }
+.up-target:disabled .lb { color: var(--text-3); }
+.up-target .why { grid-column: 1; font-size: var(--fs-xs); color: var(--warn); border: 0; cursor: inherit; text-transform: none; letter-spacing: 0; }
+.up-target .go { grid-column: 2; grid-row: 1 / span 3; color: var(--text-3); }
+.up-target:hover:not(:disabled) .go { color: var(--accent); }
+.up-queue { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
+.up-row { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 3px 10px; padding: 11px 12px; border-top: 1px solid var(--line); font-size: var(--fs-sm); }
+.up-row:first-child { border-top: 0; }
+.up-row .g { font-size: 9px; align-self: center; text-align: center; color: var(--text-3); }
+.up-row.done .g { color: var(--ok); font-size: 13px; font-weight: 700; }
+.up-row.failed .g { color: var(--crit); }
+.up-row.sending .g { color: var(--info); }
+.up-row .nm { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.up-row .to { font-weight: 400; color: var(--text-3); }
+.up-row .st { grid-column: 2; font-size: var(--fs-xs); color: var(--text-2); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.up-row.failed .st { color: var(--crit); }
+.up-row .pv-track { grid-column: 2; margin: 4px 0 2px; height: 5px; }
+.up-row .pv-track i { transition: width 0.2s linear; }
+.up-sheet .actions { margin-top: 16px; }
+.up-sheet .sub { margin-top: 10px; }
+@media (max-width: 640px) {
+  .up-bubble { right: 14px; bottom: calc(var(--nav-h) + var(--safe-b) + 14px); width: 48px; height: 48px; }
+  .up-sheet .actions .btn { flex: 1 1 auto; min-height: 44px; }
+  .session-line > span { flex-basis: calc(100% - 26px); }
+  .session-line .btn { margin-left: 26px; }
+}
+@media (prefers-reduced-motion: reduce) { .up-row .pv-track i { transition: none; } }
 </style>
 </head>
 <body>
@@ -1402,6 +1569,10 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
   <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></symbol>
   <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></symbol>
+  <symbol id="i-network" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
 </svg>
 
@@ -1411,11 +1582,20 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     <div class="logo"><svg class="ic lg" aria-hidden="true"><use href="#i-logo"/></svg></div>
     <h2>homelab-inventory</h2>
     <p id="gate-msg">API token</p>
-    <form id="gate-form">
-      <input id="gate-token" type="password" placeholder="API_TOKEN" autocomplete="current-password" required>
-      <button class="btn primary" type="submit">Unlock</button>
-    </form>
-    <div id="gate-err" class="err hidden">Invalid token.</div>
+    <div id="gate-note" class="gate-note hidden" role="alert"></div>
+    <!-- Sign-in, when GET /auth/status says a provider is configured. The
+         token form stays one tap away underneath it. -->
+    <div id="gate-sso" class="gate-sso hidden">
+      <a id="gate-sso-link" class="btn primary" href="/auth/login">Sign in</a>
+      <button id="gate-alt" class="gate-alt" type="button" aria-expanded="false" aria-controls="gate-token-box">Use a token instead</button>
+    </div>
+    <div id="gate-token-box">
+      <form id="gate-form">
+        <input id="gate-token" type="password" placeholder="API_TOKEN" autocomplete="current-password" aria-label="API token" required>
+        <button class="btn primary" type="submit">Unlock</button>
+      </form>
+      <div id="gate-err" class="err hidden">Invalid token.</div>
+    </div>
   </div>
 
   <!-- First-run setup. Shown instead of the gate while GET /setup/status
@@ -1542,7 +1722,15 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
         floor would cover.
       -->
       <section id="panel-admin" class="hidden">
+        <!-- Who is signed in, when the session came from the provider. -->
+        <div id="session-line" class="setting session-line hidden"></div>
         <div id="admin"></div>
+        <!-- Sign-in: outside #admin for the same reason as the plugins below. -->
+        <section id="signin" class="setting hidden" aria-labelledby="signin-h">
+          <h4 id="signin-h"><svg class="ic" aria-hidden="true"><use href="#i-key"/></svg>Sign-in<span id="signin-state"></span></h4>
+          <p>Let people in through an OpenID Connect provider instead of pasting the API token. The token keeps working either way.</p>
+          <div id="signin-body"></div>
+        </section>
         <!-- Plugins: outside #admin, which is rebuilt on every refresh, so a
              settings form being typed into survives the page's polling. -->
         <section id="plugins" class="setting hidden" aria-labelledby="plugins-h">
@@ -1583,6 +1771,10 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 <div id="more-scrim" class="more-scrim hidden"></div>
 <div id="more-sheet" class="more-sheet hidden" role="menu" aria-label="More sections"></div>
 <div id="tip" class="tip hidden" role="status" aria-live="polite"></div>
+<!-- Uploads: shown only when some plugin offers a destination. -->
+<button id="up-bubble" class="up-bubble hidden" type="button" aria-label="Upload files"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg><span id="up-badge" class="up-badge"></span></button>
+<input id="up-input" type="file" multiple hidden>
+<div id="up-drop" class="up-drop hidden" aria-hidden="true"><div class="up-drop-box"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg><b>Drop to upload</b><span id="up-drop-sub">Choose where it goes next.</span></div></div>
 <div id="scrim" class="scrim hidden"></div>
 <aside id="drawer" class="drawer hidden" role="dialog" aria-modal="true" aria-label="Details">
   <button class="close" id="drawer-close" type="button" aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
@@ -1618,8 +1810,10 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     });
   }
 
+  // Every request names the page (the CSRF check for cookie sessions); the
+  // bearer, when there is one, is what the server goes by.
   function api(path, signal) {
-    var headers = {};
+    var headers = {"X-Requested-By": "homelab-inventory"};
     if (token) headers.Authorization = "Bearer " + token;
     return fetch(path, { headers: headers, cache: "no-store", signal: signal }).then(function (r) {
       if (r.status === 401) { var e = new Error("unauthorized"); e.unauthorized = true; throw e; }
@@ -1733,6 +1927,8 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       return { view: "plugin", plugin: safeDecode(parts[1]), pview: parts[2] ? safeDecode(parts[2]) : "",
                params: params, tab: route.tab, host: "" };
     }
+    // Where a failed sign-in lands; the gate reads the error from it.
+    if (parts[0] === "login") return { view: "fleet", tab: "home", host: "", login: true };
     if (parts[0] === "home" || parts[0] === "alerts" || parts[0] === "hosts" ||
         parts[0] === "ports" || parts[0] === "admin") {
       return { view: "fleet", tab: parts[0], host: "", sub: parts[0] === "admin" && parts[1] === "plugins" ? "plugins" : "" };
@@ -1752,6 +1948,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   function applyRoute() {
     var previous = route;
     route = readHash();
+    if (route.login) history.replaceState(null, "", "#/home");
     closeMore();
     $("view-fleet").classList.toggle("hidden", route.view !== "fleet");
     $("view-host").classList.toggle("hidden", route.view !== "host");
@@ -1768,6 +1965,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       // when the page was first loaded.
       if (route.tab === "admin") {
         loadSettings();
+        loadSignin();
         loadPlugins(route.sub === "plugins" && (previous.view !== "fleet" || previous.tab !== "admin" || previous.sub !== "plugins"));
       }
       if (previous.view !== "fleet" || previous.tab !== route.tab) routeIn($("panel-" + route.tab));
@@ -2868,7 +3066,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     }
     var controller = new AbortController();
     var timer = setTimeout(function () { controller.abort(); }, path.endsWith("/execute") ? 90000 : 10000);
-    var headers = Object.assign({"Content-Type": "application/json"}, extra);
+    var headers = Object.assign({"Content-Type": "application/json", "X-Requested-By": "homelab-inventory"}, extra);
     if (token && !headers.Authorization) headers.Authorization = "Bearer " + token;
     return fetch(path, {method: "POST", headers: headers, body: JSON.stringify(body), signal: controller.signal, cache: "no-store"})
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return {status: r.status, body: j}; }); })
@@ -2947,7 +3145,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   function pollRestartHealth(session, attempt) {
     if (!restartVisible(session) || document.hidden) return;
     var controller = restartHealthController = new AbortController(), timer = setTimeout(function () { controller.abort(); }, 3000);
-    fetch("/healthz", {cache: "no-store", signal: controller.signal}).then(function (r) {
+    fetch("/healthz", {cache: "no-store", signal: controller.signal, headers: {"X-Requested-By": "homelab-inventory"}}).then(function (r) {
       if (!r.ok) throw new Error("offline");
       if (restartVisible(session) && $("restart-health")) $("restart-health").textContent = "API online · check Docker";
       if (restartVisible(session)) loadActionLog();
@@ -3566,7 +3764,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       if (iconURLs[slug] === null) { drop(img); return; }
       if (iconURLs[slug]) { img.src = iconURLs[slug]; return; }
 
-      var headers = {};
+      var headers = {"X-Requested-By": "homelab-inventory"};
       if (token) headers.Authorization = "Bearer " + token;
       fetch("/icons/" + encodeURIComponent(slug), { headers: headers })
         .then(function (r) {
@@ -3708,7 +3906,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   // Every curation endpoint answers with the rebuilt catalog, so the page never
   // has to guess what the server decided — it just re-renders what came back.
   function write(path, method, body, signal, extraHeaders) {
-    var headers = extraHeaders || {};
+    var headers = Object.assign({"X-Requested-By": "homelab-inventory"}, extraHeaders);
     if (token && !headers.Authorization) headers.Authorization = "Bearer " + token;
     if (body !== undefined) headers["Content-Type"] = "application/json";
     return fetch(path, {
@@ -3717,7 +3915,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     }).then(function (r) {
       if (r.status === 401) { var e = new Error("unauthorized"); e.unauthorized = true; throw e; }
       if (!r.ok) return r.json().catch(function () { return {}; }).then(function (j) { var e = new Error(j.error || ("HTTP " + r.status)); e.status = r.status; e.fields = j.fields; if (r.status === 403 && extraHeaders) sessionStorage.removeItem(OPERATOR_KEY); throw e; });
-      return r.json();
+      return r.status === 204 ? null : r.json();
     });
   }
 
@@ -4060,9 +4258,10 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 
   var drawerReturnFocus = null;
 
-  function openDrawer(html) {
+  function openDrawer(html, label) {
     var opening = $("drawer").classList.contains("hidden") || !!$("drawer").motionOut;
     if (opening) drawerReturnFocus = document.activeElement;
+    $("drawer").setAttribute("aria-label", label || "Details");
     $("drawer-body").innerHTML = html;
     reveal($("drawer"), opening && (phone() ? [{ opacity: 0, transform: "translateY(40px)" }, { opacity: 1, transform: "none" }]
       : [{ opacity: 0, transform: "translateX(28px)" }, { opacity: 1, transform: "none" }]), motion.d3);
@@ -4879,6 +5078,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 
   function renderPluginView() {
     var root = $("plugin-body"), info = pluginInfo(pv.plugin), views = pluginViews(info);
+    if (chartRO) chartRO.disconnect();   // the charts being replaced; new ones observe themselves
     var name = info ? str(info.tab.title) || str(info.name) : pv.plugin;
     var inTab = views.some(function (v) { return v.name === pv.view; });
     var v = pv.data, err = pv.err;
@@ -4947,13 +5147,14 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       h("span", { text: str(text) })]);
   }
 
-  // Lists side by side when two or more follow each other; everything else
-  // takes the full width.
+  // Lists, or charts, side by side when two or more of a kind follow each
+  // other; everything else takes the full width.
   function appendBlocks(parent, blocks, depth, fk) {
     var i = 0;
     while (i < blocks.length) {
       var j = i;
-      while (j < blocks.length && blocks[j] && blocks[j].type === "list") j++;
+      var kind = blocks[i] && (blocks[i].type === "list" || blocks[i].type === "chart") ? blocks[i].type : null;
+      while (kind && j < blocks.length && blocks[j] && blocks[j].type === kind) j++;
       if (j - i >= 2) {
         for (var k = i; k < j; k++) {
           var el = renderBlock(blocks[k], depth, fk + k);
@@ -4973,6 +5174,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       case "stats": return statsBlock(b);
       case "list": return listBlock(b, fk);
       case "table": return tableBlock(b);
+      case "chart": return chartBlock(b, fk);
       case "posters": return postersBlock(b, fk);
       case "notice": return notice(b.tone, b.text);
       case "section":
@@ -5089,7 +5291,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     return card;
   }
 
-  var NUMERIC = { number: 1, bytes: 1, duration_s: 1, percent: 1 };
+  var NUMERIC = { number: 1, bytes: 1, bytes_s: 1, duration_s: 1, percent: 1 };
   function durShort(s) {
     s = Math.round(s);
     if (s < 60) return s + "s";
@@ -5104,6 +5306,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     switch (fmt) {
       case "number": return { text: isFinite(n) ? n.toLocaleString() : String(v) };
       case "bytes": return { text: isFinite(n) ? (n === 0 ? "0 B" : bytes(n)) : String(v) };
+      case "bytes_s": return { text: isFinite(n) ? (n === 0 ? "0 B/s" : bytes(n) + "/s") : String(v) };
       case "duration_s": return { text: isFinite(n) ? (n === 0 ? "0s" : durShort(n)) : String(v) };
       case "percent": return { text: isFinite(n) ? (Math.abs(n * 100) < 10 && n !== 0 ? (n * 100).toFixed(1) : Math.round(n * 100)) + "%" : String(v) };
       case "time":
@@ -5135,6 +5338,263 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     return card;
   }
 
+  // ------------------------------------------------------------ charts
+  //
+  // A line per series, drawn from numbers only. Width comes from the card, so
+  // drawing waits for a ResizeObserver; a refresh redraws at the same cursor.
+  // A null point breaks its line, and a stretch where no series has data is
+  // shaded and labelled rather than bridged.
+
+  var chartRO = null, chartAt = {};
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  function svgEl(tag, attrs) {
+    var el = document.createElementNS(SVG_NS, tag);
+    Object.keys(attrs || {}).forEach(function (k) { if (attrs[k] != null) el.setAttribute(k, String(attrs[k])); });
+    return el;
+  }
+
+  // How a unit reads: a scale picked from the largest value, so the axis says
+  // "40 MiB/s" rather than "41943040", and the exact value for the readout.
+  var BIN = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
+  function chartScale(unit, hi) {
+    hi = Math.abs(hi);
+    if (unit === "bytes" || unit === "bytes_s") {
+      var i = 0;
+      while (hi >= 1024 && i < BIN.length - 1) { hi /= 1024; i++; }
+      return { div: Math.pow(1024, i), suffix: " " + BIN[i] + (unit === "bytes_s" ? "/s" : "") };
+    }
+    if (unit === "percent") return { div: 0.01, suffix: "%" };
+    if (unit === "ms") return hi >= 1000 ? { div: 1000, suffix: " s" } : { div: 1, suffix: " ms" };
+    if (hi >= 1e9) return { div: 1e9, suffix: "G" };
+    if (hi >= 1e6) return { div: 1e6, suffix: "M" };
+    if (hi >= 1e4) return { div: 1e3, suffix: "k" };
+    return { div: 1, suffix: "" };
+  }
+  function chartValue(unit, v) {
+    if (v == null || !isFinite(v)) return "no data";
+    if (v === 0) return { bytes: "0 B", bytes_s: "0 B/s", ms: "0 ms", percent: "0%" }[unit] || "0";
+    var s = chartScale(unit, v), x = v / s.div, ax = Math.abs(x);
+    return (ax >= 100 ? Math.round(x) : ax >= 10 ? x.toFixed(1).replace(/\.0$/, "") : x.toFixed(2).replace(/\.?0+$/, "")) + s.suffix;
+  }
+  function niceStep(raw) {
+    var p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+  }
+  var TIME_STEPS = [60, 120, 300, 600, 900, 1800, 3600, 7200, 10800, 21600, 43200, 86400, 172800, 604800, 2592000];
+  function clock(t) { return new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+  function dayLabel(t) { return new Date(t * 1000).toLocaleDateString([], { month: "short", day: "numeric" }); }
+  function chartWhen(t, span) {
+    var d = new Date(t * 1000);
+    return (span > 86400 || d.toDateString() !== new Date().toDateString() ? d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) + " " : "") + clock(t);
+  }
+
+  // The usable shape of a chart block: series with sorted finite points, the
+  // union of their timestamps, and each series' colour and dash.
+  function chartModel(b) {
+    var raw = items(b, "series").slice(0, 8), toned = {};
+    raw.forEach(function (s) { if (tone(s.tone)) toned[tone(s.tone)] = 1; });
+    var spare = toned.info ? ["text", "accent"] : ["accent", "text"], uses = {}, n = 0;
+    var series = raw.map(function (s) {
+      var pts = (Array.isArray(s.points) ? s.points : []).filter(function (p) {
+        return Array.isArray(p) && typeof p[0] === "number" && isFinite(p[0]) && (p[1] === null || (typeof p[1] === "number" && isFinite(p[1])));
+      }).slice(0, 500).sort(function (a, c) { return a[0] - c[0]; });
+      var key = tone(s.tone) || spare[n++ % spare.length];
+      var k = uses[key] = (uses[key] || 0) + 1;
+      return { name: str(s.name) || "Series", tone: tone(s.tone), cls: "c-" + key, dash: ["", "dash", "dot"][(k - 1) % 3], points: pts };
+    });
+    var seen = {}, ts = [];
+    series.forEach(function (s) { s.points.forEach(function (p) { if (!seen[p[0]]) { seen[p[0]] = 1; ts.push(p[0]); } }); });
+    ts.sort(function (a, c) { return a - c; });
+    var vals = [];
+    series.forEach(function (s) { s.points.forEach(function (p) { if (p[1] !== null) vals.push(p[1]); }); });
+    // The usual spacing, so a missing stretch does not widen what counts as "at t".
+    var diffs = ts.slice(1).map(function (t, i) { return t - ts[i]; }).sort(function (a, c) { return a - c; });
+    var step = diffs.length ? diffs[diffs.length >> 1] : 0;
+    return { unit: str(b.unit) || "number", series: series, ts: ts, vals: vals, step: step };
+  }
+
+  // The value a series has at time t: its nearest point, if that point is
+  // close enough to count as "at t".
+  function valueAt(s, t, step) {
+    var p = s.points, lo = 0, hi = p.length - 1;
+    if (!p.length) return null;
+    while (lo < hi) { var mid = (lo + hi) >> 1; if (p[mid][0] < t) lo = mid + 1; else hi = mid; }
+    var best = p[lo];
+    if (lo > 0 && Math.abs(p[lo - 1][0] - t) < Math.abs(best[0] - t)) best = p[lo - 1];
+    return Math.abs(best[0] - t) <= Math.max(step, 1) * 0.75 ? best[1] : null;
+  }
+  function latest(s) {
+    for (var i = s.points.length - 1; i >= 0; i--) if (s.points[i][1] !== null) return s.points[i];
+    return null;
+  }
+
+  function chartBlock(b, fk) {
+    var m = chartModel(b), card = cardFor(b, null), title = str(b.title) || "Chart";
+    card.classList.add("pv-chart", "chart");
+    if (!m.vals.length) { card.appendChild(h("div", { class: "pv-empty", text: str(b.empty) || "No data yet" })); return card; }
+    var when = h("span", { class: "when" });
+    var head = card.querySelector("h3");
+    if (head) head.appendChild(when); else card.appendChild(h("h3", {}, [title, when]));
+
+    var legend = h("ul", { class: "chart-legend" }), cells = m.series.map(function (s) {
+      var sw = svgEl("svg", { viewBox: "0 0 18 8", "aria-hidden": "true" });
+      sw.appendChild(svgEl("line", { x1: 0, y1: 4, x2: 18, y2: 4, class: "ln " + s.cls + (s.dash ? " " + s.dash : "") }));
+      var v = h("span", { class: "v" });
+      legend.appendChild(h("li", {}, [sw, h("span", { class: "nm", title: s.name, text: s.name }), v]));
+      return v;
+    });
+
+    var span = m.ts[m.ts.length - 1] - m.ts[0];
+    var plot = h("div", { class: "chart-plot", tabindex: "0", role: "slider", "data-fk": fk + ".chart",
+      "aria-label": title + ". Arrow keys move through time.", "aria-valuemin": "0", "aria-valuemax": String(m.ts.length - 1) });
+    var summary = h("p", { class: "sr-only", text: m.series.map(function (s) {
+      var last = latest(s), peak = null;
+      s.points.forEach(function (p) { if (p[1] !== null && (!peak || p[1] > peak[1])) peak = p; });
+      return s.name + ": " + (last ? "latest " + chartValue(m.unit, last[1]) + ", peak " + chartValue(m.unit, peak[1]) + " at " + chartWhen(peak[0], span) : "no data") + ".";
+    }).join(" ") });
+    card.appendChild(legend);
+    card.appendChild(plot);
+    card.appendChild(summary);
+
+    var geo = null, cursor = null, dots = [], at = pv.plugin + "/" + pv.view + "/" + fk;
+    var idx = chartAt[at] != null ? m.ts.indexOf(chartAt[at]) : -1;
+
+    function readout() {
+      var t = idx >= 0 ? m.ts[idx] : null, parts = [];
+      m.series.forEach(function (s, i) {
+        var v = t == null ? (latest(s) || [0, null])[1] : valueAt(s, t, m.step);
+        cells[i].textContent = chartValue(m.unit, v);
+        parts.push(s.name + " " + chartValue(m.unit, v));
+      });
+      var lt = m.ts[m.ts.length - 1];
+      when.textContent = t == null ? "Latest · " + clock(lt) : chartWhen(t, span);
+      plot.setAttribute("aria-valuenow", String(idx >= 0 ? idx : m.ts.length - 1));
+      plot.setAttribute("aria-valuetext", (t == null ? "Latest, " + chartWhen(lt, span) : chartWhen(t, span)) + ": " + parts.join(", "));
+      if (!geo) return;
+      if (t == null) { cursor.setAttribute("visibility", "hidden"); dots.forEach(function (d) { d.setAttribute("visibility", "hidden"); }); return; }
+      var x = geo.x(t);
+      cursor.setAttribute("x1", x); cursor.setAttribute("x2", x); cursor.setAttribute("visibility", "visible");
+      m.series.forEach(function (s, i) {
+        var v = valueAt(s, t, m.step);
+        if (v == null) { dots[i].setAttribute("visibility", "hidden"); return; }
+        dots[i].setAttribute("cx", x); dots[i].setAttribute("cy", geo.y(v)); dots[i].setAttribute("visibility", "visible");
+      });
+    }
+    function setIdx(i) {
+      idx = i;
+      if (i < 0) delete chartAt[at]; else chartAt[at] = m.ts[i];
+      readout();
+    }
+
+    function draw() {
+      var W = plot.clientWidth, H = plot.clientHeight;
+      if (W < 40 || H < 40) return;
+      var lo = Math.min.apply(null, m.vals), hi = Math.max.apply(null, m.vals);
+      lo = Math.min(lo, 0);
+      if (m.unit === "percent" && hi <= 1 && hi > 0.6) hi = 1;
+      var sc = chartScale(m.unit, Math.max(Math.abs(hi), Math.abs(lo)));
+      var slo = lo / sc.div, shi = hi / sc.div;
+      if (shi === slo) shi = slo + 1;
+      var rows = H < 200 ? 3 : 4, ys = niceStep((shi - slo) / rows);
+      var y0 = Math.floor(slo / ys) * ys, y1 = Math.ceil(shi / ys - 1e-9) * ys, yt = [];
+      for (var v = y0; v <= y1 + ys / 2; v += ys) yt.push(+v.toFixed(10));
+      var label = function (x) { return (Math.abs(x) >= 100 || x === Math.round(x) ? String(Math.round(x)) : String(+x.toFixed(ys < 1 ? 2 : 1))) + sc.suffix; };
+      var labels = yt.map(label), lw = Math.max.apply(null, labels.map(function (s) { return s.length; })) * 6.2 + 10;
+      var L = Math.round(lw), R = 10, T = 8, B = 22, pw = W - L - R, ph = H - T - B;
+      var t0 = m.ts[0], t1 = Math.max(m.ts[m.ts.length - 1], t0 + 60);
+      var X = function (t) { return L + (t - t0) / (t1 - t0) * pw; };
+      var Y = function (val) { return T + ph - (val / sc.div - y0) / (y1 - y0) * ph; };
+      geo = { x: X, y: Y };
+
+      var svg = svgEl("svg", { width: W, height: H, viewBox: "0 0 " + W + " " + H, "aria-hidden": "true" });
+      yt.forEach(function (tv, i) {
+        var y = Math.round(T + ph - (tv - y0) / (y1 - y0) * ph) + 0.5;
+        svg.appendChild(svgEl("line", { x1: L, x2: W - R, y1: y, y2: y, class: "grid" + (tv === 0 ? " base" : "") }));
+        var tx = svgEl("text", { x: L - 8, y: y + 3.5, "text-anchor": "end", class: "tick" });
+        tx.textContent = labels[i];
+        svg.appendChild(tx);
+      });
+
+      // Time ticks on a round step, aligned to local time.
+      var want = Math.max(2, Math.floor(pw / 92)), tstep = TIME_STEPS[TIME_STEPS.length - 1];
+      for (var k = 0; k < TIME_STEPS.length; k++) if ((t1 - t0) / TIME_STEPS[k] <= want) { tstep = TIME_STEPS[k]; break; }
+      var off = -new Date(t0 * 1000).getTimezoneOffset() * 60;
+      for (var tt = Math.ceil((t0 + off) / tstep) * tstep - off; tt <= t1; tt += tstep) {
+        var x = X(tt), midnight = (tt + off) % 86400 === 0;
+        var lab = svgEl("text", { x: x, y: H - 6, "text-anchor": x < L + 24 ? "start" : x > W - R - 24 ? "end" : "middle", class: "tick" });
+        lab.textContent = tstep >= 86400 || midnight ? dayLabel(tt) : clock(tt);
+        svg.appendChild(lab);
+        svg.appendChild(svgEl("line", { x1: Math.round(x) + 0.5, x2: Math.round(x) + 0.5, y1: T + ph, y2: T + ph + 4, class: "grid base" }));
+      }
+
+      // Stretches where no series has a value: shaded, not bridged.
+      var run = -1;
+      for (var i = 0; i <= m.ts.length; i++) {
+        var empty = i < m.ts.length && m.series.every(function (s) { return valueAt(s, m.ts[i], m.step) == null; });
+        if (empty && run < 0) run = i;
+        if (!empty && run >= 0) {
+          var ga = X(m.ts[Math.max(run - 1, 0)]), gb = X(m.ts[Math.min(i, m.ts.length - 1)]);
+          svg.appendChild(svgEl("rect", { x: ga, y: T, width: Math.max(gb - ga, 1), height: ph, class: "gap" }));
+          if (gb - ga > 52) {
+            var gl = svgEl("text", { x: (ga + gb) / 2, y: T + 14, "text-anchor": "middle", class: "gap-label" });
+            gl.textContent = "no data";
+            svg.appendChild(gl);
+          }
+          run = -1;
+        }
+      }
+
+      m.series.forEach(function (s) {
+        var d = "", seg = [];
+        function flush() {
+          if (seg.length === 1) svg.appendChild(svgEl("circle", { cx: seg[0][0], cy: seg[0][1], r: 2, class: "solo " + s.cls }));
+          else if (seg.length) d += "M" + seg.map(function (p) { return p[0].toFixed(1) + " " + p[1].toFixed(1); }).join("L");
+          seg = [];
+        }
+        s.points.forEach(function (p) { if (p[1] === null) flush(); else seg.push([X(p[0]), Y(p[1])]); });
+        flush();
+        if (d) svg.appendChild(svgEl("path", { d: d, class: "ln " + s.cls + (s.dash ? " " + s.dash : "") }));
+      });
+
+      cursor = svgEl("line", { y1: T, y2: T + ph, class: "cursor", visibility: "hidden" });
+      svg.appendChild(cursor);
+      dots = m.series.map(function (s) { var c = svgEl("circle", { r: 3.5, class: "pt " + s.cls, visibility: "hidden" }); svg.appendChild(c); return c; });
+      plot.replaceChildren(svg);
+      readout();
+    }
+
+    function fromPointer(e) {
+      if (!geo) return;
+      var r = plot.getBoundingClientRect(), x = e.clientX - r.left, best = 0, bd = Infinity;
+      for (var i = 0; i < m.ts.length; i++) { var dd = Math.abs(geo.x(m.ts[i]) - x); if (dd < bd) { bd = dd; best = i; } }
+      setIdx(best);
+    }
+    plot.addEventListener("pointermove", fromPointer);
+    plot.addEventListener("pointerdown", fromPointer);
+    plot.addEventListener("pointerleave", function (e) { if (e.pointerType === "mouse") setIdx(-1); });
+    plot.addEventListener("keydown", function (e) {
+      var last = m.ts.length - 1, cur = idx < 0 ? last : idx, big = Math.max(1, Math.round(m.ts.length / 10)), next = null;
+      if (e.key === "ArrowLeft" || e.key === "ArrowDown") next = Math.max(0, cur - 1);
+      else if (e.key === "ArrowRight" || e.key === "ArrowUp") next = Math.min(last, cur + 1);
+      else if (e.key === "PageDown") next = Math.max(0, cur - big);
+      else if (e.key === "PageUp") next = Math.min(last, cur + big);
+      else if (e.key === "Home") next = 0;
+      else if (e.key === "End") next = last;
+      else if (e.key === "Escape" && idx >= 0) next = -1;
+      if (next === null) return;
+      e.preventDefault();
+      setIdx(next);
+    });
+
+    plot._draw = draw;
+    if (!chartRO && "ResizeObserver" in window) {
+      chartRO = new ResizeObserver(function (entries) { entries.forEach(function (en) { if (en.target._draw) en.target._draw(); }); });
+    }
+    if (chartRO) chartRO.observe(plot); else setTimeout(draw, 0);
+    readout();
+    return card;
+  }
+
   // Images load as they near the screen, once per page for a given ref, and
   // are dropped with their blob URLs when the reader leaves the plugin.
   function hydratePluginImages(root) {
@@ -5163,7 +5623,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     if (typeof urls[ref] === "string") { img.src = urls[ref]; return; }
     if (pvImg.waiting[ref]) { pvImg.waiting[ref].push(img); return; }
     pvImg.waiting[ref] = [img];
-    var ctrl = pvImg.ctrl, headers = {};
+    var ctrl = pvImg.ctrl, headers = {"X-Requested-By": "homelab-inventory"};
     if (token) headers.Authorization = "Bearer " + token;
     fetch("/plugins/" + encodeURIComponent(id) + "/images/" + encodeURIComponent(ref), { headers: headers, signal: ctrl.signal })
       .then(function (r) {
@@ -5468,13 +5928,14 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
           ? h("button", { class: "btn", type: "button", onclick: function () { ui.secret[f.key] = "keep"; rerender(); } }, ["Undo"])
           : h("button", { class: "btn", type: "button", id: fid + "-replace", "aria-label": "Replace " + (str(f.label) || f.key),
               onclick: function () { ui.secret[f.key] = "replace"; rerender(); var i = $(fid); if (i) i.focus(); } }, ["Replace"]),
-        clearing ? null : h("button", { class: "btn", type: "button", "aria-label": "Clear " + (str(f.label) || f.key),
+        clearing || f.noClear ? null : h("button", { class: "btn", type: "button", "aria-label": "Clear " + (str(f.label) || f.key),
               onclick: function () { ui.secret[f.key] = "clear"; delete ui.vals[f.key]; rerender(); } }, ["Clear"])]);
     }
     return h("div", { id: fid + "-box" }, [node]);
   }
 
   function syncPlugActions(id, ui) {
+    if (ui.sync) { ui.sync(); return; }
     var p = plugByID(id), dirty = plugDirty(p, ui), body = ui.el.body;
     var save = body.querySelector("[data-plug-save]"), revert = body.querySelector("[data-plug-revert]");
     if (save) save.disabled = !!ui.busy || (!ui.enable && !dirty);
@@ -5525,6 +5986,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       if (body.settings) { ui.vals = {}; ui.secret = {}; }
       applyPlugin(item);
       plugSetMsg(ui, on ? "Enabled." : "Disabled. Settings are kept.");
+      loadUploadTargets();
       renderPlugins();
       if (ui.open) renderPlugForm(plugByID(id), ui);
     }, function (err) {
@@ -5546,6 +6008,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       ui.busy = ""; ui.vals = {}; ui.secret = {}; ui.errors = {}; ui.enable = false;
       applyPlugin(item);
       ui.msg = enabled ? "Saved and enabled." : "Saved."; ui.bad = false;
+      loadUploadTargets();
       renderPlugins();
       renderPlugForm(plugByID(id), ui);
     }, function (err) {
@@ -5573,6 +6036,634 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       renderPlugForm(plugByID(id) || p, ui);
     });
   }
+
+  // ------------------------------------------------------------ sign-in
+  //
+  // GET /auth/status is public: it says whether a provider is set up and
+  // whether this browser carries a session. A session is a cookie, so a
+  // signed-in browser needs no token at all; the requests above simply go
+  // without a bearer. Every request names the page in X-Requested-By, which
+  // is what the server's CSRF check asks of a cookie.
+
+  var auth = { status: null, retried: false, tokenOpen: false };
+  var LOGIN_ERRORS = {
+    state: "Sign-in took too long or was started in another tab. Try again.",
+    denied: "Sign-in was cancelled at the provider.",
+    provider: "The provider could not be reached, or did not answer properly. Try again, or use a token.",
+    unverified: "The provider has not verified that email address, so it cannot be used here.",
+    not_allowed: "That account is not on this dashboard's allowed list. Ask the owner to add it.",
+    disabled: "Sign-in is turned off on this dashboard. Use a token instead."
+  };
+
+  function loadAuthStatus() {
+    return api("/auth/status").then(function (s) {
+      auth.status = s && typeof s === "object" ? s : { enabled: false };
+    }, function () { auth.status = auth.status || { enabled: false }; }).then(function () {
+      renderSessionLine();
+      return auth.status;
+    });
+  }
+
+  function loginError() {
+    var m = /^#\/?login\?(.*)$/.exec(location.hash || "");
+    if (!m) return "";
+    var code = "";
+    try { code = new URLSearchParams(m[1]).get("error") || ""; } catch (e) { code = ""; }
+    return LOGIN_ERRORS[code] || "Sign-in did not complete. Try again.";
+  }
+
+  // Where the provider sends the browser back to: the view that was open.
+  function loginNext() {
+    var hash = location.hash || "";
+    return "/" + (hash && hash !== "#" && !/^#\/?login/.test(hash) ? hash : "");
+  }
+
+  function renderGate(failed, note) {
+    var s = auth.status || {}, sso = !!s.enabled, err = loginError();
+    var text = err || note || "";
+    $("gate-note").textContent = text;
+    $("gate-note").classList.toggle("bad", !!err);
+    $("gate-note").classList.toggle("hidden", !text);
+    $("gate-msg").textContent = sso ? "Sign in to continue." : "API token";
+    $("gate-sso").classList.toggle("hidden", !sso);
+    if (sso) {
+      $("gate-sso-link").textContent = "Sign in with " + (str(s.provider) || "your provider");
+      $("gate-sso-link").href = "/auth/login?next=" + encodeURIComponent(loginNext());
+    }
+    // Until the status is known, show neither way in rather than the wrong one.
+    var known = !!auth.status, open = known && (!sso || failed || auth.tokenOpen);
+    $("gate-alt").setAttribute("aria-expanded", open ? "true" : "false");
+    $("gate-alt").classList.toggle("hidden", !known || open);
+    $("gate-token-box").classList.toggle("hidden", !open);
+    $("gate-err").classList.toggle("hidden", !failed);
+  }
+
+  $("gate-alt").addEventListener("click", function () {
+    auth.tokenOpen = true;
+    $("gate-alt").setAttribute("aria-expanded", "true");
+    $("gate-alt").classList.add("hidden");
+    $("gate-token-box").classList.remove("hidden");
+    $("gate-token").focus();
+  });
+
+  // Who this browser is signed in as, at the top of Admin.
+  function renderSessionLine() {
+    var s = auth.status || {}, line = $("session-line");
+    var on = !!(s.signed_in && str(s.email));
+    line.classList.toggle("hidden", !on);
+    if (!on) { line.replaceChildren(); return; }
+    var until = Date.parse(s.expires_at);
+    line.replaceChildren(
+      iconNode("user", "sm"),
+      h("span", {}, ["Signed in as ", h("b", { text: str(s.email) }),
+        isFinite(until) ? h("span", { title: new Date(until).toLocaleString(), text: " · until " + new Date(until).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) }) : null]),
+      h("button", { class: "btn", type: "button", onclick: signOut }, [iconNode("logout", "sm"), "Sign out"]));
+  }
+
+  function signOut() {
+    var b = $("session-line").querySelector("button");
+    if (b) { b.disabled = true; b.setAttribute("aria-busy", "true"); }
+    write("/auth/logout", "POST").then(function () {
+      auth.status = Object.assign({}, auth.status, { signed_in: false, email: "", expires_at: "" });
+      renderSessionLine();
+      if (!token) { showGate(false, "Signed out."); return; }
+      announce("Signed out. This browser still has the API token.");
+    }, function (err) {
+      if (b) { b.disabled = false; b.removeAttribute("aria-busy"); }
+      if (err.unauthorized) { showGate(false, "Signed out."); return; }
+      announce("Could not sign out: " + err.message);
+    });
+  }
+
+  // ------------------------------------------------------------ Admin → Sign-in
+  //
+  // The provider's settings, as a form shaped like a plugin's. The fields are
+  // fixed here rather than sent by the server; the same merge rules apply
+  // (a value sets, null clears, absent keeps) and secrets never come back.
+
+  var SIGNIN_ENV = { issuer: "OIDC_ISSUER", client_id: "OIDC_CLIENT_ID", client_secret: "OIDC_CLIENT_SECRET", allowed: "OIDC_ALLOWED",
+    public_url: "OIDC_PUBLIC_URL", provider_name: "OIDC_PROVIDER_NAME", session_hours: "OIDC_SESSION_HOURS" };
+  var SIGNIN_FIELDS = [
+    { key: "issuer", group: "Provider", type: "url", label: "Issuer URL", required: true, placeholder: "https://id.example.org",
+      help: "The provider's base address. Its settings are read from /.well-known/openid-configuration under it." },
+    { key: "client_id", group: "Provider", type: "text", label: "Client ID", required: true },
+    { key: "client_secret", group: "Provider", type: "secret", label: "Client secret", required: true },
+    { key: "provider_name", group: "Provider", type: "text", label: "Button label",
+      help: "Shown as “Sign in with …”. Leave empty to use the issuer's host name." },
+    { key: "allowed", group: "Who gets in", type: "list", label: "Allowed accounts", required: true,
+      help: "One per line: an address such as owner@example.org, or @example.org for a whole domain." },
+    { key: "require_verified", group: "Who gets in", type: "bool", label: "Only verified email addresses", default: true },
+    { key: "session_hours", group: "Who gets in", type: "number", label: "Stay signed in for (hours)", default: 168,
+      help: "1 to 720. The default is a week." },
+    { key: "public_url", group: "This dashboard", type: "url", label: "Public URL", required: true, placeholder: "https://dash.example.org",
+      help: "The address people open this dashboard at, without a path." }
+  ];
+  var signin = { data: null, err: "", missing: false,
+    ui: { open: true, vals: {}, secret: {}, errors: {}, msg: "", bad: false, test: null, busy: "", el: { body: null } } };
+
+  function signinAsPlugin() {
+    var d = signin.data || {}, settings = {};
+    SIGNIN_FIELDS.forEach(function (f) { if (d[f.key] !== undefined) settings[f.key] = d[f.key]; });
+    return { id: "-auth", settings: settings, settings_schema: SIGNIN_FIELDS.map(function (f) {
+      var src = (d.sources || {})[f.key];
+      return f.type === "secret" && src === "env" ? Object.assign({ noClear: true }, f) : f;
+    }) };
+  }
+  function allowedText(v) { return Array.isArray(v) ? v.join("\n") : ""; }
+  function allowedList(text) {
+    return String(text).split(/[\n,]/).map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+  function signinEnabled() {
+    var ui = signin.ui;
+    return Object.prototype.hasOwnProperty.call(ui.vals, "enabled") ? ui.vals.enabled : !!(signin.data && signin.data.enabled);
+  }
+  function signinChanges() {
+    var ui = signin.ui, d = signin.data || {}, out = plugChanges(signinAsPlugin(), ui);
+    delete out.allowed; delete out.enabled;
+    if (Object.prototype.hasOwnProperty.call(ui.vals, "allowed")) {
+      var list = allowedList(ui.vals.allowed);
+      if (list.join("\n") !== allowedText(d.allowed)) out.allowed = list.length ? list : null;
+    }
+    if (signinEnabled() !== !!d.enabled) out.enabled = signinEnabled();
+    return out;
+  }
+  function signinDirty() { return Object.keys(signinChanges()).length > 0; }
+
+  function loadSignin() {
+    return api("/settings/auth").then(function (d) {
+      signin.data = d && typeof d === "object" ? d : {}; signin.err = ""; signin.missing = false;
+    }, function (err) {
+      if (err.unauthorized) { showGate(true); return; }
+      // A server without browser sign-in: no section at all.
+      if (err.status === 404) signin.missing = true;
+      else signin.err = err.message;
+    }).then(renderSignin);
+  }
+
+  var SIGNIN_STATE = { disabled: ["", "○", "off"], unconfigured: ["warn", GLYPH.warning, "needs setup"], ok: ["ok", GLYPH.good, "on"], error: ["crit", GLYPH.critical, "error"] };
+  function renderSignin() {
+    var sec = $("signin"), body = $("signin-body"), ui = signin.ui;
+    sec.classList.toggle("hidden", signin.missing);
+    if (signin.missing) return;
+    if (!signin.data) {
+      if (signin.err) body.replaceChildren(h("div", { class: "src plug-status bad", role: "alert", text: "Could not load sign-in settings: " + signin.err }));
+      else if (!body.firstChild) body.innerHTML = skeleton(2);
+      return;
+    }
+    var d = signin.data, st = SIGNIN_STATE[d.state] || ["", "•", str(d.state) || "unknown"];
+    $("signin-state").replaceChildren(pill(st[2], st[0], st[1]));
+    if (ui.el.body && ui.el.body.isConnected && (ui.busy || signinDirty() || ui.el.body.contains(document.activeElement))) return;
+    renderSigninForm();
+  }
+
+  function signinRedirect() {
+    var ui = signin.ui, d = signin.data || {};
+    var pub = Object.prototype.hasOwnProperty.call(ui.vals, "public_url") ? String(ui.vals.public_url).trim() : str(d.public_url);
+    if (!pub) return "";
+    if (pub === str(d.public_url) && str(d.redirect_uri)) return str(d.redirect_uri);
+    return pub.replace(/\/+$/, "") + "/auth/callback";
+  }
+
+  function renderSigninForm() {
+    var ui = signin.ui, d = signin.data || {}, p = signinAsPlugin(), sources = d.sources || {};
+    var body = h("div", { class: "signin-body" });
+    ui.el.body = body;
+    ui.sync = syncSignin;
+    function fromEnv(f) {
+      if (sources[f.key] !== "env") return null;
+      return h("div", { class: "from" }, [iconNode("server", "sm"),
+        "From the environment" + (SIGNIN_ENV[f.key] ? " (" + SIGNIN_ENV[f.key] + ")" : "") + ". A saved value takes precedence."]);
+    }
+    function field(f) {
+      if (f.type !== "list") {
+        var node = plugField(p, ui, f), env = fromEnv(f);
+        if (env) node.insertBefore(env, node.querySelector(".ferr"));
+        return node;
+      }
+      var fid = "pf--auth-" + f.key, err = str(ui.errors[f.key]);
+      var ta = h("textarea", { id: fid, rows: "4", spellcheck: "false", autocomplete: "off", placeholder: "owner@example.org\n@example.org",
+        "aria-describedby": fid + "-help" + (err ? " " + fid + "-err" : ""), "aria-invalid": err ? "true" : null, "aria-required": "true",
+        oninput: function () {
+          ui.vals[f.key] = ta.value;
+          if (ui.errors[f.key]) { delete ui.errors[f.key]; $(fid + "-err").textContent = ""; ta.removeAttribute("aria-invalid"); }
+          syncSignin();
+        } });
+      ta.value = Object.prototype.hasOwnProperty.call(ui.vals, f.key) ? ui.vals[f.key] : allowedText(d.allowed);
+      return h("div", { class: "pf" }, [
+        h("label", { for: fid, id: fid + "-label" }, [f.label, h("span", { class: "req", "aria-hidden": "true", text: "*" }), h("span", { class: "sr-only", text: " (required)" })]),
+        ta, h("div", { class: "help", id: fid + "-help", text: f.help }), fromEnv(f),
+        h("div", { class: "ferr", id: fid + "-err", text: err })]);
+    }
+    var groups = [];
+    SIGNIN_FIELDS.forEach(function (f) {
+      var g = groups.filter(function (x) { return x.name === f.group; })[0];
+      if (!g) groups.push(g = { name: f.group, fields: [] });
+      g.fields.push(f);
+    });
+    var redirect = signinRedirect();
+    var sets = groups.map(function (g) {
+      var kids = [h("legend", { text: g.name })].concat(g.fields.map(field));
+      if (g.name === "This dashboard") {
+        kids.push(h("div", { class: "pf" }, [
+          h("span", { class: "flab", id: "signin-redirect-label", text: "Redirect URI" }),
+          h("div", { class: "redirect" + (redirect ? "" : " none"), id: "signin-redirect", role: "group", "aria-labelledby": "signin-redirect-label" }, [
+            redirectCode(redirect),
+            redirect ? h("button", { class: "btn", type: "button", "data-copy": "", "aria-label": "Copy redirect URI" }, [iconNode("copy", "sm"), "Copy"]) : null]),
+          h("div", { class: "help", text: "Register this address with the provider as an allowed redirect or callback URL." })]));
+      }
+      return h("fieldset", { class: "plug-group" }, kids);
+    });
+    var on = signinEnabled(), dirty = signinDirty();
+    var sw = h("button", { class: "switch", type: "button", role: "switch", id: "signin-enabled", "aria-checked": on ? "true" : "false", "aria-labelledby": "signin-enabled-label",
+      onclick: function () { ui.vals.enabled = !signinEnabled(); if (ui.errors.enabled) delete ui.errors.enabled; renderSigninForm(); signin.ui.el.body.querySelector(".switch").focus(); } });
+    var form = h("form", { class: "form plug-form", novalidate: true, "aria-label": "Sign-in settings",
+      onsubmit: function (e) { e.preventDefault(); saveSignin(); } }, [
+      h("div", { class: "signin-toggle" }, [sw, h("label", { class: "lab", id: "signin-enabled-label", for: "signin-enabled", text: "Allow sign-in" }),
+        str(d.message) ? h("span", { class: "src" + (d.state === "error" ? " bad" : ""), text: "· " + str(d.message) }) : null]),
+      str(ui.errors.enabled) ? h("div", { class: "ferr", role: "alert", text: str(ui.errors.enabled) }) : null,
+      h("p", { class: "legend-note", text: "* required to allow sign-in" }),
+      h("div", { class: "plug-groups" }, sets),
+      h("div", { class: "signin-warn", id: "signin-warn" }, [h("span", { class: "g", "aria-hidden": "true", text: GLYPH.warning }),
+        h("span", { text: "Saving signs everyone out of the dashboard, so they sign in again with the new settings. The API token keeps working." })]),
+      h("div", { class: "plug-actions" }, [
+        h("button", { class: "btn", type: "button", "data-plug-test": "", disabled: !!ui.busy, onclick: testSignin },
+          [iconNode("activity", "sm"), ui.busy === "test" ? "Testing…" : "Test"]),
+        h("button", { class: "btn primary", type: "submit", "data-plug-save": "", "aria-describedby": "signin-warn", disabled: !!ui.busy || !dirty },
+          [ui.busy === "save" ? "Saving…" : "Save"]),
+        h("button", { class: "btn" + (dirty ? "" : " hidden"), type: "button", "data-plug-revert": "", disabled: !!ui.busy,
+          onclick: function () { ui.vals = {}; ui.secret = {}; ui.errors = {}; ui.msg = ""; ui.test = null; renderSigninForm(); } }, ["Revert"]),
+        h("span", { class: "src plug-status" + (ui.bad ? " bad" : ""), role: "status", "aria-live": "polite", text: ui.msg })]),
+      h("div", { class: "plug-test", "aria-live": "polite", "aria-busy": ui.busy === "test" ? "true" : null }, plugTestNodes(ui.test))]);
+    body.appendChild(form);
+    $("signin-body").replaceChildren(body);
+    if (!ui.busy && ui.refocus) {
+      var again = body.querySelector("[data-plug-" + ui.refocus + "]");
+      ui.refocus = "";
+      if (again && again.disabled) again = body.querySelector(".plug-actions button:not([disabled])");
+      if (again) again.focus();
+    }
+  }
+
+  // A URL that may wrap after a slash, never inside a word.
+  function redirectCode(uri) {
+    if (!uri) return h("code", { text: "Fill in the public URL first" });
+    var kids = [];
+    uri.split(/(?<=\/)/).forEach(function (part, i) { if (i) kids.push(h("wbr")); kids.push(part); });
+    return h("code", {}, kids);
+  }
+
+  // Typing updates the buttons and the redirect URI in place, never the form.
+  function syncSignin() {
+    var ui = signin.ui, body = ui.el.body, dirty = signinDirty();
+    if (!body) return;
+    var save = body.querySelector("[data-plug-save]"), revert = body.querySelector("[data-plug-revert]");
+    if (save) save.disabled = !!ui.busy || !dirty;
+    if (revert) revert.classList.toggle("hidden", !dirty);
+    var box = body.querySelector(".redirect"), uri = signinRedirect();
+    if (box && box.querySelector("code").textContent !== (uri || "Fill in the public URL first")) {
+      box.classList.toggle("none", !uri);
+      box.querySelector("code").replaceWith(redirectCode(uri));
+      var copy = box.querySelector("[data-copy]");
+      if (!uri && copy) copy.remove();
+      if (uri && !copy) box.appendChild(h("button", { class: "btn", type: "button", "data-copy": "", "aria-label": "Copy redirect URI" }, [iconNode("copy", "sm"), "Copy"]));
+    }
+  }
+
+  function signinMsg(text, bad) {
+    var ui = signin.ui;
+    ui.msg = text; ui.bad = !!bad;
+    var s = ui.el.body && ui.el.body.querySelector(".plug-status");
+    if (s) { s.textContent = text; s.classList.toggle("bad", !!bad); }
+  }
+
+  function saveSignin() {
+    var ui = signin.ui;
+    if (ui.busy || !signinDirty()) return;
+    // A browser with no token is about to lose the session it is using.
+    var cookieOnly = !token && auth.status && auth.status.signed_in;
+    if (cookieOnly && !confirm("Saving signs everyone out, including you. You will need to sign in again. Save?")) return;
+    var body = signinChanges();
+    ui.busy = "save"; ui.refocus = "save"; ui.msg = ""; renderSigninForm();
+    write("/settings/auth", "PUT", body).then(function (d) {
+      signin.data = d && typeof d === "object" ? d : signin.data;
+      ui.busy = ""; ui.vals = {}; ui.secret = {}; ui.errors = {}; ui.test = null;
+      ui.msg = "Saved. Anyone signed in through the provider has to sign in again."; ui.bad = false;
+      renderSignin(); renderSigninForm();
+      if (cookieOnly) { showGate(false, "Sign-in settings saved. Sign in again."); return; }
+      loadAuthStatus();
+    }, function (err) {
+      ui.busy = "";
+      if (err.unauthorized) { showGate(!!token, cookieOnly ? "Sign in again." : ""); return; }
+      ui.errors = err.fields && typeof err.fields === "object" ? err.fields : {};
+      var names = Object.keys(ui.errors);
+      ui.msg = names.length ? (err.message && err.message !== "HTTP 422" ? err.message.charAt(0).toUpperCase() + err.message.slice(1).replace(/\.$/, "") + ". " : "") + "Nothing was saved." : "Could not save: " + err.message;
+      ui.bad = true;
+      renderSigninForm();
+      var first = ["enabled"].concat(SIGNIN_FIELDS.map(function (f) { return f.key; })).filter(function (k) { return ui.errors[k]; })[0];
+      var el = first === "enabled" ? ui.el.body.querySelector(".switch") : first && ($("pf--auth-" + first) || $("pf--auth-" + first + "-replace"));
+      if (el) el.focus();
+    });
+  }
+
+  function testSignin() {
+    var ui = signin.ui;
+    if (ui.busy) return;
+    var changes = signinChanges();
+    delete changes.enabled;
+    ui.busy = "test"; ui.test = null; ui.refocus = "test"; ui.msg = "";
+    renderSigninForm();
+    var ctrl = new AbortController(), timer = setTimeout(function () { ctrl.abort(); }, 30000);
+    write("/settings/auth/test", "POST", { settings: changes }, ctrl.signal).then(function (r) {
+      ui.test = r && typeof r === "object" ? r : { ok: false, message: "empty answer" };
+    }, function (err) {
+      if (err.unauthorized) { showGate(true); return; }
+      if (err.fields && typeof err.fields === "object") ui.errors = err.fields;
+      ui.test = { ok: false, message: err.name === "AbortError" ? "no answer within 30 s" : err.status === 429 ? "a test is already running, try again in a moment" : err.message };
+    }).then(function () {
+      clearTimeout(timer);
+      ui.busy = "";
+      renderSigninForm();
+    });
+  }
+
+  // ------------------------------------------------------------ uploads
+  //
+  // Plugins that can take a file list their destinations at GET
+  // /uploads/targets. With at least one, a bubble sits bottom right and a
+  // file dropped anywhere opens the sheet. Files go one at a time, as raw
+  // bodies over XHR (fetch cannot report upload progress), named in
+  // X-Upload-Name. The server decides; the checks here only explain early
+  // what it would refuse.
+
+  var up = { targets: [], files: [], queue: [], xhr: null, drag: 0, seen: true };
+
+  function loadUploadTargets() {
+    return api("/uploads/targets").then(function (list) {
+      up.targets = (Array.isArray(list) ? list : []).filter(function (t) {
+        return t && PLUGIN_ID.test(t.plugin) && VIEW_NAME.test(t.id);
+      });
+    }, function (err) {
+      if (err.unauthorized) return;
+      up.targets = [];
+    }).then(function () { renderUpBubble(); if (!up.queue.length) renderUpSheet(); });
+  }
+
+  function appShown() { return !$("app").classList.contains("hidden"); }
+  function upActive() { return up.queue.filter(function (q) { return q.state === "waiting" || q.state === "sending"; }); }
+
+  function renderUpBubble() {
+    var b = $("up-bubble"), active = upActive(), show = appShown() && (up.targets.length > 0 || up.queue.length > 0);
+    b.classList.toggle("hidden", !show);
+    var badge = $("up-badge"), failed = up.queue.filter(function (q) { return q.state === "failed"; }).length;
+    var done = up.queue.filter(function (q) { return q.state === "done"; }).length;
+    badge.className = "up-badge";
+    if (active.length) badge.textContent = String(active.length);
+    else if (!up.seen && failed) { badge.textContent = "!"; badge.classList.add("bad"); }
+    else if (!up.seen && done) { badge.textContent = String(done); badge.classList.add("ok"); }
+    else badge.textContent = "";
+    var cur = up.queue.filter(function (q) { return q.state === "sending"; })[0];
+    b.classList.toggle("busy", !!cur);
+    b.style.setProperty("--p", cur && cur.file.size ? Math.round(cur.loaded / cur.file.size * 100) : 0);
+    b.setAttribute("aria-label", active.length ? "Uploads: " + active.length + " to go" :
+      !up.seen && failed ? "Uploads: " + failed + " failed" : !up.seen && done ? "Uploads: " + done + " finished" : "Upload files");
+  }
+
+  function upSheetOpen() {
+    var s = $("drawer-body").firstChild;
+    return !$("drawer").classList.contains("hidden") && !$("drawer").motionOut && !!s && s.classList && s.classList.contains("up-sheet");
+  }
+
+  function extOf(name) {
+    var i = name.lastIndexOf(".");
+    return i > 0 ? name.slice(i).toLowerCase() : "";
+  }
+  function acceptList(t) { return Array.isArray(t.accept) ? t.accept.filter(function (x) { return typeof x === "string"; }) : []; }
+  // Why a destination cannot take these files, or "" when it can.
+  function upReason(t, files) {
+    var acc = acceptList(t), max = +t.max_bytes || 0;
+    var wrong = acc.length ? files.filter(function (f) { return acc.indexOf(extOf(f.name)) < 0; }) : [];
+    if (wrong.length === 1) return "Does not take " + (files.length > 1 ? wrong[0].name : extOf(wrong[0].name) || "files without an extension") + ". Takes " + acc.join(" ");
+    if (wrong.length) return "Does not take " + wrong.length + " of these files. Takes " + acc.join(" ");
+    var big = max ? files.filter(function (f) { return f.size > max; }) : [];
+    if (big.length === 1) return (files.length > 1 ? big[0].name + " is" : "This file is") + " over its " + bytes(max) + " limit";
+    if (big.length) return big.length + " of these files are over its " + bytes(max) + " limit";
+    return "";
+  }
+
+  function openUpSheet(files) {
+    if (files && files.length) up.files = Array.prototype.slice.call(files);
+    up.seen = true;
+    if (!upSheetOpen()) openDrawer("", "Upload");
+    renderUpSheet(true);
+    renderUpBubble();
+  }
+
+  function sizeOf(n) { return n === 0 ? "0 B" : bytes(n); }
+  function upSeveralPlugins() { return up.targets.some(function (t) { return t.plugin !== up.targets[0].plugin; }); }
+  function upTerms(t) {
+    var acc = acceptList(t);
+    return (acc.length ? acc.join(" ") : "Any file") + (+t.max_bytes ? " · up to " + bytes(+t.max_bytes) : "");
+  }
+
+  function renderUpSheet(opening) {
+    if (!opening && !upSheetOpen()) return;
+    var focusKey = document.activeElement && document.activeElement.getAttribute ? document.activeElement.getAttribute("data-up") : null;
+    var kids = [], active = upActive();
+    if (up.files.length) {
+      var files = up.files;
+      kids.push(h("h3", { id: "up-title", text: files.length === 1 ? "Upload a file" : "Upload " + files.length + " files" }));
+      kids.push(h("ul", { class: "up-files", "aria-label": "Files" }, files.map(function (f) {
+        return h("li", {}, [iconNode("file", "sm"), h("span", { class: "nm", title: f.name, text: f.name }), h("span", { class: "sz", text: sizeOf(f.size) })]);
+      })));
+      kids.push(h("h4", { id: "up-to", text: "Send to" }));
+      var ok = 0, several = upSeveralPlugins();
+      kids.push(h("div", { class: "up-targets", role: "group", "aria-labelledby": "up-to" }, up.targets.map(function (t, i) {
+        var why = upReason(t, files), whyID = "up-why-" + i;
+        if (!why) ok++;
+        return h("button", { class: "up-target", type: "button", disabled: !!why, "data-up": "t" + i, "aria-describedby": why ? whyID : null,
+          onclick: function () { upEnqueue(t); } }, [
+          h("span", { class: "lb" }, [str(t.label) || t.id, several && str(t.plugin_name) ? h("small", { text: str(t.plugin_name) }) : null]),
+          str(t.help) ? h("span", { class: "hp", text: str(t.help) }) : null,
+          why ? h("span", { class: "why", id: whyID, text: why }) : h("span", { class: "ac", text: upTerms(t) }),
+          why ? null : iconNode("send", "go")]);
+      })));
+      if (!up.targets.length) kids.push(h("p", { class: "sub", text: "No destination is set up any more. Configure one in Admin → Plugins." }));
+      else if (!ok) kids.push(h("p", { class: "sub", text: files.length > 1 ? "No destination takes all of these files. Upload them in smaller groups." : "No destination takes this file." }));
+      kids.push(h("div", { class: "actions" }, [h("button", { class: "btn", type: "button", "data-up": "cancel-pick", onclick: function () { up.files = []; renderUpSheet(); } }, ["Cancel"])]));
+      if (active.length) kids.push(h("p", { class: "sub", text: active.length + " earlier upload" + (active.length > 1 ? "s are" : " is") + " still going; these join the queue." }));
+    } else if (up.queue.length) {
+      kids.push(h("h3", { id: "up-title", text: active.length ? "Uploading" : "Uploads" }));
+      kids.push(h("ul", { class: "up-queue", "aria-label": "Uploads" }, up.queue.map(upRow)));
+      kids.push(h("div", { class: "actions" }, active.length ? [
+        h("button", { class: "btn", type: "button", "data-up": "stop", onclick: upCancel }, [iconNode("x", "sm"), active.length > 1 ? "Cancel the rest" : "Cancel"])
+      ] : [
+        h("button", { class: "btn primary", type: "button", "data-up": "more", onclick: function () { up.queue = []; renderUpBubble(); $("up-input").click(); } }, [iconNode("upload", "sm"), "Upload more"]),
+        h("button", { class: "btn", type: "button", "data-up": "clear", onclick: function () { up.queue = []; renderUpBubble(); renderUpSheet(); } }, ["Clear list"])
+      ]));
+    } else {
+      kids.push(h("h3", { id: "up-title", text: "Upload" }));
+      kids.push(h("div", { class: "up-pick" }, [iconNode("upload"),
+        h("span", { text: "Drop files anywhere on the page, or" }),
+        h("button", { class: "btn primary", type: "button", "data-up": "choose", onclick: function () { $("up-input").click(); } }, ["Choose files"])]));
+      kids.push(h("h4", { id: "up-dest", text: "Destinations" }));
+      var several2 = upSeveralPlugins();
+      kids.push(h("ul", { class: "up-targets up-dests", "aria-labelledby": "up-dest" }, up.targets.map(function (t) {
+        return h("li", { class: "up-target info" }, [
+          h("span", { class: "lb" }, [str(t.label) || t.id, several2 && str(t.plugin_name) ? h("small", { text: str(t.plugin_name) }) : null]),
+          str(t.help) ? h("span", { class: "hp", text: str(t.help) }) : null,
+          h("span", { class: "ac", text: upTerms(t) })]);
+      })));
+    }
+    var sheet = h("div", { class: "up-sheet" }, kids);
+    $("drawer-body").replaceChildren(sheet);
+    var again = focusKey && sheet.querySelector('[data-up="' + focusKey + '"]');
+    if (!again && focusKey) again = sheet.querySelector(".actions .btn, .up-target:not([disabled])");
+    if (again) again.focus();
+  }
+
+  var UP_GLYPH = { waiting: "○", sending: "●", done: "✓", failed: GLYPH.critical, cancelled: "–" };
+  function upRow(q) {
+    var t = q.target, cls = "up-row " + q.state;
+    var g = h("span", { class: "g", "aria-hidden": "true", text: UP_GLYPH[q.state] });
+    var name = h("span", { class: "nm", title: q.file.name }, [q.file.name, h("span", { class: "to", text: " → " + (str(t.label) || t.id) })]);
+    var row = h("li", { class: cls }, [g, name]);
+    if (q.state === "sending") {
+      var pct = q.file.size ? Math.min(100, Math.round(q.loaded / q.file.size * 100)) : 0;
+      var track = h("div", { class: "pv-track t-info", role: "progressbar", "aria-label": "Uploading " + q.file.name, "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(pct) }, [h("i")]);
+      track.firstChild.style.width = pct + "%";
+      q.el = { track: track, st: h("span", { class: "st", text: pct + "% · " + sizeOf(q.loaded) + " of " + sizeOf(q.file.size) }) };
+      row.appendChild(track);
+      row.appendChild(q.el.st);
+    } else {
+      q.el = null;
+      row.appendChild(h("span", { class: "st", text: q.state === "waiting" ? "Waiting · " + sizeOf(q.file.size) : q.message }));
+    }
+    return row;
+  }
+
+  // Progress moves the bar and the numbers only; the sheet is not rebuilt.
+  function upProgress(q) {
+    renderUpBubble();
+    if (!q.el || !q.el.track.isConnected) return;
+    var pct = q.file.size ? Math.min(100, Math.round(q.loaded / q.file.size * 100)) : 0;
+    q.el.track.firstChild.style.width = pct + "%";
+    q.el.track.setAttribute("aria-valuenow", String(pct));
+    q.el.st.textContent = (pct >= 100 ? "Sent · waiting for " + (str(q.target.label) || q.target.id) : pct + "% · " + sizeOf(q.loaded) + " of " + sizeOf(q.file.size));
+  }
+
+  function upEnqueue(t) {
+    up.files.forEach(function (f) { up.queue.push({ file: f, target: t, state: "waiting", loaded: 0, message: "" }); });
+    up.files = [];
+    up.seen = upSheetOpen();
+    renderUpSheet();
+    renderUpBubble();
+    upNext();
+  }
+
+  // Plain words for what the server answered.
+  function upError(q, status, j) {
+    var t = q.target, label = str(t.label) || t.id, why = str(j && j.error);
+    switch (status) {
+      case 0: return "The connection dropped before the upload finished.";
+      case 400: return "The upload was refused" + (why ? ": " + why : ".");
+      case 401: return "Your session has ended. Sign in again and retry.";
+      case 403: return "Not allowed" + (why ? ": " + why : ".");
+      case 404: return label + " is no longer available.";
+      case 411: return "The browser did not send the file's size.";
+      case 413: return "Too large for " + label + (+t.max_bytes ? " (the limit is " + bytes(+t.max_bytes) + ")." : ".");
+      case 415: return label + " does not take this kind of file" + (acceptList(t).length ? " (it takes " + acceptList(t).join(" ") + ")." : ".");
+      case 422: return "The file name cannot be used" + (why ? " (" + why + ")" : "") + ". Rename the file and try again.";
+      case 502: return label + " refused it" + (why ? ": " + why : ".");
+    }
+    return "Failed (HTTP " + status + ")" + (why ? ": " + why : ".");
+  }
+
+  function upNext() {
+    if (up.xhr) return;
+    var q = up.queue.filter(function (x) { return x.state === "waiting"; })[0];
+    if (!q) {
+      renderUpBubble();
+      if (upSheetOpen()) up.seen = true;
+      renderUpSheet();
+      renderUpBubble();
+      return;
+    }
+    q.state = "sending"; q.loaded = 0;
+    var xhr = up.xhr = new XMLHttpRequest();
+    xhr.open("POST", "/plugins/" + encodeURIComponent(q.target.plugin) + "/upload/" + encodeURIComponent(q.target.id));
+    xhr.setRequestHeader("X-Requested-By", "homelab-inventory");
+    xhr.setRequestHeader("X-Upload-Name", encodeURIComponent(q.file.name));
+    if (token) xhr.setRequestHeader("Authorization", "Bearer " + token);
+    xhr.upload.onprogress = function (e) { if (e.lengthComputable) { q.loaded = e.loaded; upProgress(q); } };
+    function settle(state, message) {
+      if (up.xhr !== xhr) return;
+      up.xhr = null;
+      q.state = state; q.message = message;
+      if (!upSheetOpen()) up.seen = false;
+      announce((state === "done" ? "Uploaded " : state === "failed" ? "Failed: " : "Cancelled: ") + q.file.name + (state === "failed" ? ". " + message : ""));
+      renderUpSheet();
+      if (xhr.status === 404) loadUploadTargets();
+      if (xhr.status === 401) { up.queue.forEach(function (x) { if (x.state === "waiting") { x.state = "cancelled"; x.message = "Not sent"; } }); renderUpBubble(); showGate(!!token); return; }
+      upNext();
+    }
+    xhr.onload = function () {
+      var j = null;
+      try { j = JSON.parse(xhr.responseText); } catch (e) { j = null; }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        var stored = str(j && j.name), msg = str(j && j.message) || "Uploaded.";
+        settle("done", msg + (stored && stored !== q.file.name ? " Saved as " + stored + "." : ""));
+      } else settle("failed", upError(q, xhr.status, j));
+    };
+    xhr.onerror = function () { settle("failed", upError(q, 0, null)); };
+    xhr.onabort = function () { settle("cancelled", "Cancelled"); };
+    renderUpSheet();
+    upProgress(q);
+    xhr.send(q.file);
+  }
+
+  function upCancel() {
+    up.queue.forEach(function (x) { if (x.state === "waiting") { x.state = "cancelled"; x.message = "Not sent"; } });
+    if (up.xhr) up.xhr.abort(); else { renderUpSheet(); renderUpBubble(); }
+  }
+
+  $("up-bubble").addEventListener("click", function () { openUpSheet(); });
+  $("up-input").addEventListener("change", function () {
+    var files = this.files;
+    if (files && files.length) openUpSheet(files);
+    this.value = "";
+  });
+
+  // Drop anywhere: only files, only while a destination exists and the app
+  // (not the gate or setup) is on screen.
+  function dragsFiles(e) {
+    var types = e.dataTransfer && e.dataTransfer.types;
+    return !!types && Array.prototype.indexOf.call(types, "Files") >= 0 && up.targets.length > 0 && appShown();
+  }
+  function hideDrop() { up.drag = 0; $("up-drop").classList.add("hidden"); }
+  document.addEventListener("dragenter", function (e) {
+    if (!dragsFiles(e)) return;
+    e.preventDefault();
+    up.drag++;
+    $("up-drop").classList.remove("hidden");
+  });
+  document.addEventListener("dragover", function (e) {
+    if (!dragsFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  });
+  document.addEventListener("dragleave", function (e) {
+    if (!dragsFiles(e)) return;
+    if (--up.drag <= 0) hideDrop();
+  });
+  document.addEventListener("drop", function (e) {
+    if (!dragsFiles(e)) return;
+    e.preventDefault();
+    hideDrop();
+    if (e.dataTransfer.files && e.dataTransfer.files.length) openUpSheet(e.dataTransfer.files);
+  });
+  window.addEventListener("beforeunload", function (e) {
+    if (up.xhr) { e.preventDefault(); e.returnValue = ""; }
+  });
 
   // ------------------------------------------------------------ loading
 
@@ -5619,10 +6710,13 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
         $("refresh").classList.remove("spin");
         $("meta").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         $("meta").parentNode.title = "Updated " + new Date().toLocaleString();
+        auth.retried = false; auth.tokenOpen = false;
         renderAll();
         renderPluginNav();
         refreshAgents();
         applyRoute();
+        loadAuthStatus();
+        loadUploadTargets();
       })
       .catch(function (err) {
         if (err.unauthorized) { showGate(!!token); return; }
@@ -5635,7 +6729,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     return loading;
   }
 
-  function showGate(failed) {
+  function showGate(failed, note) {
     closeDrawer();
     sessionStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(OPERATOR_KEY);
@@ -5644,8 +6738,15 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     clearTimeout(refreshTimer);
     $("app").classList.add("hidden");
     $("gate").classList.remove("hidden");
-    $("gate-err").classList.toggle("hidden", !failed);
-
+    hideDrop();
+    renderUpBubble();
+    renderGate(failed, note);
+    loadAuthStatus().then(function (s) {
+      if ($("gate").classList.contains("hidden")) return;
+      // A session cookie can still let this browser in where a token did not.
+      if (s.signed_in && !auth.retried) { auth.retried = true; load(); return; }
+      renderGate(failed, note);
+    });
   }
 
   // ------------------------------------------------------------ first-run setup
