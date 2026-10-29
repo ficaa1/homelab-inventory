@@ -1,5 +1,7 @@
 # homelab-inventory
 
+![homelab-inventory: overview, launcher, alerts, disk forecast, network chart, media and uploads, running on a demo fleet](docs/images/demo.gif)
+
 A read-only inventory agent, API, and single-file dashboard for a Linux homelab. It collects hosts, Docker, Proxmox, ZFS, ports and storage, and presents alerts and history.
 
 Features include packages, drift and trends, transition-only notifications via Apprise, a service launcher, optional signed agent self-update, optional restart actions, and an MCP bridge for assistants.
