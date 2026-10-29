@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"regexp"
 	"sort"
 	"strconv"
 
@@ -36,6 +37,9 @@ func scalar(v *float64) any {
 	}
 	return *v
 }
+
+var containerID = regexp.MustCompile(`^[0-9a-f]{12}([0-9a-f]{52})?$`)
+
 func (n *Network) buildView(ctx context.Context, name string, view *plugin.View) {
 	hosts := map[string]*hostTraffic{}
 	host := func(s sample) *hostTraffic {
@@ -44,7 +48,8 @@ func (n *Network) buildView(ctx context.Context, name string, view *plugin.View)
 			hosts[instance] = &hostTraffic{instance: instance, name: hostName(instance)}
 		}
 		h := hosts[instance]
-		if nodename := s.Metric["nodename"]; nodename != "" {
+		// A containerised node_exporter reports its container ID as nodename.
+		if nodename := s.Metric["nodename"]; nodename != "" && !containerID.MatchString(nodename) {
 			h.name = nodename
 		}
 		return h

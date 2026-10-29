@@ -297,7 +297,11 @@ path prefix is supported. There are no user-supplied PromQL queries.
 
 **node_exporter** supplies per-host receive/transmit bytes per second, network
 errors and drops. `node_uname_info` supplies readable nodenames where available;
-otherwise the instance name is shown without its port. Device exclusions are
+otherwise (or when the nodename is a container ID) the instance name is shown
+without its port. A node_exporter in a container sees the host's interfaces only
+with host networking (`network_mode: host`, plus `pid: host` and the `/host`
+root mount its documentation describes); on a bridge network it reports just the
+container's own `eth0`. Device exclusions are
 anchored to the complete interface name; the default excludes loopback,
 container bridges, virtual interfaces and common VPN interfaces. The setting
 must compile as a regular expression and cannot contain quotes, line breaks or
