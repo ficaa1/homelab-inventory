@@ -160,7 +160,8 @@ func (t hostTransport) RoundTrip(req *http.Request) (resp *http.Response, err er
 	// query while constructing its own error. The outer client still supplies
 	// the ten-second deadline through the request context.
 	wire := req.Clone(req.Context())
-	inner := &http.Client{Transport: guardedTransport{t.h}, CheckRedirect: t.h.client.CheckRedirect}
+	jar, _ := req.Context().Value(cookieJarKey{}).(http.CookieJar)
+	inner := &http.Client{Transport: guardedTransport{t.h}, CheckRedirect: t.h.client.CheckRedirect, Jar: jar}
 	resp, err = inner.Do(wire)
 	if err != nil {
 		if resp != nil {

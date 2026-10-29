@@ -17,9 +17,19 @@ type View struct {
 	Blocks         []Block   `json:"blocks"`
 }
 
-// Block is the closed union of the six declarative block types. Fields not
+// Block is the closed union of the declarative block types. Fields not
 // belonging to a selected type are rejected rather than silently rendered.
+// Point encodes [unix_seconds, value]; a nil value represents a gap.
+type Point [2]*float64
+type Series struct {
+	Name   string  `json:"name"`
+	Tone   string  `json:"tone,omitempty"`
+	Points []Point `json:"points"`
+}
+
 type Block struct {
+	Unit    string           `json:"unit,omitempty"`
+	Series  []Series         `json:"series,omitempty"`
 	Type    string           `json:"type"`
 	Title   string           `json:"title,omitempty"`
 	Empty   string           `json:"empty,omitempty"`
@@ -101,6 +111,9 @@ func ValidateView(v View, manifest Manifest) ([]byte, error) {
 			if b.Type != "notice" && (b.Text != "" || b.Tone != "") {
 				return errors.New("block text and tone require a notice")
 			}
+			if b.Type != "chart" && (b.Unit != "" || len(b.Series) > 0) {
+				return errors.New("unit and series require a chart")
+			}
 			switch b.Type {
 			case "stats", "list", "posters":
 				for _, i := range b.Items {
@@ -143,7 +156,7 @@ func ValidateView(v View, manifest Manifest) ([]byte, error) {
 					}
 					keys[c.Key] = true
 					switch c.Format {
-					case "", "text", "number", "bytes", "duration_s", "time", "percent":
+					case "", "text", "number", "bytes", "bytes_s", "duration_s", "time", "percent":
 					default:
 						return errors.New("invalid column format")
 					}
@@ -160,6 +173,33 @@ func ValidateView(v View, manifest Manifest) ([]byte, error) {
 						case nil, string, float64, float32, int, int64, int32, uint, uint64, uint32, json.Number, bool:
 						default:
 							return errors.New("table cells must be scalar values")
+						}
+					}
+				}
+			case "chart":
+				switch b.Unit {
+				case "bytes_s", "bytes", "ms", "percent", "number":
+				default:
+					return errors.New("invalid chart unit")
+				}
+				if len(b.Series) > 8 {
+					return errors.New("chart exceeds 8 series")
+				}
+				for _, series := range b.Series {
+					if !toneOK(series.Tone) {
+						return errors.New("invalid series tone")
+					}
+					if len(series.Points) > 500 {
+						return errors.New("chart series exceeds 500 points")
+					}
+					previous := math.Inf(-1)
+					for _, point := range series.Points {
+						if point[0] == nil || math.IsNaN(*point[0]) || math.IsInf(*point[0], 0) || *point[0] <= previous {
+							return errors.New("chart times must be finite and strictly ascending")
+						}
+						previous = *point[0]
+						if point[1] != nil && (math.IsNaN(*point[1]) || math.IsInf(*point[1], 0)) {
+							return errors.New("chart values must be finite or null")
 						}
 					}
 				}

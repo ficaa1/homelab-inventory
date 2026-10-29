@@ -21,6 +21,8 @@ func openPlugins(data string, logger *log.Logger) (*plugin.Registry, error) {
 	return plugin.Open(data, builtInPlugins(), logger)
 }
 func (s *server) pluginRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /uploads/targets", s.auth(s.handleUploadTargets))
+	mux.HandleFunc("POST /plugins/{id}/upload/{target}", s.auth(s.handlePluginUpload))
 	mux.HandleFunc("GET /plugins", s.auth(s.handlePlugins))
 	mux.HandleFunc("PUT /plugins/{id}", s.auth(s.handlePluginUpdate))
 	mux.HandleFunc("POST /plugins/{id}/test", s.auth(s.handlePluginTest))

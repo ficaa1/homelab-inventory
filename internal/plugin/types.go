@@ -3,6 +3,7 @@ package plugin
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -105,3 +106,20 @@ type ValidationError struct {
 }
 
 func (e *ValidationError) Error() string { return e.Message }
+
+// UploadTarget describes one currently configured destination.
+type UploadTarget struct {
+	ID       string   `json:"id"`
+	Label    string   `json:"label"`
+	Help     string   `json:"help,omitempty"`
+	Accept   []string `json:"accept,omitempty"`
+	MaxBytes int64    `json:"max_bytes"`
+}
+type UploadResult struct {
+	Name    string `json:"name"`
+	Message string `json:"message"`
+}
+type Uploader interface {
+	UploadTargets() []UploadTarget
+	Upload(context.Context, string, string, int64, io.Reader) (UploadResult, error)
+}
