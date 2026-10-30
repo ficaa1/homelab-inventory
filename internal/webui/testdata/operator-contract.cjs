@@ -33,6 +33,11 @@ assert.doesNotMatch(fleet.innerHTML,/data-agent-action/);
 context.capabilities = {agent_offers_enabled:true};
 context.renderAgentFleet();
 assert.match(fleet.innerHTML,/data-agent-action="promote"/);
+context.agentStatus = null;
+context.renderAgentFleet();
+assert.match(fleet.innerHTML, /class="pill ">Unavailable/);
+assert.doesNotMatch(fleet.innerHTML, /class="pill good"/);
+assert.doesNotMatch(fleet.innerHTML, /data-agent-action/);
 (async () => {
   await context.operatorWrite('/agent/offers', 'POST', {action:'promote'});
   await context.operatorWrite('/agent/offers', 'POST', {action:'hold'});
