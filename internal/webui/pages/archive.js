@@ -25,6 +25,7 @@
   var seedLoading = false;
   var draft = null, preview = null, scBusy = false;
   var poll = { timer: null, last: 0, busy: false, again: false, fails: 0, ran: false };
+  var liveText = null;
   var stripOpen = true, linger = {}, goTargets = {}, lingerTimer = null, pending = null;
 
   // ------------------------------------------------------------ small helpers
@@ -44,7 +45,7 @@
   function metric(n) { var p = size(n).split(" "); return esc(p[0]) + "<small>" + esc(p[1]) + "</small>"; }
   function pad(n) { return String(n).padStart(2, "0"); }
   function title(t) { return (t.title || "Untitled") + (t.kind === "sonarr" ? " S" + pad(t.season) : ""); }
-  function key(t) { return t.kind + ":" + t.id + ":" + (t.season || 0); }
+  function archiveKey(t) { return t.kind + ":" + t.id + ":" + (t.season || 0); }
   function fileBytes(t) { return (t.files || []).reduce(function (n, f) { return n + f.size; }, 0); }
   function pill(word, level) {
     return '<span class="pill ' + esc(level || "") + '"><span class="glyph" aria-hidden="true">' + GLYPH[level || "info"] + "</span>" + esc(word) + "</span>";
@@ -56,7 +57,7 @@
   function fail(err) { return err && err.unauthorized; }
   function active(a) { return a && a.job && ["complete", "abandoned", "failed"].indexOf(a.job.phase) < 0; }
   function failedJobs(a) { return (a.failedJobs || []).concat(a.job && a.job.phase === "failed" ? [a.job] : []); }
-  function jobID(j) { return key(j.target) + "@" + new Date(j.started).toISOString().slice(0, 19).replace(/[-:]/g, "") + "Z"; }
+  function jobID(j) { return archiveKey(j.target) + "@" + new Date(j.started).toISOString().slice(0, 19).replace(/[-:]/g, "") + "Z"; }
 
   // Replace el's children with html, keeping every node that still matches,
   // so a poll keeps scroll, focus and open details. Children pair by data-key
@@ -64,6 +65,7 @@
   function morph(el, html) {
     var t = document.createElement("template"), focus = document.activeElement;
     t.innerHTML = html;
+    if (st.strip && el === st.body && st.strip.parentNode === el) st.root.insertBefore(st.strip, el);
     morphKids(el, t.content);
     if (focus && focus !== document.activeElement && focus.isConnected && el.contains(focus)) focus.focus({ preventScroll: true });
   }
@@ -131,56 +133,52 @@
   }
 
   function nowCard(v) {
-    var a = v.archive || {}, info = v.info || {}, j = a.job, on = active(a), html = '<div class="arc-now" data-key="now">';
-    if (on) {
+    var a = v.archive || {}, info = v.info || {}, j = a.job, isActive = active(a), html = '<div class="arc-now">';
+    if (isActive) {
       var p = j.progress || {}, phase = j.phase, idx = STEPS.map(function (s) { return s[0]; }).indexOf(phase);
       html += '<div class="arc-eyebrow">' + pill(a.paused ? "held" : "running", a.paused ? "warning" : "good") +
-        "<span>" + (j.manuallyApproved ? "Approved" : "Automatic") + " · started " + esc(elapsed(j.started)) + " ago</span></div>" +
-        "<h3>" + esc(title(j.target)) + '</h3><div class="arc-code">' + esc((j.release || {}).title) + "</div>";
+        '<span>' + (j.manuallyApproved ? "Approved" : "Automatic") + ' · started ' + esc(elapsed(j.started)) + ' ago</span></div>' +
+        '<h3>' + esc(title(j.target)) + '</h3><div class="arc-code">' + esc(j.release.title) + '</div>';
       if (phase === "downloading" && p.bytesTotal > 0) {
-        var done = p.bytesTotal - (p.bytesLeft || 0);
-        html += bar(Math.max(0, Math.min(100, done / p.bytesTotal * 100)), a.paused ? "held" : "", "Download") +
-          '<div class="arc-figs"><span><b>' + esc(gb(done)) + "</b> of " + esc(gb(p.bytesTotal)) + "</span></div>";
+        html += '<div class="arc-figs"><span><b>' + esc(gb(p.bytesTotal - (p.bytesLeft || 0))) + '</b> of ' + esc(gb(p.bytesTotal)) + '</span></div>';
       }
-      if (phase !== "needs_approval" && a.paused) html += reason(a.paused) + '<div class="arc-figs">Retry ' + esc(HI.fromNow(info.nextCycle)) + "</div>";
+      if (phase !== "needs_approval" && a.paused) html += reason(a.paused) + '<div class="arc-figs">Retry ' + esc(HI.fromNow(info.nextCycle)) + '</div>';
       if (phase === "needs_approval") {
-        html += '<div class="arc-line" title="' + esc(j.approvalReason || j.message || "") + '">' + pill(j.forceImport ? "Approved" : "Needs approval", "warning") + " " +
-          esc(j.forceImport ? waitText(a.paused) : jobReason(j.approvalReason || j.message)) + '</div><div class="actions">' +
-          ownerButton("job/approve", "Import anyway", { id: jobID(j) }, j.forceImport || v.dryRun) +
-          ownerButton("job/drop", "Drop", { id: jobID(j) }, v.dryRun) + "</div>";
+        html += '<div class="note" title="' + esc(j.approvalReason || j.message || '') + '">' + pill(j.forceImport ? 'Approved' : 'Needs approval','warning') + ' ' + esc(j.forceImport ? waitText(a.paused) : jobReason(j.approvalReason || j.message)) + '</div><div class="actions">' +
+          ownerButton('job/approve','Import anyway',{id:jobID(j)},j.forceImport || v.dryRun) +
+          ownerButton('job/drop','Drop',{id:jobID(j)},v.dryRun) + '</div>';
       } else if (p.error || j.message) html += reason(p.error || j.message);
-      if (phase !== "needs_approval") html += '<ol class="arc-steps">' + STEPS.map(function (s, i) {
-        return '<li class="' + (i < idx ? "done" : i === idx ? "on" : "") + '"' + (i === idx ? ' aria-current="step"' : "") + ">" + esc(s[1]) + "</li>";
-      }).join("") + "</ol>";
+      if (phase !== 'needs_approval') html += '<ol class="arc-steps">' + STEPS.map(function (s, i) {
+        return '<li class="' + (i < idx ? 'done' : i === idx ? 'on' : '') + '"' + (i === idx ? ' aria-current="step"' : '') + '>' + esc(s[1]) + '</li>';
+      }).join('') + '</ol>';
     } else {
       var queued = (a.approvals || []).filter(function (q) { return !q.blocked; }).length;
-      html += "<h3>" + (queued ? "Starting" : "Idle") + '</h3><div class="arc-idle">' +
-        (queued ? esc(a.paused || "Queued") + " · " + esc(HI.fromNow(info.nextCycle)) :
-          "Nightly " + esc(clock(info.windowStart, info.timezone)) + "–" + esc(clock(info.windowEnd, info.timezone)) +
-          " · " + esc(info.timezone || "") + " · next " + esc(HI.fromNow(info.nextCycle))) + "</div>";
+      html += '<h3>' +
+        (queued ? 'Starting' : 'Idle') + '</h3><div class="idle-line">' +
+        (queued ? esc(a.paused || 'Queued') + ' · ' + esc(HI.fromNow(info.nextCycle)) :
+          'Nightly ' + esc(clock(info.windowStart, info.timezone)) + '–' + esc(clock(info.windowEnd, info.timezone)) +
+          ' · ' + esc(info.timezone || '') + ' · next ' + esc(HI.fromNow(info.nextCycle))) + '</div>';
     }
-    failedJobs(a).forEach(function (f) {
-      html += '<div class="arc-queue" data-key="failed:' + esc(jobID(f)) + '"><div class="arc-eyebrow">' + pill(f.nonHalting ? "failed" : "halted", f.nonHalting ? "warning" : "critical") + "</div><h3>" + esc(title(f.target)) + "</h3>" +
-        '<div class="arc-line" title="' + esc(f.message || "") + '">' + esc(jobReason(f.message)) + "</div>" +
-        '<div class="actions"><button class="btn" type="button" data-archive-action="clear-job" data-archive-id="' + esc(jobID(f)) + '">Clear</button></div></div>';
+    failedJobs(a).forEach(function (failed) {
+      html += '<div class="arc-queue"><div class="arc-eyebrow">' + pill(failed.nonHalting ? 'failed' : 'halted', failed.nonHalting ? 'warning' : 'critical') + '</div><h3>' + esc(title(failed.target)) + '</h3>' +
+        '<div class="note" title="' + esc(failed.message || '') + '">' + esc(jobReason(failed.message)) + '</div>' +
+        '<div class="actions"><button class="btn" style="min-height:44px;min-width:44px" type="button" data-archive-action="clear-job" data-archive-id="' + esc(jobID(failed)) + '">Clear</button></div></div>';
     });
     var queue = a.approvals || [];
     if (queue.length) {
-      html += '<div class="arc-queue" data-key="approvals"><h4>' + (on ? "Up next" : "Approvals") + "</h4>" + queue.map(function (q, i) {
-        var d = (a.report || []).filter(function (r) { return key(r.target) === key(q); })[0], c = d && (d.candidates || []).filter(function (x) { return x.id === q.releaseId; })[0];
-        return '<div class="arc-q" data-key="q:' + esc(key(q)) + '"><span class="n">' + (i + 1) + '.</span><span class="what"><b>' + esc(d ? title(d.target) : q.kind + " " + q.id) + "</b> · " +
-          (c ? '<span class="arc-code">' + esc(c.title) + "</span> · " + esc(gb(c.size)) : "release from the last search") +
-          (q.message ? reason(q.message, q.blocked ? "Blocked" : "Details") : "") +
-          "</span>" + ownerOrder("approvals/reorder", { key: key(q) }, i, queue.length) +
-          '<button class="btn" type="button" data-archive-action="clear" data-archive-id="' + i + '">Remove</button></div>';
-      }).join("") + "</div>";
+      html += '<div class="arc-queue"><h4>' + (isActive ? 'Up next' : 'Approvals') + '</h4>' + queue.map(function (q, i) {
+        var d = (a.report || []).filter(function (r) { return archiveKey(r.target) === archiveKey(q); })[0], c = d && (d.candidates || []).filter(function (x) { return x.id === q.releaseId; })[0];
+        return '<div class="arc-q"><span class="n">' + (i + 1) + '.</span><span class="what"><b>' + esc(d ? title(d.target) : q.kind + ' ' + q.id) + '</b> · ' +
+          (c ? '<span class="arc-code">' + esc(c.title) + '</span> · ' + esc(gb(c.size)) : 'release from the last search') +
+          (q.message ? reason(q.message, q.blocked ? 'Blocked' : 'Details') : '') +
+          '</span>' + ownerOrder('approvals/reorder', {key:archiveKey(q)},i,queue.length) + '<button class="btn" type="button" data-archive-action="clear" data-archive-id="' + i + '">Remove</button></div>';
+      }).join('') + '</div>';
     }
-    var searches = (v.archiveSearches || []).filter(function (q) { return q.state === "queued"; });
-    if (searches.length) html += '<div class="arc-queue" data-key="searches"><h4>Search queue</h4>' + searches.map(function (q, i) {
-      return '<div class="arc-q" data-key="s:' + esc(key(q.title)) + '"><span class="n">' + (i + 1) + '.</span><span class="what"><b>' + esc(q.name + (q.title.kind === "sonarr" ? " S" + pad(q.title.season) : "")) + "</b></span>" +
-        ownerOrder("search/reorder", { key: key(q.title) }, i, searches.length) + "</div>";
-    }).join("") + "</div>";
-    return html + "</div>";
+    var searches = (v.archiveSearches || []).filter(function(q) { return q.state === 'queued'; });
+    if (searches.length) html += '<div class="arc-queue"><h4>Search queue</h4>' + searches.map(function(q,i) {
+      return '<div class="arc-q"><span class="n">' + (i+1) + '.</span><span class="what"><b>' + esc(q.name + (q.title.kind === 'sonarr' ? ' S' + String(q.title.season).padStart(2,'0') : '')) + '</b></span>' + ownerOrder('search/reorder',{key:archiveKey(q.title)},i,searches.length) + '</div>';
+    }).join('') + '</div>';
+    return html + '</div>';
   }
 
   function tiles(v) {
@@ -189,95 +187,99 @@
       if (h.status !== "restored" && h.job.actualBytes > 0) { saved += fileBytes(h.job.target) - h.job.actualBytes; done++; }
     });
     (a.report || []).forEach(function (d) {
-      var k = key(d.target), busy = active(a) && key(a.job.target) === k;
-      if (!d.release && (d.candidates || []).length && !busy && !(a.approvals || []).some(function (q) { return key(q) === k; })) waiting++;
+      var key = archiveKey(d.target), busy = active(a) && archiveKey(a.job.target) === key;
+      if (!d.release && (d.candidates || []).length && !busy && !(a.approvals || []).some(function (q) { return archiveKey(q) === key; })) waiting++;
     });
-    var free = info.downloadFreeBytes, min = info.downloadMinFreeBytes, known = !info.downloadFreeError && real(info.downloadChecked);
+    var free = info.downloadFreeBytes, min = info.downloadMinFreeBytes, diskKnown = !info.downloadFreeError && info.downloadChecked && new Date(info.downloadChecked).getFullYear() > 1;
     function tile(label, value, sub, cls) {
-      return '<div class="tile"><div class="label">' + esc(label) + '</div><div class="value' + (cls ? " " + cls : "") + '">' + value + '</div><div class="sub">' + esc(sub) + "</div></div>";
+      return '<div class="tile"><div class="label">' + esc(label) + '</div><div class="value' + (cls ? ' ' + cls : '') + '">' + value + '</div><div class="sub">' + esc(sub) + '</div></div>';
     }
-    return '<div class="kpis arc-kpis" data-key="tiles">' +
-      tile("Space saved", esc((saved / 1e9).toFixed(0)) + "<small>GB</small>", done + " replacement" + (done === 1 ? "" : "s")) +
-      tile("Your pick", esc(waiting), waiting ? "titles" : "—", waiting ? "warn" : "") +
-      tile("Download disk", known ? esc((free / 1e9).toFixed(0)) + "<small>GB free</small>" : "—", known ? "Minimum " + gb(min) : (info.downloadFreeError || "Unknown"), known && free < min ? "warn" : "") +
-      tile("Tracker searches", esc(info.searchesLastMinute || 0) + "<small>/ " + esc(info.searchesPerMinute || 5) + " per min</small>", (info.searchesUsed || 0) + " tonight") +
-      "</div>";
+    return '<div class="kpis arc-kpis">' +
+      tile("Space saved", esc((saved / 1e9).toFixed(0)) + '<small>GB</small>', done + ' replacement' + (done === 1 ? '' : 's')) +
+      tile("Your pick", esc(waiting), waiting ? 'titles' : '—', waiting ? 'warn' : '') +
+      tile("Download disk", diskKnown ? esc((free / 1e9).toFixed(0)) + '<small>GB free</small>' : '—', diskKnown ? 'Minimum ' + gb(min) : (info.downloadFreeError || 'Unknown'), diskKnown && free < min ? 'warn' : '') +
+      tile("Tracker searches", esc(info.searchesLastMinute || 0) + '<small>/ ' + esc(info.searchesPerMinute || 5) + ' per min</small>', (info.searchesUsed || 0) + ' tonight') +
+      '</div>';
   }
 
   function standing(v, d) {
-    var a = v.archive || {}, k = key(d.target), n = (d.candidates || []).length;
-    var queued = (a.approvals || []).filter(function (q) { return key(q) === k; })[0];
-    if (active(a) && key(a.job.target) === k) return [pill("replacing", "good"), ""];
+    var a = v.archive || {}, key = archiveKey(d.target), n = (d.candidates || []).length;
+    var queued = (a.approvals || []).filter(function (q) { return archiveKey(q) === key; })[0];
+    if (active(a) && archiveKey(a.job.target) === key) return [pill("replacing", "good"), ""];
     if (queued) return [pill(queued.blocked ? "blocked" : "queued", queued.blocked ? "warning" : "info"), queued.blocked ? queued.message : ""];
     if (d.reason === "already archived") return [pill("archived", "good"), ""];
     if (d.release && !d.skipped) return [pill("auto pick", "good"), ""];
     if (/watched within idle window/.test(d.skipped || d.reason || "")) return [pill("watched recently, your pick", "warning"), ""];
     if (d.release) return [pill("waiting", "info"), d.skipped || d.reason];
-    if (n) return [pill("your pick", "warning"), d.skipped || d.reason || "none passed the automatic rules"];
-    if (real(d.searchedAt)) return [pill("none found", "info"), d.reason];
+    if (n) {
+      var why = d.skipped || d.reason || "none passed the automatic rules";
+      return [pill("your pick", "warning"), why];
+    }
+    if (d.searchedAt && new Date(d.searchedAt).getFullYear() > 1) return [pill("none found", "info"), d.reason];
     return [pill("not searched", "info"), d.reason];
   }
 
   function breakdown(c) {
-    var s = c.score || {}, n = function (v) { return Number(v || 0).toFixed(1).replace(/\.0$/, ""); };
-    if (!s.mode) return '<div class="arc-muted">Details unavailable</div>';
-    var left = 100, segs = [s.sizeFit, s.savings, s.seeders, s.group, s.features].map(function (v) {
-      var w = Math.max(0, Math.min(left, Number(v) || 0)); left -= w;
-      return '<i style="width:' + w + '%"></i>';
-    }).join("");
-    var line = function (label, value, detail) { return "<div>" + label + (detail ? "<small>" + esc(detail) + "</small>" : "") + "</div><b>" + value + "</b>"; };
-    var total = Math.max(0, Math.min(100, Number(s.total))), minimum = Math.max(0, Math.min(100, Number(s.minScore)));
-    return '<div class="arc-parts"><div>' + esc(s.mode) + " · " + esc(s.codec) + "</div><b>" + n(s.total) + "/100</b></div>" +
-      '<div class="arc-stack" role="img" aria-label="Score ' + n(s.total) + " of 100, minimum " + n(s.minScore) + '">' + segs +
-      (s.audioPenalty ? '<span class="penalty" title="Unknown audio" style="left:' + total + "%;width:" + Math.max(0, Math.min(Math.abs(s.audioPenalty), 100 - total)) + '%"></span>' : "") +
-      '<span class="minimum" style="left:' + minimum + '%"><span style="transform:translateX(' + (s.minScore > 90 ? "-100%" : s.minScore < 10 ? "0" : "-50%") + ')">Min ' + n(s.minScore) + "</span></span></div>" +
-      '<div class="arc-parts">' + line("Size fit", n(s.sizeFit) + "/50", n(s.gbPerHour) + " GB/h, target " + n(s.target)) +
-      line("Range", n(s.floor) + "–" + n(s.cap) + " GB/h") +
-      line("Savings", n(s.savings) + "/20") + line("Seeders", n(s.seeders) + "/15") +
-      line("Group", n(s.group) + "/10", s.trusted ? "Trusted" : "Unlisted") +
-      line("Features", "+" + n(s.features), (s.featureNames || []).join(" · ") || "None") +
-      (s.audioPenalty ? line("Unknown audio", "−" + n(Math.abs(s.audioPenalty))) : "") + "</div>";
+    var s = c.score, n = function(v) { return Number(v || 0).toFixed(1).replace(/\.0$/, ''); };
+    if (!s.mode) return '<div class="src">Details unavailable</div>';
+    var remaining = 100, segments = [s.sizeFit, s.savings, s.seeders, s.group, s.features].map(function(v) {
+      var width = Math.max(0, Math.min(remaining, Number(v) || 0)); remaining -= width;
+      return '<i style="width:' + width + '%"></i>';
+    }).join('');
+    var row = function(label, value, detail) { return '<div>' + label + (detail ? '<small>' + esc(detail) + '</small>' : '') + '</div><b>' + value + '</b>'; };
+    return '<div class="arc-parts"><div>' + esc(s.mode) + ' · ' + esc(s.codec) + '</div><b>' + n(s.total) + '/100</b></div>' +
+      '<div class="arc-stack" role="img" aria-label="Score ' + n(s.total) + ' of 100, minimum ' + n(s.minScore) + '">' + segments +
+      (s.audioPenalty ? '<span class="penalty" title="Unknown audio −5" style="left:' + Math.max(0,Math.min(100,Number(s.total))) + '%;width:' + Math.max(0,Math.min(Math.abs(s.audioPenalty),100-Number(s.total))) + '%"></span>' : '') +
+      '<span class="minimum" style="left:' + Math.max(0,Math.min(100,Number(s.minScore))) + '%"><span style="transform:translateX(' + (s.minScore > 90 ? '-100%' : s.minScore < 10 ? '0' : '-50%') + ')">Min ' + n(s.minScore) + '</span></span></div>' +
+      '<div class="arc-parts">' + row('Size fit', n(s.sizeFit) + '/50', n(s.gbPerHour) + ' GB/h, target ' + n(s.target)) +
+      row('Range', n(s.floor) + '–' + n(s.cap) + ' GB/h') +
+      row('Savings', n(s.savings) + '/20') + row('Seeders', n(s.seeders) + '/15') +
+      row('Group', n(s.group) + '/10', s.trusted ? 'Trusted' : 'Unlisted') +
+      row('Features', '+' + n(s.features), (s.featureNames || []).join(' · ') || 'None') +
+      (s.audioPenalty ? row('Unknown audio', '−' + n(Math.abs(s.audioPenalty))) : '') + '</div>';
   }
 
   function releases(v, d, i) {
-    var a = v.archive || {}, k = key(d.target), before = fileBytes(d.target);
-    var here = active(a) && key(a.job.target) === k, blocked = v.dryRun || !v.archiveEnabled || here;
-    var queued = (a.approvals || []).filter(function (q) { return key(q) === k; })[0];
-    var list = d.candidates || [], shown = notice["all:" + k] ? list : list.slice(0, 8);
-    var html = '<div class="arc-body"><div class="arc-tools"><span>' + (real(d.searchedAt) ? "Searched " + esc(HI.ago(d.searchedAt)) : "Not searched") +
-      " · " + esc(d.mode === "2160p" || d.target.fourK ? "4K HDR" : "1080p or 4K HDR") + "</span>" +
-      '<button class="btn" type="button" data-archive-action="search" data-archive-id="' + i + '"' + (v.archiveEnabled ? "" : " disabled") + ">Search</button>" +
-      (notice[k] ? '<span role="status">' + esc(notice[k]) + "</span>" : "") + "</div>";
-    if (!list.length) return html + (d.rejected && d.rejected["not freeleech"] ? '<div class="arc-v">' + esc(d.rejected["not freeleech"]) + " non-freeleech</div>" : "") + "</div>";
+    var a = v.archive || {}, key = archiveKey(d.target), before = fileBytes(d.target);
+    var activeHere = active(a) && archiveKey(a.job.target) === key;
+    var blocked = v.dryRun || !v.archiveEnabled || activeHere;
+    var queued = (a.approvals || []).filter(function (q) { return archiveKey(q) === key; })[0];
+    var showAll = notice["all:" + key], list = d.candidates || [], shown = showAll ? list : list.slice(0, 8);
+    var searched = d.searchedAt && new Date(d.searchedAt).getFullYear() > 1;
+    var html = '<div class="arc-body"><div class="arc-tools"><span>' + (searched ? 'Searched ' + esc(HI.ago(d.searchedAt)) : 'Not searched') +
+      ' · ' + esc(d.mode === "2160p" || d.target.fourK ? "4K HDR" : "1080p or 4K HDR") + '</span>' +
+      '<button class="btn" type="button" data-archive-action="search" data-archive-id="' + i + '"' + (v.archiveEnabled ? '' : ' disabled') + '>Search</button>' +
+      (notice[key] ? '<span role="status">' + esc(notice[key]) + '</span>' : '') + '</div>';
+    if (!list.length) return html + (d.rejected && d.rejected["not freeleech"] ? '<div class="arc-v">' + d.rejected["not freeleech"] + ' non-freeleech</div>' : '') + '</div>';
     html += '<div class="arc-rel head"><span>Release</span><span>Size</span><span>GB/h</span><span>Seeders</span><span>Score</span><span>Auto pick</span><span></span></div>';
     html += shown.map(function (c, ci) {
-      var s = c.score || {}, pick = d.release && c.title === d.release.title && !c.rejection, mine = queued && queued.releaseId === c.id;
+      var pick = d.release && c.title === d.release.title && !c.rejection, mine = queued && queued.releaseId === c.id;
       var verdict = pick ? '<span class="arc-v ok">✓ auto pick</span>' : !c.rejection ? '<span class="arc-v ok">passes</span>' : reason(c.rejection);
-      var did = "arc-score-" + (k + "-" + c.indexerId + "-" + c.id).replace(/[^A-Za-z0-9_-]/g, "_"), expanded = !!notice[did];
-      return '<div class="arc-release" data-key="' + esc(did) + '"><div class="arc-rel' + (mine ? " queued" : pick ? " pick" : "") + '"><div class="t">' + esc(c.title) + "<small>" + esc(c.group || "unknown group") + " · " + esc(s.codec || "?") + (c.audioUnverified ? " · audio unverified" : "") + "</small></div>" +
-        '<div class="c" data-k="size"><b>' + esc(gb(c.size)) + '</b><span class="sub">−' + (before > 0 ? Math.round((1 - c.size / before) * 100) : 0) + "%</span></div>" +
-        '<div class="c" data-k="GB/h">' + Number(s.gbPerHour || 0).toFixed(1) + "</div>" +
-        '<div class="c" data-k="seeders">' + esc(c.seeders) + "</div>" +
-        '<div class="c" data-k="score"><button class="btn arc-score-toggle" type="button" aria-expanded="' + expanded + '" aria-controls="' + did + '" data-score-toggle="' + did + '">Score ' + Number(s.total || 0).toFixed(0) + "</button></div>" +
-        '<div class="c">' + verdict + "</div>" +
-        '<div class="a">' + (mine ? '<span class="arc-v">queued</span>' : '<button class="btn' + (pick ? " primary" : "") + '" type="button" data-archive-action="approve" data-archive-id="' + i + ":" + ci + '"' + (blocked ? " disabled" : "") + ">Approve</button>") + "</div></div>" +
-        '<div id="' + did + '" class="arc-breakdown' + (expanded ? "" : " hidden") + '">' + breakdown(c) + "</div></div>";
-    }).join("");
-    if (list.length > shown.length) html += '<div class="arc-more"><button class="btn" type="button" data-archive-action="all" data-archive-id="' + i + '">All ' + list.length + "</button></div>";
-    return html + "</div>";
+      var detailID = "score-" + encodeURIComponent(key + ":" + c.indexerId + ":" + c.id), expanded = !!notice[detailID];
+      return '<div class="arc-release" data-key="' + esc(detailID) + '"><div class="arc-rel' + (mine ? ' queued' : pick ? ' pick' : '') + '"><div class="t">' + esc(c.title) + '<small>' + esc(c.group || 'unknown group') + ' · ' + esc(c.score.codec || '?') + (c.audioUnverified ? ' · audio unverified' : '') + '</small></div>' +
+        '<div class="c" data-k="size"><b>' + esc(gb(c.size)) + '</b><span class="sub">−' + (before > 0 ? Math.round((1 - c.size / before) * 100) : 0) + '%</span></div>' +
+        '<div class="c" data-k="GB/h">' + Number(c.score.gbPerHour).toFixed(1) + '</div>' +
+        '<div class="c" data-k="seeders">' + esc(c.seeders) + '</div>' +
+        '<div class="c" data-k="score"><button class="btn arc-score-toggle" type="button" aria-expanded="' + expanded + '" aria-controls="' + detailID + '" data-score-toggle="' + detailID + '">Score ' + Number(c.score.total).toFixed(0) + '</button></div>' +
+        '<div class="c">' + verdict + '</div>' +
+        '<div class="a">' + (mine ? '<span class="arc-v">queued</span>' : '<button class="btn' + (pick ? ' primary' : '') + '" type="button" data-archive-action="approve" data-archive-id="' + i + ':' + ci + '"' + (blocked ? ' disabled' : '') + '>Approve</button>') + '</div></div><div id="' + detailID + '" class="arc-breakdown' + (expanded ? '' : ' hidden') + '">' + breakdown(c) + '</div></div>';
+    }).join('');
+    if (list.length > shown.length) html += '<div class="arc-more"><button class="btn" type="button" data-archive-action="all" data-archive-id="' + i + '">All ' + list.length + '</button></div>';
+    return html + '</div>';
   }
 
   function titles(v) {
-    var rows = ((v.archive || {}).report || []).slice();
-    if (!rows.length) return '<div class="empty" data-key="titles-empty">No titles</div>';
+    var a = v.archive || {}, rows = (a.report || []).slice();
+    if (!rows.length) return '<div class="empty">No titles</div>';
     var rank = function (d) { var s = standing(v, d)[0]; return /replacing|queued|blocked/.test(s) ? 0 : /your pick|auto pick/.test(s) ? 1 : /archived/.test(s) ? 3 : 2; };
-    rows = rows.map(function (d, i) { return { d: d, i: i }; }).sort(function (x, y) { return rank(x.d) - rank(y.d) || fileBytes(y.d.target) - fileBytes(x.d.target); });
-    return '<div data-key="titles">' + rows.map(function (r) {
-      var d = r.d, s = standing(v, d), g = "title:" + key(d.target), isOpen = !!open[g];
-      return '<details class="arc-title" data-key="' + esc(g) + '" data-group="' + esc(g) + '"' + (isOpen ? " open" : "") + '><summary><span class="name">' + esc(title(d.target)) +
-        '<span class="size">' + esc(gb(fileBytes(d.target))) + (d.target.fourK ? " · 4K" : "") + ((d.candidates || []).length ? " · " + d.candidates.length + " releases" : "") + "</span></span><span>" + s[0] + "</span></summary>" +
-        (isOpen ? reason(s[1]) + releases(v, d, r.i) : '<div class="arc-body hidden"></div>') + "</details>";
-    }).join("") + "</div>";
+    rows = rows.map(function (d, i) { return {d: d, i: i}; }).sort(function (x, y) { return rank(x.d) - rank(y.d) || fileBytes(y.d.target) - fileBytes(x.d.target); });
+    return rows.map(function (r) {
+      var d = r.d, s = standing(v, d), key = "archive:title:" + archiveKey(d.target);
+      var isOpen = open.hasOwnProperty(key) ? open[key] : false;
+      return '<details class="arc-title" data-key="' + esc(key) + '" data-group="' + esc(key) + '"' + (isOpen ? ' open' : '') + '><summary><span class="name">' + esc(title(d.target)) +
+        '<span class="size">' + esc(gb(fileBytes(d.target))) + (d.target.fourK ? ' · 4K' : '') + ((d.candidates || []).length ? ' · ' + d.candidates.length + ' releases' : '') + '</span></span><span>' + s[0] + '</span></summary>' +
+        (isOpen ? reason(s[1]) + releases(v, d, r.i) : '<div class="arc-body hidden"></div>') + '</details>';
+    }).join('');
   }
 
   function refusal(v, h, action) {
@@ -294,24 +296,23 @@
 
   function history(v) {
     var rows = (v.archive || {}).history || [];
-    if (!rows.length) return '<div class="empty" data-key="history-empty">No replacements</div>';
-    return '<div class="scroll" tabindex="0" aria-label="Completed" data-key="history"><table class="arc-history"><thead><tr>' +
-      "<th>Title</th><th>Size</th><th>Undo</th><th>Status</th></tr></thead><tbody>" +
+    if (!rows.length) return '<div class="empty">No replacements</div>';
+    return '<div class="scroll" tabindex="0" aria-label="Completed"><table class="arc-history"><thead><tr>' +
+      '<th>Title</th><th>Size</th><th>Undo</th><th>Status</th></tr></thead><tbody>' +
       rows.map(function (h) {
         var j = h.job, before = fileBytes(j.target), after = j.actualBytes > 0 ? j.actualBytes : null, reasons = [];
-        var acts = ["restore", "purge"].map(function (action) {
-          var r = refusal(v, h, action);
-          if (r && reasons.indexOf(r) < 0) reasons.push(r);
-          return r ? "" : '<button class="btn" type="button" data-archive-action="' + action + '" data-archive-id="' + esc(h.id) + '">' + (action === "restore" ? "Restore" : "Purge") + "</button>";
-        }).join("");
-        return '<tr data-key="h:' + esc(h.id) + '"><td><b>' + esc(title(j.target)) + '</b><span class="arc-code">' + esc((j.release || {}).title) + '</span><span class="sub">' +
-          (j.manuallyApproved ? "Approved · " : "") + esc(j.sidecarsCarried || 0) + " subtitle file" + (j.sidecarsCarried === 1 ? "" : "s") + " carried" + (j.sidecarMessage ? " · " + esc(j.sidecarMessage) : "") + "</span></td><td>" +
-          esc(gb(before)) + " → <b>" + esc(gb(after)) + '</b><div class="sub">' + (after == null ? "not verified" : esc(gb(before - after)) + " saved") + "</div></td><td>" +
-          (h.status === "ended" ? "Library unchanged" : esc(date(h.undoUntil)) + '<div class="sub">original ' + (h.inRecycle == null ? "unknown" : h.inRecycle ? "in recycle bin" : "gone") + "</div>") + "</td><td>" +
-          (h.status === "ended" ? '<div class="sub" title="' + esc(j.message || "") + '">' + esc(jobReason(j.message)) + "</div>" : "") +
-          pill(h.status, h.status === "available" ? "good" : /failed/.test(h.status) ? "critical" : "info") + (h.note ? '<div class="sub">' + esc(h.note) + "</div>" : "") +
-          (acts ? '<div class="acts">' + acts + "</div>" : "") + (h.status === "available" ? reasons.map(function (r) { return reason(r); }).join("") : "") + "</td></tr>";
-      }).join("") + "</tbody></table></div>";
+        var actions = ["restore", "purge"].map(function (action) {
+          var reason = refusal(v, h, action);
+          if (reason && reasons.indexOf(reason) < 0) reasons.push(reason);
+          return reason ? '' : '<button class="btn" type="button" data-archive-action="' + action + '" data-archive-id="' + esc(h.id) + '">' + (action === "restore" ? 'Restore' : 'Purge') + '</button>';
+        }).join('');
+        return '<tr><td><b>' + esc(title(j.target)) + '</b><span class="arc-code">' + esc(j.release.title) + '</span><span class="sub">' +
+          (j.manuallyApproved ? 'Approved · ' : '') + esc(j.sidecarsCarried || 0) + ' subtitle file' + (j.sidecarsCarried === 1 ? '' : 's') + ' carried' + (j.sidecarMessage ? ' · ' + esc(j.sidecarMessage) : '') + '</span></td><td>' +
+          esc(gb(before)) + ' → <b>' + esc(gb(after)) + '</b><div class="sub">' + (after == null ? 'not verified' : esc(gb(before - after)) + ' saved') + '</div></td><td>' +
+          (h.status === 'ended' ? 'Library unchanged' : esc(date(h.undoUntil)) + '<div class="sub">original ' + (h.inRecycle == null ? 'unknown' : h.inRecycle ? 'in recycle bin' : 'gone') + '</div>') + '</td><td>' +
+          (h.status === 'ended' ? '<div class="sub" title="' + esc(j.message || '') + '">' + esc(jobReason(j.message)) + '</div>' : '') + pill(h.status, h.status === 'available' ? 'good' : /failed/.test(h.status) ? 'critical' : 'info') + (h.note ? '<div class="sub">' + esc(h.note) + '</div>' : '') +
+          (actions ? '<div class="acts">' + actions + '</div>' : '') + (h.status === 'available' ? reasons.map(function (r) { return reason(r); }).join('') : '') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
   }
 
   function purgeAllButton(v) {
@@ -319,29 +320,34 @@
     return n ? '<span class="spacer"></span><button class="btn" type="button" data-archive-action="purge-all">Purge all (' + n + ")</button>" : "";
   }
 
+  function archiveLibrarySwitch(noPause) {
+    var v = status || {}, paused = v.archivePaused;
+    return (noPause ? "" : ownerButton("pause", paused ? "Resume" : "Pause", { paused: !paused }, v.dryRun)) +
+      '<div class="library-nav" role="group" aria-label="Media views">' + HI.mediaSections().map(function (section) {
+        var on = section.plugin === ID && section.view === st.view;
+        return '<button class="btn' + (on ? ' primary' : '') + '" type="button" data-library-link="' + esc(HI.link(section.plugin, section.view)) + '" aria-pressed="' + on + '">' + esc(section.title) + '</button>';
+      }).join("") + '</div>';
+  }
+
   function renderStatus() {
     var v = status;
-    if (!v) { morph(st.body, '<div data-key="load">' + HI.skeleton(3) + "</div>"); return; }
-    if (!v.reachable) {
-      morph(st.body, '<div class="empty" data-key="down"><div class="big">Media policy did not answer.</div>' + esc(v.error || "Try again shortly.") + "</div>");
-      return;
-    }
-    var a = v.archive || {};
-    morph(st.body,
-      (!v.archiveEnabled ? '<div class="banner warn" data-key="disabled"><div>' + pill("disabled", "warning") + " Archive is disabled in the service</div></div>" : "") +
-      (v.archivePaused ? '<div class="banner warn" data-key="paused"><div>' + pill("Paused", "warning") + "</div></div>" : "") +
-      (ownerNotice ? '<div class="arc-msg" role="status" data-key="owner">' + esc(ownerNotice) + "</div>" : "") +
-      (v.dryRun ? '<div class="banner warn" data-key="dry"><div>' + pill("dry run", "warning") + "</div></div>" : "") +
-      (v.error || a.error ? '<div class="banner warn" data-key="error"><div>' + pill("error", "critical") + " " + esc(v.error || a.error) + "</div></div>" : "") +
-      (a.tagRemovalError ? '<div class="arc-msg warn" data-key="tagerr">' + esc(a.tagRemovalError) + "</div>" : "") +
+    if (!v) { morph(st.body, archiveLibrarySwitch() + HI.skeleton(3)); return; }
+    if (!v.reachable) { morph(st.body, archiveLibrarySwitch() + '<div class="empty"><div class="big">Media policy did not answer.</div>' + esc(v.error || "Try refresh.") + '</div>'); return; }
+    var a = v.archive || {}, info = v.info || {};
+    morph(st.body, '<div class="arc-head"><h2>Archive</h2><span class="pill" title="Originals kept in the recycle bin">' + HI.iconNode("clock", "sm").outerHTML + ' undo ' + esc(info.undoDays || 7) + 'd</span><span class="spacer"></span>' +
+      archiveLibrarySwitch() + '<button class="btn" type="button" data-archive-action="run"' + (!v.archiveEnabled || (info.runNow || {}).pending ? ' disabled' : '') + '>Check now</button></div>' +
+      (!v.archiveEnabled ? '<div class="banner warn"><div>' + pill('disabled', 'warning') + '</div></div>' : '') +
+      (v.archivePaused ? '<div class="banner warn"><div>' + pill('Paused','warning') + '</div></div>' : '') +
+      (ownerNotice ? '<div class="note" role="status">' + esc(ownerNotice) + '</div>' : '') +
+      (v.dryRun ? '<div class="banner warn"><div>' + pill('dry run', 'warning') + '</div></div>' : '') +
+      (v.error || a.error ? '<div class="banner warn"><div>' + pill('error', 'critical') + ' ' + esc(v.error || a.error) + '</div></div>' : '') +
+      (a.tagRemovalError ? '<div class="note">' + esc(a.tagRemovalError) + '</div>' : '') +
       nowCard(v) + tiles(v) +
-      ((a.abandonedDownloads || []).length ? '<div class="arc-now arc-queue" data-key="abandoned"><h4>Rejected downloads</h4>' + a.abandonedDownloads.map(function (d) {
-        return '<div class="arc-q"><span class="what"><b>' + esc(d.title) + '</b><br><span class="arc-code">' + esc(d.release) + "</span><br>Removes " + esc(real(d.removeAfter) ? new Date(d.removeAfter).toLocaleDateString() : "after completion") + "</span></div>";
-      }).join("") + "</div>" : "") +
-      (a.cleanupError ? '<div class="arc-msg warn" data-key="cleanup">' + esc(a.cleanupError) + "</div>" : "") +
-      '<div class="arc-section" data-key="sec-titles"><h3>Tagged titles</h3></div>' + titles(v) +
-      '<div class="arc-section" data-key="sec-done"><h3>Completed</h3>' + purgeAllButton(v) + "</div>" + history(v) +
-      (a.notificationError ? '<div class="arc-msg warn" data-key="notify">' + esc(a.notificationError) + "</div>" : ""));
+      ((a.abandonedDownloads || []).length ? '<div class="arc-queue"><h4>Rejected downloads</h4>' + a.abandonedDownloads.map(function(d) { return '<div class="arc-q"><span class="what"><b>' + esc(d.title) + '</b><br><span class="arc-code">' + esc(d.release) + '</span><br>Removes ' + esc(new Date(d.removeAfter).getFullYear() > 1 ? new Date(d.removeAfter).toLocaleDateString() : 'Awaiting completion') + '</span></div>'; }).join('') + '</div>' : '') +
+      (a.cleanupError ? '<div class="arc-msg warn">' + esc(a.cleanupError) + '</div>' : '') +
+      '<div class="arc-section"><h3>Tagged titles</h3></div>' + titles(v) +
+      '<div class="arc-section"><h3>Completed</h3>' + purgeAllButton(v) + '</div>' + history(v) +
+      (a.notificationError ? '<div class="freebar">' + esc(a.notificationError) + '</div>' : ''));
     focusPending();
   }
 
@@ -349,9 +355,9 @@
   // release and removing a queued approval are all undoable.
   function inline(action, id) {
     var a = (status || {}).archive || {};
-    if (action === "all") { notice["all:" + key(a.report[Number(id)].target)] = true; render(); return true; }
+    if (action === "all") { notice["all:" + archiveKey(a.report[Number(id)].target)] = true; render(); return true; }
     if (action === "search") {
-      var t = a.report[Number(id)].target, k = key(t);
+      var t = a.report[Number(id)].target, k = archiveKey(t);
       notice[k] = "searching…";
       render();
       HI.send(ID, "search", "POST", { title: { kind: t.kind, id: t.id, season: t.season || 0 } }).then(function (r) {
@@ -501,7 +507,7 @@
   // ------------------------------------------------------------ library view
 
   function libKey(item) { return item.kind + ":" + item.id; }
-  var ACTIVITY_WORD = { downloading: "Downloading", paused: "Paused", importing: "Importing", waiting: "Waiting to import", queued: "Waiting to import", attention: "Needs attention", failed: "Needs attention" };
+  var ACTIVITY_WORD = { downloading: "Downloading", paused: "Paused", importing: "Importing", waiting: "Waiting to import", queued: "Queued", attention: "Needs attention", failed: "Failed" };
   function activityTitle(item) {
     var a = libraryActivity;
     return a && (a.titles || []).filter(function (t) { return t.kind === item.kind && t.id === item.id; })[0] || null;
@@ -515,23 +521,23 @@
     if (seconds < 86400) return Math.floor(seconds / 3600) + "h " + Math.floor((seconds % 3600) / 60) + "m left";
     return Math.floor(seconds / 86400) + " d left";
   }
+  var libActivityLevels = {downloading:'info', paused:'warning', importing:'info', waiting:'info', queued:'info', attention:'warning', failed:'critical'};
   function libraryProgress(p) {
-    if (!p || !ACTIVITY_WORD[p.state]) return "";
-    var word = ACTIVITY_WORD[p.state], pct = null, sub = "", tone = p.state === "failed" || p.state === "attention" ? "critical" : p.state === "paused" ? "warning" : "info";
-    if (p.state === "importing" && p.total) { word += " " + p.imported + "/" + p.total; pct = p.imported / p.total * 100; }
-    else if ((p.state === "downloading" || p.state === "paused") && p.percent != null) { word += " " + p.percent + "%"; pct = p.percent; }
-    if (p.state === "downloading" && p.eta_seconds != null) sub = activityETA(p.eta_seconds);
-    var barHTML = pct != null ? '<span class="arc-lib-progress-bar" aria-hidden="true"><i style="width:' + Math.max(0, Math.min(100, pct)).toFixed(2) + '%"></i></span>' : p.state === "importing" ? '<span class="arc-lib-progress-bar busy" aria-hidden="true"><i></i></span>' : "";
-    return '<div class="arc-lib-progress">' + pill(word, tone) + barHTML + (sub ? '<div class="sub">' + esc(sub) + "</div>" : "") + "</div>";
+    if (!p || !ACTIVITY_WORD[p.state]) return '';
+    var word = ACTIVITY_WORD[p.state], pct = null, sub = '';
+    if (p.state === 'importing' && p.total) { word += ' ' + p.imported + '/' + p.total; pct = p.imported / p.total * 100; }
+    else if ((p.state === 'downloading' || p.state === 'paused') && p.percent != null) { word += ' ' + p.percent + '%'; pct = p.percent; }
+    if (p.state === 'downloading' && p.eta_seconds != null) sub = activityETA(p.eta_seconds);
+    var bar = pct != null ? '<span class="library-bar" aria-hidden="true"><i style="width:' + pct.toFixed(2) + '%"></i></span>' : p.state === 'importing' ? '<span class="library-bar busy" aria-hidden="true"><i></i></span>' : '';
+    return '<div class="library-progress">' + pill(word, libActivityLevels[p.state]) + bar + (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') + '</div>';
   }
   function libraryProgressSlot(item, season) {
-    var p = season == null ? activityTitle(item) : activitySeason(item, season);
-    return '<div class="arc-lib-progress-slot" data-library-progress="' + esc(libKey(item)) + '"' + (season == null ? "" : ' data-library-season="' + season + '"') + ">" + libraryProgress(p) + "</div>";
+    return '<div data-library-progress="' + esc(libKey(item)) + '"' + (season == null ? '' : ' data-library-season="' + season + '"') + '>' + libraryProgress(season == null ? activityTitle(item) : activitySeason(item, season)) + '</div>';
   }
-  function libPill(s) {
-    var word = { none: "Not archived", tagged: "Tagged", shrunk: "Shrunk", pending_approval: "Pending approval", active: "In progress", failed: "Needs review" }[s.status] || "Not archived";
-    var cls = s.status === "shrunk" ? "good" : s.status === "failed" ? "critical" : s.status === "pending_approval" ? "warning" : "info";
-    return pill(word, cls) + (real(s.date) ? '<div class="sub">' + esc(new Date(s.date).toLocaleDateString()) + " · " + esc(size(s.savedBytes || 0)) + " saved</div>" : "");
+  function libPill(status) {
+    var word = {none:'Not archived', tagged:'Tagged', shrunk:'Shrunk', pending_approval:'Pending approval', active:'In progress', failed:'Needs review'}[status.status] || 'Not archived';
+    var cls = status.status === 'shrunk' ? 'good' : status.status === 'failed' ? 'critical' : status.status === 'pending_approval' ? 'warning' : 'info';
+    return pill(word,cls) + (status.date ? '<div class="sub">' + esc(new Date(status.date).toLocaleDateString()) + ' · ' + esc(size(status.savedBytes || 0)) + ' saved</div>' : '');
   }
 
   function loadLibrary(refresh) {
@@ -561,52 +567,46 @@
   }
 
   function renderLibrary() {
-    if (!library) { loadLibrary(false); return; }
-    var all = (library.items || []).slice().sort(function (a, b) { return b.sizeBytes - a.sizeBytes || a.title.localeCompare(b.title); });
-    var q = libQuery.toLowerCase();
-    var rows = all.filter(function (it) { return (libFilter === "all" || it.kind === libFilter) && (it.title + " " + it.year).toLowerCase().indexOf(q) >= 0; });
-    var total = rows.reduce(function (n, it) { return n + it.sizeBytes; }, 0);
-    var top = rows.slice(0, 20).reduce(function (n, it) { return n + it.sizeBytes; }, 0);
-    var saved = rows.reduce(function (n, it) { return n + ((it.archiveStatus || {}).savedBytes || 0); }, 0);
-    var maxSize = Math.max(1, (all[0] || {}).sizeBytes || 0);
-    var body = rows.map(function (it) {
-      var k = libKey(it), tv = it.kind === "sonarr", exp = !!libExpanded[k];
-      var s = it.archiveStatus || { status: "none" };
-      if (s.status === "none" && it.tags.archive) s = { status: "tagged" };
-      var blocked = library.dryRun || !library.archiveEnabled || ["active", "failed", "pending_approval"].indexOf(s.status) >= 0;
-      var busy = blocked ? ' disabled title="Busy: a job or approval is pending"' : "";
-      var quality = [it.resolution ? it.resolution + "p" : it.quality, it.dynamicRange, it.videoCodec].filter(Boolean).join(" · ");
-      var name = "<b>" + esc(it.title) + "</b>" + (it.year ? '<span class="arc-year">' + esc(it.year) + "</span>" : "");
-      var sid = "arc-seasons-" + it.id;
-      return '<tr class="arc-lib-row" data-key="r:' + esc(k) + '"><td class="arc-lib-title">' +
-        (tv ? '<button type="button" class="arc-expand" data-library-expand="' + esc(k) + '" aria-expanded="' + exp + '" aria-controls="' + sid + '"><span aria-hidden="true">' + (exp ? "▾" : "▸") + "</span>" + name + "</button>" : name) +
-        '<div class="sub">' + (tv ? (it.seasons || []).length + " seasons" : (it.runtime ? it.runtime + " min" : "Movie")) + '</div></td><td class="arc-lib-type">' + (tv ? "TV" : "Movie") + "</td>" +
-        '<td class="arc-lib-size"><strong>' + esc(size(it.sizeBytes)) + '</strong><span class="arc-minibar" aria-hidden="true"><i style="width:' + (it.sizeBytes / maxSize * 100).toFixed(2) + '%"></i></span></td>' +
-        '<td class="arc-lib-quality">' + esc(quality || "—") + "</td>" +
-        '<td class="arc-lib-tags">' + (it.tags.archive ? "<span>archive</span>" : "") + (it.tags.fourK ? "<span>4k</span>" : "") + (!it.tags.archive && !it.tags.fourK ? '<span class="sub">—</span>' : "") + "</td>" +
-        '<td class="arc-lib-status">' + libPill(s) + libraryProgressSlot(it) + '</td><td class="arc-lib-action">' +
-        (it.tags.archive ? (tv ? '<button class="btn" type="button" data-library-action="' + esc(k) + '"' + busy + ">Seasons</button> " : "") +
-          '<button class="btn" type="button" data-library-action="' + esc(k) + '|untag"' + busy + ">Un-tag</button>" :
-          '<button class="btn" type="button" data-library-action="' + esc(k) + '"' + busy + ">Archive</button>") + "</td></tr>" +
-        (tv ? '<tr id="' + sid + '" class="arc-season-row' + (exp ? "" : " hidden") + '" data-key="s:' + esc(k) + '"><td colspan="7"><div class="arc-seasons">' + (it.seasons || []).map(function (se) {
-          return '<div class="arc-season"><b>' + (se.season ? "Season " + se.season : "Specials") + "</b><span>" + esc(size(se.sizeBytes)) + (se.selected ? " · <b>to archive</b>" : "") + "</span><div>" + libPill(se.archiveStatus || { status: "none" }) + libraryProgressSlot(it, se.season) + "</div>" +
-            (se.season > 0 && !se.selected && !blocked ? '<button class="btn" type="button" data-library-action="' + esc(k) + "|s" + se.season + '">Archive</button>' : "<span></span>") + "</div>";
-        }).join("") + "</div></td></tr>" : "");
-    }).join("") || '<tr data-key="none"><td colspan="7" class="arc-none">No matches</td></tr>';
-    morph(st.body,
-      '<div class="kpis arc-kpis arc-lib-kpis" data-key="kpis">' +
-      '<div class="tile"><div class="label">Stored media</div><div class="value">' + metric(total) + '</div><div class="sub">' + rows.length + " titles</div></div>" +
-      '<div class="tile"><div class="label">Largest ' + Math.min(20, rows.length) + '</div><div class="value">' + (total ? (top / total * 100).toFixed(0) : "0") + '%</div><div class="sub">of total</div></div>' +
-      '<div class="tile"><div class="label">Space saved</div><div class="value">' + metric(saved) + '</div><div class="sub">Verified</div></div></div>' +
-      '<div class="arc-lib-tools" data-key="tools"><div class="seg" role="group" aria-label="Media type">' + ["all", "radarr", "sonarr"].map(function (k, i) {
-        return '<button class="btn" type="button" data-library-filter="' + k + '" aria-pressed="' + (libFilter === k) + '">' + ["All", "Movies", "TV"][i] + "</button>";
-      }).join("") + '</div><div class="arc-find-row"><label class="field arc-find">' +
-      '<input id="arc-lib-search" type="search" placeholder="Search titles…" aria-label="Search library titles" autocomplete="off" value="' + esc(libQuery) + '"></label>' +
-      '<button class="btn" type="button" data-library-refresh>Refresh</button></div></div>' +
-      (library.dryRun || !library.archiveEnabled ? '<div class="arc-msg warn" data-key="mode">' + (library.dryRun ? "Dry run" : "Archive disabled") + "</div>" : "") +
-      (libNotice ? '<div class="arc-msg" role="status" data-key="notice">' + esc(libNotice) + "</div>" : "") +
-      '<div class="arc-lib-card" data-key="table"><table class="arc-lib"><thead><tr><th>Title</th><th>Type</th><th>Disk usage ↓</th><th>Quality</th><th>Tags</th><th>Archive status</th><th>Action</th></tr></thead><tbody>' + body + "</tbody></table></div>");
+    if (!library) return;
+    var html = '<div class="arc-head library-heading"><h2>Library</h2><span class="spacer"></span>' + archiveLibrarySwitch() + '</div><div class="kpis arc-kpis library-kpis"><div class="tile" id="library-total"></div><div class="tile" id="library-top"></div><div class="tile" id="library-saved"></div></div>' +
+      '<div class="library-tools"><div class="library-filters" role="group" aria-label="Media type">' + ['all','radarr','sonarr'].map(function(k,i) {
+        return '<button type="button" data-library-filter="' + k + '" aria-pressed="' + (libFilter === k) + '">' + ['All','Movies','TV'][i] + '</button>';
+      }).join('') + '</div><div class="library-find"><input id="library-search" type="search" placeholder="Search titles…" aria-label="Search library titles" value="' + esc(libQuery) + '"><button class="btn" data-library-refresh>Refresh</button></div></div>' +
+      (library.dryRun || !library.archiveEnabled ? '<div class="note">' + (library.dryRun ? 'Dry run' : 'Disabled') + '</div>' : '') +
+      '<div id="library-notice" class="note' + (libNotice ? '' : ' hidden') + '" role="status">' + esc(libNotice) + '</div>' +
+      '<div class="arc-title library-card"><table class="library-table"><thead><tr><th>Title</th><th>Type</th><th>Disk usage ↓</th><th>Quality</th><th>Tags</th><th>Archive status</th><th>Action</th></tr></thead><tbody id="library-rows"></tbody></table></div>';
+    morph(st.body, html);
+    renderArchiveLibraryRows();
     focusPending();
+  }
+  function renderArchiveLibraryRows() {
+    var all = (library.items || []).slice().sort(function(a,b) { return b.sizeBytes - a.sizeBytes || a.title.localeCompare(b.title); });
+    var rows = all.filter(function(item) { return (libFilter === 'all' || item.kind === libFilter) && (item.title + ' ' + item.year).toLowerCase().includes(libQuery.toLowerCase()); });
+    var total = rows.reduce(function(n,item) { return n + item.sizeBytes; },0);
+    var top = rows.slice(0,20).reduce(function(n,item) { return n + item.sizeBytes; },0);
+    $('library-total').innerHTML = '<div class="label">Stored media</div><div class="value">' + metric(total) + '</div><div class="sub">' + rows.length + ' titles</div>';
+    $('library-top').innerHTML = '<div class="label">Largest ' + Math.min(20,rows.length) + '</div><div class="value">' + (total ? (top/total*100).toFixed(0) : '0') + '%</div><div class="sub">of total</div>';
+    $('library-saved').innerHTML = '<div class="label">Space saved</div><div class="value">' + metric(rows.reduce(function(n,item) { return n + ((item.archiveStatus || {}).savedBytes || 0); },0)) + '</div><div class="sub">Verified</div>';
+    var maxSize = Math.max(1, (all[0] || {}).sizeBytes || 0);
+    $('library-rows').innerHTML = rows.map(function(item) {
+      var key = libKey(item), tv = item.kind === 'sonarr', expanded = libExpanded[key];
+      var status = item.archiveStatus || {status:'none'};
+      if (status.status === 'none' && item.tags.archive) status = {status:'tagged'};
+      var blocked = library.dryRun || !library.archiveEnabled || ['active','failed','pending_approval'].includes(status.status);
+      var quality = [item.resolution ? item.resolution + 'p' : item.quality, item.dynamicRange, item.videoCodec].filter(Boolean).join(' · ');
+      var title = '<b>' + esc(item.title) + '</b>' + (item.year ? '<span class="library-year">' + item.year + '</span>' : '');
+      return '<tr class="library-row"><td class="library-title">' + (tv ? '<button type="button" class="library-expand" data-library-expand="' + key + '" aria-expanded="' + !!expanded + '" aria-controls="library-seasons-' + item.id + '"><span aria-hidden="true">' + (expanded ? '▾' : '▸') + '</span>' + title + '</button>' : title) +
+        '<div class="sub">' + (tv ? (item.seasons || []).length + ' seasons' : (item.runtime ? item.runtime + ' min' : 'Movie')) + '</div></td><td class="library-type">' + (tv ? 'TV' : 'Movie') + '</td>' +
+        '<td class="library-size"><strong>' + esc(size(item.sizeBytes)) + '</strong><span class="library-bar" aria-hidden="true"><i style="width:' + (item.sizeBytes/maxSize*100).toFixed(2) + '%"></i></span></td><td class="library-quality">' + esc(quality || '—') + '</td>' +
+        '<td class="library-tags">' + (item.tags.archive ? '<span>archive</span>' : '') + (item.tags.fourK ? '<span>4k</span>' : '') + (!item.tags.archive && !item.tags.fourK ? '<span class="sub">—</span>' : '') + '</td>' +
+        '<td class="library-status">' + libPill(status) + libraryProgressSlot(item) + '</td><td class="library-action">' + (item.tags.archive ? (tv ? '<button class="btn" type="button" data-library-action="' + esc(key) + '"' + (blocked ? ' disabled' : '') + '>Seasons</button> ' : '') +
+          '<button class="btn" type="button" data-library-action="' + key + '|untag"' + (blocked ? ' disabled title="Busy: a job or approval is pending"' : '') + '>Un-tag</button>' :
+          '<button class="btn" type="button" data-library-action="' + esc(key) + '"' + (blocked ? ' disabled title="Busy: a job or approval is pending"' : '') + '>Archive</button>') + '</td></tr>' +
+        (tv ? '<tr id="library-seasons-' + item.id + '" class="library-season-row' + (expanded ? '' : ' hidden') + '"><td colspan="7"><div class="library-seasons">' + (item.seasons || []).map(function(s) {
+          return '<div class="arc-rel library-season"><b>' + (s.season ? 'Season ' + s.season : 'Specials') + '</b><span>' + esc(size(s.sizeBytes)) + (s.selected ? ' · <b>to archive</b>' : '') + '</span>' + '<div>' + libPill(s.archiveStatus || {status:'none'}) + libraryProgressSlot(item, s.season) + '</div>' +
+            (s.season > 0 && !s.selected && !blocked ? '<button class="btn" type="button" data-library-action="' + key + '|s' + s.season + '">Archive</button>' : '<span></span>') + '</div>';
+        }).join('') + '</div></td></tr>' : '');
+    }).join('') || '<tr><td colspan="7" class="empty">No matches</td></tr>';
   }
 
   function search(t) {
@@ -705,13 +705,13 @@
   }
 
   function seedResults(q) {
-    var rs = seeding.queueResults || [], last = rs.length ? Date.parse(rs[rs.length - 1].at) : 0;
-    if (!rs.length || (!q.length && Date.now() - last > 10 * 60000)) return "";
-    var moved = rs.filter(function (r) { return r.result === "done" && r.mode === "move"; }).length;
-    var linked = rs.filter(function (r) { return r.result === "done" && r.mode !== "move"; }).length, bad = rs.filter(function (r) { return r.result !== "done"; });
-    return '<ul class="arc-results" data-key="seed-results">' + (linked ? "<li>Linked " + linked + "</li>" : "") + (moved ? "<li>Moved " + moved + "</li>" : "") + bad.map(function (r) {
-      return '<li class="bad"><b>' + esc(torrentTitle(r.name)) + "</b> · " + (r.result === "failed" ? "Failed" : "Skipped") + (r.reason ? " · " + esc(r.reason) : "") + "</li>";
-    }).join("") + "</ul>";
+    var rs = (seeding.queueResults || []), last = rs.length ? Date.parse(rs[rs.length - 1].at) : 0;
+    if (!rs.length || (!q.length && Date.now() - last > 10 * 60000)) return '';
+    var moved = rs.filter(function(r) { return r.result === 'done' && r.mode === 'move'; }).length;
+    var done = rs.filter(function (r) { return r.result === 'done' && r.mode !== 'move'; }).length, bad = rs.filter(function (r) { return r.result !== 'done'; });
+    return '<ul class="seed-results" data-key="seed-results">' + (done ? '<li>Linked ' + done + '</li>' : '') + (moved ? '<li>Moved ' + moved + '</li>' : '') + bad.map(function (r) {
+      return '<li class="bad"><b>' + esc(torrentTitle(r.name)) + '</b> · ' + (r.result === 'failed' ? 'Failed' : 'Skipped') + (r.reason ? ' · ' + esc(r.reason) : '') + '</li>';
+    }).join('') + '</ul>';
   }
 
   function seedPlans() {
@@ -724,24 +724,24 @@
   }
 
   function renderSeeding() {
-    if (!seeding) { loadSeeding(); morph(st.body, '<div data-key="load">' + HI.skeleton(3) + "</div>"); return; }
-    var s = seedPlans(), j = s.j, q = s.q;
-    var moving = j && j.plan && SEED_ACTIVE.indexOf(j.phase) >= 0 ? j.plan.hash : "";
-    var stopped = j && j.plan && (j.phase === "halted" || j.phase === "failed" || j.phase === "stopped");
-    morph(st.body,
-      (stopped ? '<div id="arc-seed-error" class="arc-msg warn" role="status" tabindex="-1" data-key="seed-error"><b>' + esc(j.plan.name) + "</b> · " + esc(phaseLabel(j.phase)) + (j.error ? '<div class="sub">' + esc(j.error) + "</div>" : "") + "</div>" : "") +
-      (moving ? '<div class="arc-now" data-key="moving"><div class="arc-eyebrow">' + pill(j.stopRequested ? "Stop requested" : phaseLabel(j.phase), "good") + "</div><h3>" + esc(torrentTitle(j.plan.name)) + '</h3><div class="arc-code">' + esc(j.plan.name) + '</div><div class="actions">' +
-        ownerButton("seeding/stop", "Stop", { hash: moving }, j.stopRequested) + "</div></div>" : "") +
-      (q.length ? '<div class="arc-now arc-queue" data-key="seed-queue"><h4>' + (q.some(function (e) { return e.mode === "move"; }) ? "Queue" : "Link queue") + "</h4>" + q.map(function (e, i) {
-        return '<div class="arc-q" data-key="sq:' + esc(e.hash) + '"><span class="n">' + (i + 1) + '.</span><span class="what"><b>' + esc(torrentTitle(e.name)) + "</b></span>" + ownerOrder("seeding/queue/reorder", { hash: e.hash }, i, q.length) + "</div>";
-      }).join("") + "</div>" : "") +
+    if(!seeding) return;
+    var j=seeding.job, q=seedQueue(), pos={};
+    q.forEach(function (e, i) { pos[e.hash] = i + 1; });
+    var links=seeding.items.filter(function (p) { return linkable(p) && !pos[p.hash]; }).slice(0, SEED_QUEUE_MAX), canLink=links.length > 0 && !q.length && !seedHolds(j);
+    var moves=seeding.items.filter(function(p) { return eligible(p) && !pos[p.hash]; }).slice(0, SEED_QUEUE_MAX), canMove=moves.length > 0 && !q.length && !seedHolds(j);
+    var moving=j && SEED_ACTIVE.indexOf(j.phase) >= 0 ? j.plan.hash : '';
+    morph(st.body,'<div class="arc-head"><h2>Seeding</h2><span class="spacer"></span>'+archiveLibrarySwitch()+'<button class="btn" data-seed-all'+(canLink?'':' disabled')+'>Link all ('+links.length+')</button><button class="btn" data-seed-move-all'+(canMove?'':' disabled')+'>Move all ('+moves.length+')</button>'+(q.length?'<button class="btn" data-seed-queue-cancel>Cancel queue</button>':'')+'<button class="btn" data-seed-refresh>Refresh</button></div>'+seedErrorText(j)+
+      (moving ? '<div class="arc-now"><b>' + esc(torrentTitle(j.plan.name)) + '</b><div class="note">' + esc(j.stopRequested ? 'Stop requested' : phaseLabel(j.phase)) + '</div>' + ownerButton('seeding/stop','Stop',{hash:moving},j.stopRequested) + '</div>' : '') +
+      (q.length ? '<div class="arc-queue"><h4>' + (q.some(function(e) { return e.mode === 'move'; }) ? 'Queue' : 'Link queue') + '</h4>' + q.map(function(e,i) { return '<div class="arc-q"><span class="n">' + (i+1) + '.</span><span class="what"><b>' + esc(torrentTitle(e.name)) + '</b></span>' + ownerOrder('seeding/queue/reorder',{hash:e.hash},i,q.length) + '</div>'; }).join('') + '</div>' : '') +
       seedResults(q) +
-      '<div data-key="seed-list">' + (seeding.items.length ? seeding.items.map(function (p) {
-        var k = s.pos[p.hash], sub = p.hash === moving ? phaseLabel(j.phase) : k ? "Queued " + k : p.refusal || "Frees " + size(p.nvmeBytesFreed);
-        return '<button class="arc-seed" type="button" data-key="t:' + esc(p.hash) + '" data-seed-hash="' + esc(p.hash) + '"' + (p.refusal || k ? " disabled" : "") + '><span class="arc-seed-name"><b>' + esc(p.name) + '</b><span class="sub">' + esc(sub) + "</span></span>" +
-          '<span class="arc-seed-size">' + (p.mode ? pill(p.mode === "link" ? "Link" : "Move", p.mode === "link" ? "good" : "info") : "") + '<span class="sub">' + esc(size(p.size)) + "</span></span></button>";
-      }).join("") : '<div class="empty">No torrents waiting on the download disk</div>') + "</div>");
+      (seeding.items.length ? seeding.items.map(function(p) {
+        var k = pos[p.hash], sub = p.hash === moving ? phaseLabel(j.phase) : k ? 'Queued ' + k : p.refusal || 'Frees '+size(p.nvmeBytesFreed);
+        return '<button class="seed-row" data-seed-hash="'+esc(p.hash)+'"'+(p.refusal||k?' disabled':'')+'><span class="seed-name"><b>'+esc(p.name)+'</b><span class="sub">'+esc(sub)+'</span></span><span class="seed-size">'+(p.mode?pill(p.mode==='link'?'Link':'Move',p.mode==='link'?'good':'info'):'')+'<span class="sub">'+esc(size(p.size))+'</span></span></button>';
+      }).join(''):'<div class="empty">No torrents on NVMe</div>'));
     focusPending();
+  }
+  function seedErrorText(j) {
+    return j && (j.phase === 'halted' || j.phase === 'failed' || j.phase === 'stopped') ? '<div id="seed-error" class="arc-msg warn" role="status" tabindex="-1"><b>'+esc(j.plan.name)+'</b> · '+esc(phaseLabel(j.phase))+(j.error?'<div class="sub">'+esc(j.error)+'</div>':'')+'</div>' : '';
   }
 
   function loadSeeding() {
@@ -953,14 +953,14 @@
     failedJobs(a).forEach(function (f) { out.failed.push({ key: "archive:" + jobID(f), title: title(f.target), word: "Stopped", level: "critical", go: go }); });
     (v.archiveSearches || []).forEach(function (q) {
       if (q.state === "done" || q.state === "failed" && q.finished && Date.now() - Date.parse(q.finished) > LINGER) return;
-      var r = { key: "search:" + key(q.title), title: q.name + (q.title.kind === "sonarr" ? " S" + pad(q.title.season) : ""),
-        word: q.state === "searching" ? "Searching" : q.state === "failed" ? "Failed" : "Queued", pct: null, eta: null, bytes: null, go: { view: "status", title: key(q.title) } };
+      var r = { key: "search:" + archiveKey(q.title), title: q.name + (q.title.kind === "sonarr" ? " S" + pad(q.title.season) : ""),
+        word: q.state === "searching" ? "Searching" : q.state === "failed" ? "Failed" : "Queued", pct: null, eta: null, bytes: null, go: { view: "status", title: archiveKey(q.title) } };
       if (q.state === "failed") { r.level = "critical"; out.failed.push(r); } else if (q.state === "searching") out.running.push(r); else out.queued.push(r);
     });
     (a.approvals || []).forEach(function (q) {
-      var d = (a.report || []).filter(function (r) { return key(r.target) === key(q); })[0], why = q.blocked ? reasonLabel(q.message || "") : "";
-      out.queued.push({ key: "approval:" + key(q) + ":" + q.releaseId, title: d ? title(d.target) : q.kind === "sonarr" ? "Series" : "Movie",
-        word: q.blocked ? "Blocked" + (why && why !== "Details" ? " · " + why : "") : "Approved", level: q.blocked ? "warning" : "", go: { view: "status", title: key(q) } });
+      var d = (a.report || []).filter(function (r) { return archiveKey(r.target) === archiveKey(q); })[0], why = q.blocked ? reasonLabel(q.message || "") : "";
+      out.queued.push({ key: "approval:" + archiveKey(q) + ":" + q.releaseId, title: d ? title(d.target) : q.kind === "sonarr" ? "Series" : "Movie",
+        word: q.blocked ? "Blocked" + (why && why !== "Details" ? " · " + why : "") : "Approved", level: q.blocked ? "warning" : "", go: { view: "status", title: archiveKey(q) } });
     });
     return out;
   }
@@ -1013,36 +1013,51 @@
     return done / total * 100;
   }
 
-  function opHTML(r, withBar) {
+  function opHTML(r, bar) {
     goTargets[r.key] = r.go;
-    var l = linger[r.key], fading = r.done && l && l.until - Date.now() <= FADE;
-    var meta = r.word + (r.eta > 0 ? " · " + eta(r.eta) : "");
-    return '<button type="button" class="arc-op' + (r.level ? " " + r.level : "") + (r.done ? " done" : "") + (fading ? " fade" : "") + '" data-key="' + esc(r.key) + '" data-arc-go="' + esc(r.key) + '"' + (r.name ? ' title="' + esc(r.name) + '"' : "") + ">" +
-      '<span class="arc-op-t">' + esc(r.title) + '</span><span class="arc-op-w">' + esc(meta) + "</span>" +
-      (withBar ? '<span class="arc-minibar' + (r.pct == null ? " busy" : "") + '" role="progressbar" aria-label="' + esc(r.title) + '" aria-valuemin="0" aria-valuemax="100"' +
-        (r.pct == null ? "" : ' aria-valuenow="' + Math.round(r.pct) + '"') + '><i style="width:' + (r.pct == null ? 35 : r.pct.toFixed(1)) + '%"></i></span>' : "") + "</button>";
+    var entry = linger[r.key], fading = r.done && entry && entry.until - Date.now() <= FADE;
+    var meta = r.word + (r.eta > 0 ? ' · ' + activityETA(r.eta) : '');
+    return '<button type="button" class="arc-op' + (r.level ? ' ' + r.level : '') + (r.done ? ' done' : '') + (fading ? ' fade' : '') + '" data-key="' + esc(r.key) + '" data-arc-go="' + esc(r.key) + '"' + (r.name ? ' title="' + esc(r.name) + '"' : '') + '>' +
+      '<span class="arc-op-t">' + esc(r.title) + '</span><span class="arc-op-w">' + esc(meta) + '</span>' +
+      (bar ? '<span class="library-bar' + (r.pct == null ? ' busy' : '') + '" role="progressbar" aria-label="' + esc(r.title) + '" aria-valuemin="0" aria-valuemax="100"' +
+        (r.pct == null ? '' : ' aria-valuenow="' + Math.round(r.pct) + '"') + '><i style="width:' + (r.pct == null ? 35 : r.pct.toFixed(1)) + '%"></i></span>' : '') + '</button>';
   }
 
   function renderStrip() {
     if (!st.strip) return;
-    var m = model();
-    if (st.view === "selection" || (!m.running.length && !m.queued.length && !m.failed.length && !m.done.length)) { st.strip.hidden = true; return; }
+    var head = st.body.querySelector(".arc-head");
+    if (head && head.nextSibling !== st.strip) st.body.insertBefore(st.strip, head.nextSibling);
+    var el = st.strip, m = model(), live = el.querySelector('.arc-live');
+    if (!m.running.length && !m.queued.length && !m.failed.length && !m.done.length) {
+      el.hidden = true;
+      setLive(live, '');
+      return;
+    }
     var pct = aggregate(m.running), n = m.running.length;
     if (pct != null) pct = Math.round(pct);
-    var sum = n ? n + " active" : m.failed.length ? m.failed.length + " failed" : m.queued.length ? "Queued " + m.queued.length : "Done";
+    var sum = n ? n + ' active' : m.failed.length ? m.failed.length + ' failed' : m.queued.length ? 'Queued ' + m.queued.length : 'Done';
     goTargets = {};
-    morph(st.strip, '<div class="arc-strip-card" data-key="card"><button type="button" class="arc-strip-head" data-arc-toggle aria-expanded="' + stripOpen + '" aria-controls="arc-strip-body">' +
-      '<span class="arc-strip-sum">' + esc(sum) + "</span>" + (n && m.failed.length ? '<span class="arc-strip-fail">' + m.failed.length + " failed</span>" : "") +
-      '<span class="spacer"></span><span class="arc-strip-pct">' + (pct == null ? "" : pct + "%") + '</span><span class="arc-strip-chev" aria-hidden="true">' + (stripOpen ? "▾" : "▸") + "</span></button>" +
-      (n ? bar(pct, pct == null ? "indeterminate" : "", "Overall progress") : "") +
-      '<div id="arc-strip-body" data-key="body" class="arc-strip-body' + (stripOpen ? "" : " hidden") + '">' +
-      m.failed.map(function (r) { return opHTML(r, false); }).join("") +
-      m.running.map(function (r) { return opHTML(r, true); }).join("") +
-      m.done.map(function (r) { return opHTML(r, true); }).join("") +
-      (!m.queued.length ? "" : n || m.failed.length || m.done.length ? '<details class="arc-strip-q" data-key="queued"><summary>Queued ' + m.queued.length + "</summary>" + m.queued.map(function (r) { return opHTML(r, false); }).join("") + "</details>" : m.queued.map(function (r) { return opHTML(r, false); }).join("")) +
-      "</div></div>");
-    st.strip.hidden = false;
+    morph(el.firstChild, '<button type="button" class="arc-strip-head" data-arc-toggle aria-expanded="' + stripOpen + '" aria-controls="arc-strip-body">' +
+      '<span class="arc-strip-sum">' + esc(sum) + '</span>' + (n && m.failed.length ? '<span class="arc-strip-fail">' + m.failed.length + ' failed</span>' : '') +
+      '<span class="spacer"></span><span class="arc-strip-pct">' + (pct == null ? '' : pct + '%') + '</span><span class="arc-strip-chev" aria-hidden="true">' + (stripOpen ? '▾' : '▸') + '</span></button>' +
+      (n ? bar(pct, pct == null ? 'indeterminate' : '', 'Overall progress') : '') +
+      '<div id="arc-strip-body" data-key="body" class="arc-strip-body' + (stripOpen ? '' : ' hidden') + '">' +
+      m.failed.map(function (r) { return opHTML(r, false); }).join('') +
+      m.running.map(function (r) { return opHTML(r, true); }).join('') +
+      m.done.map(function (r) { return opHTML(r, true); }).join('') +
+      // Queued alone is already the header, so its rows sit flat.
+      (!m.queued.length ? '' : n || m.failed.length || m.done.length ? '<details class="arc-strip-q" data-key="queued"><summary>Queued ' + m.queued.length + '</summary>' + m.queued.map(function (r) { return opHTML(r, false); }).join('') + '</details>' : m.queued.map(function (r) { return opHTML(r, false); }).join('')) +
+      '</div>');
+    el.hidden = false;
     scheduleLinger();
+    // Announce phases, never percentages, so a tick stays quiet.
+    setLive(live, m.failed.concat(m.running, m.done).map(function (r) { return r.word.replace(/\s*[\d·].*$/, '') + ' ' + r.title; }).join('. '));
+  }
+  function setLive(el, text) {
+    if (liveText === null) { liveText = text; return; }
+    if (text === liveText) return;
+    liveText = text;
+    el.textContent = text;
   }
 
   function scheduleLinger() {
@@ -1137,14 +1152,14 @@
     if (!t || t.view !== st.view) return;
     if (t.view === "status" && t.title) {
       if (!status || !status.reachable) return;
-      var g = "title:" + t.title, d = st.body.querySelector('details.arc-title[data-group="' + CSS.escape(g) + '"]');
+      var g = "archive:title:" + t.title, d = st.body.querySelector('details.arc-title[data-group="' + CSS.escape(g) + '"]');
       if (d && !d.open) { open[g] = true; pending = null; renderStatus(); d = st.body.querySelector('details.arc-title[data-group="' + CSS.escape(g) + '"]'); }
       el = (d && d.querySelector("summary")) || st.body.querySelector(".arc-now");
     } else if (t.view === "status") el = st.body.querySelector(".arc-now");
     else if (t.view === "seeding") {
       if (!seeding) return;
       var rowEl = st.body.querySelector('[data-seed-hash="' + CSS.escape(t.hash || "") + '"]');
-      el = (!rowEl || rowEl.disabled) && $("arc-seed-error") ? $("arc-seed-error") : rowEl;
+      el = (!rowEl || rowEl.disabled) && $("seed-error") ? $("seed-error") : rowEl;
     }
     pending = null;
     if (!el) return;
@@ -1156,26 +1171,7 @@
   // ------------------------------------------------------------ frame
 
   // The header's trailing tools change with the view and the pause state.
-  function renderTools() {
-    if (!st.tools) return;
-    var v = status || {}, info = v.info || {}, paused = v.archivePaused, html = "";
-    var pause = v.reachable ? ownerButton("pause", paused ? "Resume" : "Pause", { paused: !paused }, v.dryRun).replace('class="btn"', 'class="btn arc-pause"') : "";
-    if (st.view === "status") {
-      html = (v.reachable ? '<span class="pill" title="Originals kept in the recycle bin">' + HI.iconNode("clock", "sm").outerHTML + " undo " + esc(info.undoDays || 7) + "d</span>" : "") + pause +
-        '<button class="btn" type="button" data-archive-action="run"' + (!v.archiveEnabled || (info.runNow || {}).pending ? " disabled" : "") + ">Check now</button>";
-    } else if (st.view === "library") {
-      html = pause;
-    } else if (st.view === "seeding" && !seeding) {
-      html = pause;
-    } else if (st.view === "seeding") {
-      var s = seedPlans();
-      html = pause + '<button class="btn" type="button" data-seed-all' + (s.canLink ? "" : " disabled") + ">Link all (" + s.links.length + ")</button>" +
-        '<button class="btn" type="button" data-seed-move-all' + (s.canMove ? "" : " disabled") + ">Move all (" + s.moves.length + ")</button>" +
-        (s.q.length ? '<button class="btn" type="button" data-seed-queue-cancel>Cancel queue</button>' : "") +
-        '<button class="btn" type="button" data-seed-refresh>Refresh</button>';
-    }
-    morph(st.tools, html);
-  }
+  function renderTools() { /* Tools live in the source's arc-head for each view. */ }
 
   function render() {
     if (!st.root) return;
@@ -1191,7 +1187,8 @@
     var b = e.target.closest ? e.target.closest("button, [data-arc-go]") : null;
     if (!b || b.disabled || !st.root.contains(b)) return;
     var a = b.getAttribute.bind(b);
-    if (a("data-owner-path")) ownerControl(b);
+    if (a("data-library-link")) HI.go(a("data-library-link"));
+    else if (a("data-owner-path")) ownerControl(b);
     else if (a("data-archive-action")) openAction(a("data-archive-action"), a("data-archive-id"));
     else if (a("data-score-toggle")) {
       var id = a("data-score-toggle"), panel = $(id), ex = a("aria-expanded") !== "true";
@@ -1216,7 +1213,7 @@
   }
   function onInput(e) {
     var t = e.target;
-    if (t.id === "arc-lib-search") { libQuery = t.value; renderLibrary(); }
+    if (t.id === "library-search") { libQuery = t.value; renderLibrary(); }
     else if ((st.view === "selection" || st.view === "admin") && t.type === "number" && /^arc-sc-/.test(t.id)) { readSelection(); selectionChanged(); }
   }
   function onKey(e) {
@@ -1249,8 +1246,9 @@
       root.className = "arc-page";
       st.tools = HI.h("div", { class: "arc-head-tools" });
       st.strip = HI.h("section", { class: "arc-strip", "aria-label": "Activity", hidden: true });
-      st.body = HI.h("div", { class: "arc-view arc-view-" + st.view });
-      root.appendChild(HI.head(ID, st.view, st.tools));
+      st.body = HI.h("div", { id: st.view === "library" ? "archive-library" : st.view === "seeding" ? "archive-seeding" : "archive", class: "arc-view arc-view-" + st.view });
+      st.strip.id = "arc-strip";
+      st.strip.innerHTML = '<div class="arc-strip-card"></div><div class="arc-live" aria-live="polite"></div>';
       root.appendChild(st.strip);
       root.appendChild(st.body);
       var t = ctx.params && (ctx.params.get("title") || ctx.params.get("hash"));
