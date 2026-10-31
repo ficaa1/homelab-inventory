@@ -46,7 +46,7 @@
 
   function posterOf(t) {
     var f = t && t.poster ? String(t.poster).split("/").pop() : "";
-    return /^[A-Za-z0-9]{10,64}\.(jpg|png)$/.test(f) ? f : "";
+    return /^[A-Za-z0-9_-]{6,64}\.(jpg|png|webp)$/.test(f) ? f : "";
   }
   function posterNode(t, cls) {
     var f = posterOf(t), box = h("span", { class: "tposter" + (cls ? " " + cls : "") });
