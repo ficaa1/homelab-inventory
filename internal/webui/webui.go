@@ -15,7 +15,7 @@ package webui
 
 import (
 	"crypto/sha256"
-	_ "embed"
+	"embed"
 	"encoding/base64"
 	"net/http"
 	"strings"
@@ -115,7 +115,34 @@ var backupCSS []byte
 //go:embed backup-ui.js
 var backupUI []byte
 
+// Built-in plugin pages; see pages/README.md.
+//
+//go:embed pages
+var pageFiles embed.FS
+
+// pageAssets joins every page file with the given extension, in name order.
+func pageAssets(ext string) string {
+	entries, err := pageFiles.ReadDir("pages")
+	if err != nil {
+		panic(err)
+	}
+	var b strings.Builder
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ext) {
+			data, err := pageFiles.ReadFile("pages/" + e.Name())
+			if err != nil {
+				panic(err)
+			}
+			b.WriteString("\n")
+			b.Write(data)
+		}
+	}
+	return b.String()
+}
+
 func init() {
+	indexHTML = []byte(strings.Replace(string(indexHTML), "</style>", pageAssets(".css")+"\n</style>", 1))
+	indexHTML = []byte(strings.Replace(string(indexHTML), "<script>", "<script>"+pageAssets(".js")+"\n", 1))
 	indexHTML = []byte(strings.Replace(string(indexHTML), "</style>", "\n"+string(backupCSS)+"</style>", 1))
 	indexHTML = []byte(strings.Replace(string(indexHTML), "<!-- backup-ui -->", "", 1))
 	indexHTML = []byte(strings.Replace(string(indexHTML), "</script>", "\n"+string(backupUI)+"</script>", 1))

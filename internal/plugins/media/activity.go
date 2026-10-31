@@ -2,14 +2,15 @@ package media
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
 	"github.com/ficaa1/homelab-inventory/internal/plugins/media/activity"
 	"net/url"
+	"time"
 )
 
-func (m *Media) libraryActivity(ctx context.Context) plugin.View {
-	v := plugin.View{Title: "Library activity", UpdatedAt: m.host.Now(), RefreshSeconds: 10, Blocks: []plugin.Block{}}
+func (m *Media) collectLibraryActivity(ctx context.Context) (activity.Activity, map[string]string) {
 	feeds := map[string]activity.Feed{}
 	for _, id := range []string{"sonarr", "radarr"} {
 		feed := activity.Feed{Status: activity.StatusUnconfigured}
@@ -28,10 +29,16 @@ func (m *Media) libraryActivity(ctx context.Context) plugin.View {
 		}
 		feeds[id] = feed
 	}
-	a := activity.Build(m.host.Now(), feeds["sonarr"], feeds["radarr"])
+	status := map[string]string{"sonarr": feeds["sonarr"].Status, "radarr": feeds["radarr"].Status}
+	return activity.Build(m.host.Now(), feeds["sonarr"], feeds["radarr"]), status
+}
+
+func (m *Media) libraryActivity(ctx context.Context) plugin.View {
+	v := plugin.View{Title: "Library activity", UpdatedAt: m.host.Now(), RefreshSeconds: 10, Blocks: []plugin.Block{}}
+	a, status := m.collectLibraryActivity(ctx)
 	for _, id := range []string{"sonarr", "radarr"} {
-		if feeds[id].Status != activity.StatusOK {
-			v.Blocks = append(v.Blocks, plugin.Block{Type: "notice", Tone: "warn", Text: id + " activity " + feeds[id].Status})
+		if status[id] != activity.StatusOK {
+			v.Blocks = append(v.Blocks, plugin.Block{Type: "notice", Tone: "warn", Text: id + " activity " + status[id]})
 		}
 	}
 	items := []plugin.Item{}
@@ -59,4 +66,25 @@ func (m *Media) libraryActivity(ctx context.Context) plugin.View {
 	}
 	v.Blocks = append(v.Blocks, list("Import progress", "No active imports", items))
 	return v
+}
+
+// API exposes the same derived activity used by the declarative view so the
+// Archive Library can place progress beside the matching title and season.
+func (m *Media) API(ctx context.Context, req plugin.APIRequest) (plugin.APIResponse, error) {
+	if req.Method != "GET" || req.Path != "activity" {
+		return plugin.APIResponse{}, plugin.ErrNotFound
+	}
+	a, _ := m.collectLibraryActivity(ctx)
+	b, err := json.Marshal(a)
+	if err != nil {
+		return plugin.APIResponse{}, err
+	}
+	return plugin.APIResponse{Body: b}, nil
+}
+
+func (m *Media) APITimeout(method, path string) time.Duration {
+	if method == "GET" && path == "activity" {
+		return 20 * time.Second
+	}
+	return 0
 }

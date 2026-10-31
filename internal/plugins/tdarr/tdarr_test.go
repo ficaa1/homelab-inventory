@@ -5,6 +5,7 @@ import (
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
 	"github.com/ficaa1/homelab-inventory/internal/plugins/tdarr/engine"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -35,5 +36,24 @@ func TestConfiguredPathsAndProtectedIdentities(t *testing.T) {
 	}
 	if _, e = p.Action(context.Background(), "arbitrary", plugin.Config{}); e != plugin.ErrNotFound {
 		t.Fatal("unknown action admitted")
+	}
+}
+
+// The page API keeps the action barriers: an unreviewed plan never reaches the sidecar.
+func TestPageAPIGatesExecution(t *testing.T) {
+	hits := 0
+	sidecar := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits++ }))
+	defer sidecar.Close()
+	p := New(testHost{t.TempDir()}).(*Integration)
+	if e := p.Configure(plugin.Config{"tdarr_url": "http://service.invalid", "sidecar_url": sidecar.URL}); e != nil {
+		t.Fatal(e)
+	}
+	body := `{"plan":{"selection":[{"kind":"radarr","id":1}],"files":[],"paths":["/worker/movies/a.mkv"],"total_bytes":1,"selected_bytes":1,"withPc":false},"hash":"x","confirmation_token":"forged","confirm":true}`
+	out, err := p.API(context.Background(), plugin.APIRequest{Method: "POST", Path: "batch/execute", Body: []byte(body), Actor: "bearer"})
+	if err != nil || out.Status != 409 || hits != 0 {
+		t.Fatalf("forged confirmation: %d %s, sidecar hits %d", out.Status, out.Body, hits)
+	}
+	if _, err = p.API(context.Background(), plugin.APIRequest{Method: "POST", Path: "status"}); err != plugin.ErrNotFound {
+		t.Fatal("unknown route admitted")
 	}
 }
