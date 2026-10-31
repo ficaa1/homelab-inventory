@@ -7773,7 +7773,14 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     openDrawer: openDrawer, closeDrawer: closeDrawer, go: go,
     // GET and mutation helpers for the plugin's own API; a 401 opens the gate.
     get: function (id, path, signal) { return api(pagePath(id, path), signal).catch(pageFail); },
-    send: function (id, path, method, body) { return write(pagePath(id, path), method || "POST", body === undefined ? {} : body).catch(pageFail); },
+    // opts.operator sends the operator credential (prompted once per session)
+    // for routes the plugin gates like operator actions.
+    send: function (id, path, method, body, opts) {
+      var headers;
+      try { headers = opts && opts.operator ? operatorHeaders() : undefined; } catch (e) { return Promise.reject(e); }
+      return write(pagePath(id, path), method || "POST", body === undefined ? {} : body, undefined, headers).catch(pageFail);
+    },
+    operatorEnabled: function () { return !!capabilities.operator_enabled; },
     // A picture from the plugin's API or image route, as a blob URL (an <img>
     // cannot send the token). Callers revoke it when they drop the image.
     image: function (id, path, signal) {

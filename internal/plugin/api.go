@@ -31,6 +31,23 @@ type APITimeouts interface {
 	APITimeout(method, path string) time.Duration
 }
 
+// APIOperator optionally names routes that, like operator actions, need the
+// separate operator credential instead of the dashboard token. Core checks it
+// before dispatch; the plugin then sees Actor "operator".
+type APIOperator interface {
+	APIOperator(method, path string) bool
+}
+
+// APIOperator reports whether a page route needs the operator credential.
+func (r *Registry) APIOperator(id, method, path string) bool {
+	e := r.entries[id]
+	if e == nil {
+		return false
+	}
+	o, ok := e.plugin.(APIOperator)
+	return ok && o.APIOperator(method, path)
+}
+
 type APIRequest struct {
 	Method string
 	Path   string // no leading slash, already unescaped
