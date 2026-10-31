@@ -5750,8 +5750,10 @@ body.has-up-bubble main.wrap { padding-bottom: 88px; }
 
   function loadDuskAdmin(state) {
     state.content.textContent = "Loading Dusk setup…";
-    return Promise.all([api("/dusk/admin"), api("/dusk/enrichment").catch(function (err) { if (err.unauthorized) throw err; return {error:err.message}; })]).then(function (results) {
+    return Promise.all([api("/dusk/admin"), api("/dusk/enrichment").catch(function (err) { if (err.unauthorized) throw err; return {error:err.message}; }), api("/dusk/options").catch(function (err) { if (err.unauthorized) throw err; return {error:err.message}; })]).then(function (results) {
       var data = results[0]; data.enrichment_options = Array.isArray(results[1]) ? results[1] : []; data.enrichment_error = (results[1] && results[1].error) || "";
+      data.options = results[2] && !results[2].error ? results[2] : {};
+      data.options_error = (results[2] && results[2].error) || "";
       state.loaded = true; state.data = data; renderDuskAdmin(state);
     }, function (err) {
       if (err.unauthorized) { showGate(true); return; }
@@ -5843,10 +5845,11 @@ body.has-up-bubble main.wrap { padding-bottom: 88px; }
     });
     var devices = (data.devices || []).map(function (device) {
       var profile = profiles.filter(function (p) { return p.id === device.profile_id; })[0];
-      return h("li", {}, [h("span", { text: (device.name || "TV") + " · " + (profile ? profile.name : device.profile_id) + " · " + (device.scopes || []).join(", ") + " · " + (device.revoked_at ? "Revoked" : "Paired " + device.created_at) }),
+      return h("li", {}, [h("span", { text: (device.name || "TV") + " · " + (profile ? profile.name : device.profile_id) + " · " + (device.scopes || []).join(", ") + " · " + (device.revoked_at ? "Revoked" : "Paired" + (device.created_at ? " " + device.created_at : "")) }),
         device.revoked_at ? null : action("Revoke " + (device.name || "TV"), function () { if (window.confirm("Revoke this device’s access immediately?")) mutate("/dusk/devices/" + encodeURIComponent(device.id), "DELETE", {}); })]);
     });
     box.replaceChildren(h("p", { text: "Dusk uses the connections configured in Media. Household profiles keep pairing permissions, requests and taste separate." }), status, create,
+      data.options_error ? h("p", { role: "status", class: "help", text: "Request options unavailable. Configure Media and its Overseerr connection to select requesters, servers and quality profiles. Pairing remains available. " + data.options_error }) : null,
       h("div", { class: "plug-groups", style: "margin-top:24px" }, sections.length ? sections : [h("p", { text: "Create a household profile to pair your first TV." })]),
       h("h3", { text: "Devices" }), h("ul", {}, devices.length ? devices : [h("li", { text: "No devices paired." })]),
       h("div", { class: "help", text: (options.diagnostics || []).join(" · ") }));

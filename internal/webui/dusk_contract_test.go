@@ -20,7 +20,7 @@ class Element {
  addEventListener(type,fn) { this[type]=fn; }
  querySelectorAll(tag) { return flat(this).filter(c=>c.tag===tag); }
 }
-function flat(el) { return [el,...(el.children||[]).filter(c=>typeof c==='object').flatMap(flat)]; }
+function flat(el) { return [el,...(el.children||[]).filter(c=>c&&typeof c==='object').flatMap(flat)]; }
 function h(tag,attrs,children=[]) { const el=new Element(tag,attrs,children); if(tag==='select') el.replaceChildren(...children); return el; }
 let calls=[]; function write(path,method,body) { calls.push({path,method,body}); return Promise.resolve({code:'ABCD-EFGH',expires_at:'2030-01-01'}); }
 function showGate() { throw Error('unexpected auth'); } function loadDuskAdmin() { return Promise.resolve(); }
@@ -49,5 +49,37 @@ Promise.resolve().then(()=>{
 `
 	if out, err := exec.Command(node, "-e", script).CombinedOutput(); err != nil {
 		t.Fatalf("Dusk UI contract: %v\n%s", err, out)
+	}
+}
+
+func TestDuskAdminLoadsOptionsWithoutBlockingPairing(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node unavailable")
+	}
+	script := `
+const fs=require('fs'), assert=require('assert'), page=fs.readFileSync('index.html','utf8');
+const start=page.indexOf('  function loadDuskAdmin('), end=page.indexOf('  function duskOptions(',start);
+let calls=[], failOptions=false, renders=0;
+function api(path){calls.push(path);if(path==='/dusk/options')return failOptions?Promise.reject(new Error('Unavailable')):Promise.resolve({requesters:[{id:3,name:'Viewer'}],servers:[]});return Promise.resolve(path==='/dusk/admin'?{profiles:[{id:'room',name:'Room'}]}:[]);}
+function renderDuskAdmin(){renders++;} function showGate(){throw Error('unexpected auth');}
+eval(page.slice(start,end));
+(async()=>{
+ const state={content:{}};
+ await loadDuskAdmin(state);
+ assert.deepStrictEqual(calls,['/dusk/admin','/dusk/enrichment','/dusk/options']);
+ assert.equal(state.data.options.requesters[0].id,3);
+ assert.equal(state.loaded,true);
+ failOptions=true;
+ await loadDuskAdmin(state);
+ assert.equal(state.loaded,true);
+ assert.equal(state.data.profiles[0].id,'room');
+ assert.equal(state.data.options_error,'Unavailable');
+ assert.deepStrictEqual(state.data.options,{});
+ assert.equal(renders,2);
+})().catch(err=>{console.error(err);process.exitCode=1;});
+`
+	if out, err := exec.Command(node, "-e", script).CombinedOutput(); err != nil {
+		t.Fatalf("Dusk options loading: %v\n%s", err, out)
 	}
 }
