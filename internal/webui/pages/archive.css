@@ -246,6 +246,7 @@
 .arc-page .library-keep { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 16px 0; }
 .arc-page .library-keep .sub { flex-basis: 100%; margin-left: 24px; }
 .arc-page .library-season-picker { border: 1px solid var(--line-2); border-radius: var(--r); padding: 14px; margin: 16px 0; }
+.arc-page [data-library-progress]:empty { display: none; }
 .arc-page .library-picker-row + .library-picker-row { border-top: 1px solid var(--line); }
 .arc-page .library-picker-row [data-library-progress] { padding: 0 0 8px 28px; }
 .arc-page .library-season-picker legend { color: var(--text-2); font-size: var(--fs-xs); padding: 0 5px; }
