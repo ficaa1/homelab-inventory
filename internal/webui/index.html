@@ -1235,6 +1235,9 @@ pre.code {
 .pv-head { display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap; margin-bottom: var(--s5); }
 .pv-head h2 { margin: 0; overflow-wrap: anywhere; }
 .pv-head .seg .btn { min-width: 64px; }
+.pv-heads > .pv-head { margin-bottom: var(--s3); }
+.seg.pv-sub { margin-bottom: var(--s5); align-self: flex-start; }
+.pv-heads { display: flex; flex-direction: column; }
 .pv-stamp { margin-left: auto; font-size: var(--fs-xs); color: var(--text-3); font-variant-numeric: tabular-nums; }
 .pv-stamp.stale { color: var(--warn); }
 .pv-blocks { align-items: start; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
@@ -4960,15 +4963,74 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     return ((info && info.tab && info.tab.views) || []).filter(function (v) { return v && VIEW_NAME.test(v.name); });
   }
 
+  // Tabs that share tab.group sit behind one sidebar entry, each a section of
+  // that page. A group of one is an ordinary tab.
+  var GROUP_ORDER = { media: ["archive", "tdarr", "taste", "media"] };
+  var GROUP_ICON = { media: "film" };
+  var groupLast = {};   // group -> the member plugin last shown
+  function groupMembers(group) {
+    var order = GROUP_ORDER[group] || [];
+    return pluginTabs().filter(function (p) { return p.tab.group === group; }).sort(function (a, b) {
+      var i = order.indexOf(a.id), j = order.indexOf(b.id);
+      return (i < 0 ? order.length : i) - (j < 0 ? order.length : j) || (a.id < b.id ? -1 : 1);
+    });
+  }
+  function groupOf(id) {
+    var p = pluginInfo(id), g = p && str(p.tab.group);
+    return g && VIEW_NAME.test(g) && groupMembers(g).length > 1 ? g : "";
+  }
+  function groupTitle(g) { return g.charAt(0).toUpperCase() + g.slice(1); }
+  // One entry per ungrouped tab and one per group, in tab order.
+  function navEntries() {
+    var seen = {}, out = [];
+    pluginTabs().forEach(function (p) {
+      var g = groupOf(p.id);
+      if (!g) { out.push({ id: p.id, group: "", title: str(p.tab.title), icon: p.tab.icon }); return; }
+      if (seen[g]) return;
+      seen[g] = true;
+      out.push({ id: groupMembers(g)[0].id, group: g, title: groupTitle(g), icon: GROUP_ICON[g] || p.tab.icon });
+    });
+    return out;
+  }
+  function entryHash(e) {
+    var id = e.group && groupLast[e.group] && pluginInfo(groupLast[e.group]) ? groupLast[e.group] : e.id;
+    return pluginHash(id, pluginLastView[id] || "", "");
+  }
+  function entryOn(e) {
+    return route.view === "plugin" && (e.group ? groupOf(route.plugin) === e.group : route.plugin === e.id);
+  }
+  // The page header for a plugin: its views as tabs, and for a grouped plugin
+  // the group title with its members as sections above them.
+  function pluginHead(id, current, trailing, attrs) {
+    var info = pluginInfo(id), views = pluginViews(info), g = groupOf(id);
+    var name = info ? str(info.tab.title) || str(info.name) : id;
+    var seg = function (label, list, on, pick) {
+      return h("div", { class: "seg", role: "group", "aria-label": label }, list.map(function (x) {
+        return h("button", { class: "btn", type: "button", "aria-pressed": on(x) ? "true" : "false", "data-fk": "seg-" + x.key, onclick: function () { pick(x); } }, [x.title]);
+      }));
+    };
+    var viewSeg = views.length > 1 ? seg(name + " views", views.map(function (x) { return { key: x.name, title: str(x.title) || x.name }; }),
+      function (x) { return x.key === current; }, function (x) { go(pluginHash(id, x.key === views[0].name ? "" : x.key, "")); }) : null;
+    var bar = [h("h2", { text: g ? groupTitle(g) : name })];
+    if (g) bar.push(seg(groupTitle(g) + " sections", groupMembers(g).map(function (p) { return { key: "g-" + p.id, id: p.id, title: str(p.tab.title) }; }),
+      function (x) { return x.id === id; }, function (x) { go(pluginHash(x.id, pluginLastView[x.id] || "", "")); }));
+    else if (viewSeg) bar.push(viewSeg);
+    if (trailing) bar.push(trailing);
+    var head = h("div", attrs || { class: "pv-head" }, bar);
+    if (!g || !viewSeg) return [head];
+    viewSeg.classList.add("pv-sub");
+    return [head, viewSeg];
+  }
+
   // Plugin tabs follow the built-ins. On a phone the bar keeps four built-ins
   // and a More button; Admin and the plugin tabs move into its menu.
   function renderPluginNav() {
     var nav = document.querySelector(".tabs"), more = $("tab-more");
     Array.prototype.forEach.call(nav.querySelectorAll("[data-plugin]"), function (t) { t.remove(); });
-    var tabs = pluginTabs();
-    tabs.forEach(function (p) {
-      nav.insertBefore(h("button", { class: "tab", role: "tab", type: "button", "data-plugin": p.id, "data-overflow": true,
-        "aria-selected": "false", title: str(p.tab.title) }, [iconNode(p.tab.icon), h("span", { class: "tl", text: str(p.tab.title) })]), more);
+    var tabs = navEntries();
+    tabs.forEach(function (e) {
+      nav.insertBefore(h("button", { class: "tab", role: "tab", type: "button", "data-plugin": e.id, "data-group": e.group || null, "data-overflow": true,
+        "aria-selected": "false", title: e.title }, [iconNode(e.icon), h("span", { class: "tl", text: e.title })]), more);
     });
     nav.classList.toggle("has-more", tabs.length > 0);
     syncNavSelection();
@@ -4985,7 +5047,7 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     var overflowOn = false;
     Array.prototype.forEach.call(document.querySelectorAll(".tab[data-panel], .tab[data-plugin]"), function (t) {
       var on = t.dataset.plugin
-        ? route.view === "plugin" && route.plugin === t.dataset.plugin
+        ? entryOn({ id: t.dataset.plugin, group: t.dataset.group || "" })
         : (route.view === "fleet" && route.tab === t.dataset.panel) || (route.view === "host" && t.dataset.panel === "hosts");
       t.setAttribute("aria-selected", on ? "true" : "false");
       if (on && t.hasAttribute("data-overflow")) overflowOn = true;
@@ -4995,7 +5057,7 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
 
   document.querySelector(".tabs").addEventListener("click", function (e) {
     var t = e.target.closest ? e.target.closest("[data-plugin]") : null;
-    if (t) { go(pluginHash(t.dataset.plugin, pluginLastView[t.dataset.plugin] || "", "")); return; }
+    if (t) { go(entryHash({ id: t.dataset.plugin, group: t.dataset.group || "" })); return; }
     if (e.target.closest && e.target.closest("#tab-more")) {
       if ($("more-sheet").classList.contains("hidden")) openMore(); else closeMore(true);
     }
@@ -5015,10 +5077,10 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
 
   function openMore() {
     var sheet = $("more-sheet"), items = [];
-    pluginTabs().forEach(function (p) {
-      items.push(h("button", { type: "button", role: "menuitem", "data-more": "#/p/" + encodeURIComponent(p.id),
-        "aria-current": route.view === "plugin" && route.plugin === p.id ? "page" : null },
-        [iconNode(p.tab.icon), str(p.tab.title)]));
+    navEntries().forEach(function (e) {
+      items.push(h("button", { type: "button", role: "menuitem", "data-more": entryHash(e),
+        "aria-current": entryOn(e) ? "page" : null },
+        [iconNode(e.icon), e.title]));
     });
     if (items.length) items.push(h("hr", { "aria-hidden": "true" }));
     items.push(h("button", { type: "button", role: "menuitem", "data-more": "#/admin",
@@ -5079,6 +5141,8 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
   // same route (the page's own 60-second refresh) leaves it alone: a view
   // refreshes on its own schedule or when the refresh button is pressed.
   function openPluginView() {
+    var g = groupOf(route.plugin);
+    if (g) groupLast[g] = route.plugin;
     if (Object.prototype.hasOwnProperty.call(PAGES, route.plugin)) {
       if (pv.key) { var keep = activePage; activePage = null; leavePluginView(); activePage = keep; }
       showPage(route.plugin, PAGES[route.plugin]);
@@ -5162,20 +5226,15 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
         [iconNode("back", "sm"), str(backTitle) || name]));
     }
     var title = inTab || !v ? name : str(v.title) || name;
-    var bar = [h("h2", { text: title })];
-    if (inTab && views.length > 1) {
-      bar.push(h("div", { class: "seg", role: "group", "aria-label": name + " views" }, views.map(function (x) {
-        return h("button", { class: "btn", type: "button", "aria-pressed": x.name === pv.view ? "true" : "false", "data-fk": "seg-" + x.name,
-          onclick: function () { go(pluginHash(pv.plugin, x.name === views[0].name ? "" : x.name, "")); } }, [str(x.title) || x.name]);
-      })));
-    }
+    var stampNode = null;
     if (v) {
       var when = Date.parse(v.updated_at) || pv.at, every = refreshEvery();
       var stamp = "Updated " + new Date(when).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       if (err) stamp = "Refresh failed · showing " + new Date(when).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      bar.push(h("span", { class: "pv-stamp" + (err ? " stale" : ""), title: new Date(when).toLocaleString() + (every ? " · refreshes every " + Math.round(every / 1000) + " s" : "") }, [stamp]));
+      stampNode = h("span", { class: "pv-stamp" + (err ? " stale" : ""), title: new Date(when).toLocaleString() + (every ? " · refreshes every " + Math.round(every / 1000) + " s" : "") }, [stamp]);
     }
-    head.push(h("div", { class: "pv-head" }, bar));
+    if (inTab) head = head.concat(pluginHead(pv.plugin, pv.view, stampNode));
+    else head.push(h("div", { class: "pv-head" }, [h("h2", { text: title }), stampNode]));
 
     var body;
     if (!v && !err) {
@@ -7792,15 +7851,8 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     // The page header: title, the plugin's views as a segmented control, and
     // an optional trailing node (a timestamp or a button).
     head: function (id, current, trailing) {
-      var info = pluginInfo(id), views = pluginViews(info);
-      var name = info ? str(info.tab.title) || str(info.name) : id;
-      var bar = [h("h2", { text: name })];
-      if (views.length > 1) bar.push(h("div", { class: "seg", role: "group", "aria-label": name + " views" }, views.map(function (x) {
-        return h("button", { class: "btn", type: "button", "aria-pressed": x.name === current ? "true" : "false",
-          onclick: function () { go(pluginHash(id, x.name === views[0].name ? "" : x.name, "")); } }, [str(x.title) || x.name]);
-      })));
-      if (trailing) bar.push(trailing);
-      return h("div", { class: "pv-head" }, bar);
+      var parts = pluginHead(id, current, trailing);
+      return parts.length === 1 ? parts[0] : h("div", { class: "pv-heads" }, parts);
     },
     // Hand one file to the upload sheet for this plugin's own destination; the
     // sheet sends it with progress and errors. False when it is not configured.
