@@ -49,7 +49,7 @@ func (*Integration) Manifest() plugin.Manifest {
 		fields = append(fields, plugin.Field{Key: k.key, Label: k.label, Type: plugin.Text, Help: "Absolute media root; no host filesystem is read by the dashboard."})
 	}
 	fields = append(fields, plugin.Field{Key: "protected_titles", Label: "Protected title identities (JSON array)", Type: plugin.Text, Help: "Explicit kind/id, tmdb_id, imdb_id, title and/or path exclusions. Empty means none."})
-	return plugin.Manifest{ID: "tdarr", Name: "Tdarr", Version: "1", Description: "Review compression candidates and explicitly execute guarded batches through an existing sidecar.", Settings: fields, Actions: actions(), Tab: &plugin.Tab{Title: "Tdarr", Icon: "film", Group: "media", Views: []plugin.ViewRef{{Name: "library", Title: "Library"}, {Name: "status", Title: "Status"}, {Name: "candidates", Title: "Candidates"}}}}
+	return plugin.Manifest{ID: "tdarr", Name: "Tdarr", Version: "1", Description: "Review compression candidates and explicitly execute guarded batches through an existing sidecar.", Settings: fields, Actions: actions(), Tab: &plugin.Tab{Title: "Tdarr", Icon: "film", Group: "media", Views: []plugin.ViewRef{{Name: "library", Title: "Tdarr"}}}}
 }
 func (p *Integration) str(k string) string {
 	s, _ := p.c[k].(string)
