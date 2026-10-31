@@ -150,6 +150,7 @@
 .arc-page .library-nav { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); }
 .arc-page .library-nav .btn { border: 0; background: none; color: var(--text-3); min-height: 28px; padding: 4px 12px; }
 .arc-page .library-nav .btn.primary, .arc-page .library-nav .btn[aria-pressed="true"] { background: var(--surface-3); color: var(--text); filter: none; }
+.arc-page .library-nav [data-library-view="tdarr"] { min-height:44px; }
 .arc-page .library-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .arc-page .library-kpis .tile .value small { margin-left: 4px; }
 .arc-page .library-card { overflow: hidden; }
