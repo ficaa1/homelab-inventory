@@ -96,3 +96,10 @@ type Discovery struct {
 	Seeds         []Seed   `json:"seeds"`
 	Hidden        []string `json:"hidden"`
 }
+
+// ProfileSource enriches a selected household profile from a configured playback
+// history account. Choices are administrator-only; history excludes identities.
+type ProfileSource interface {
+	TVProfiles(context.Context) ([]Choice, error)
+	TVHistory(context.Context, int) ([]Title, error)
+}
