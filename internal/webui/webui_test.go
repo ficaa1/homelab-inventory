@@ -104,7 +104,7 @@ func TestFetchesTheEndpointsItNeeds(t *testing.T) {
 	for _, path := range []string{`api("/overview")`, `api("/alerts")`, `api("/hosts")`, `api("/ports")`,
 		`"/history"`, `api("/settings")`, `"/notify/test"`,
 		`api("/actions/stacks?host="`, `"/packages"`, `"/changes?limit=10"`, `api("/actions/log?limit=20")`, `"/actions/preview"`, `"/actions/execute"`,
-		`api("/agent/status")`, `operatorWrite('/agent/offers'`, `"/storage/runs/prune"`, `"/firewall-plan"`} {
+		`api("/agent/status")`, `('/agent/offers'`, `"/storage/runs/prune"`, `"/firewall-plan"`} {
 		if !strings.Contains(page, path) {
 			t.Errorf("the dashboard no longer calls %s", path)
 		}

@@ -155,8 +155,8 @@ code {
   Desktop: a fixed sidebar holds the sections and the tools; the fleet status
   bar sticks to the top of the working column. Tablet: the sidebar folds to a
   72px rail of icons. Phone: a top bar, the status bar under it, and the
-  sections in a bottom bar; once plugins add tabs, Admin and the plugin tabs
-  move into the bar's More menu.
+  sections in a bottom bar. Network and Media join the bar; any other plugin
+  tab goes into the bar's More menu.
 */
 .topbar {
   position: fixed; top: 0; bottom: 0; left: 0; z-index: 40; width: var(--sidebar);
@@ -168,7 +168,7 @@ code {
   padding: 20px 12px 16px; gap: 24px;
 }
 .brand {
-  display: flex; align-items: center; gap: 10px; flex: none; width: 100%; min-height: 36px;
+  display: flex; align-items: center; gap: 12px; flex: none; width: 100%; min-height: 36px;
   background: none; border: 0; padding: 0 8px; cursor: pointer; text-align: left;
   font-size: 16px; font-weight: 600; color: var(--text);
 }
@@ -317,9 +317,9 @@ h2 { font-size: var(--fs-xl); font-weight: 500; line-height: 1.25; margin: 0 0 4
 .page-head p { margin: 0; color: var(--text-2); font-size: var(--fs-sm); }
 .subtitle { color: var(--text-3); font-size: var(--fs-sm); margin-bottom: var(--s4); overflow-wrap: anywhere; }
 .back {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px;
   font-size: var(--fs-sm); color: var(--text-3); background: none;
-  border: 0; padding: 4px 0; cursor: pointer; margin-bottom: var(--s2);
+  border: 0; padding: 4px 0; cursor: pointer; margin-bottom: var(--s3);
 }
 .back:hover { color: var(--text); }
 
@@ -467,15 +467,15 @@ kbd {
 .group[open] > summary::before { transform: rotate(45deg); }
 .group > summary .n {
   margin-left: auto; color: var(--text-3); font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
-  background: none; padding: 0;
+  background: var(--surface-3); border-radius: var(--r-pill); padding: 1px 8px;
 }
 .group > summary:hover { background: var(--hover); }
 
 /* ------------------------------------------------------------------ hosts */
-.hgrid { align-items: start; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: var(--s3); }
+.hgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: var(--s3); }
 .hcard {
   display: grid; gap: 10px; background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--r-lg); padding: 16px; cursor: pointer; text-align: left; color: inherit;
+  border-radius: var(--r-lg); padding: 14px 16px; cursor: pointer; text-align: left; color: inherit;
   width: 100%; min-width: 0;
 }
 .hcard:hover { border-color: var(--line-2); background: var(--surface-2); }
@@ -487,7 +487,7 @@ kbd {
 }
 .hcard .os { font-size: var(--fs-xs); color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hcard .top .pill { margin-left: auto; }
-.hcard .stats { display: grid; grid-template-columns: 1.2fr .8fr 1.2fr .8fr; gap: 8px; }
+.hcard .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .hcard .st { min-width: 0; }
 .hcard .st .k { font-size: 12px; color: var(--text-3); }
 .hcard .st .v { font-size: var(--fs-md); font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -513,7 +513,7 @@ td .sub { font-size: var(--fs-xs); }
 td.num, th.num { text-align: right; }
 .pkg td { white-space: normal; vertical-align: top; }
 .pkg code { word-break: break-all; }
-.why { cursor: help; border-bottom: 1px dotted var(--text-3); color: var(--text-3); }
+.why { cursor: help; border-bottom: 1px dotted var(--text-3); text-transform: none; letter-spacing: 0; color: var(--text-3); }
 .why:hover { color: var(--text); }
 @media (max-width: 640px) {
   table.trend thead { display: none; }
@@ -542,7 +542,7 @@ td.num, th.num { text-align: right; }
 .svc {
   display: flex; flex-direction: column; gap: 6px; min-width: 0; position: relative;
   background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--r-lg); padding: 16px; color: inherit; text-decoration: none;
+  border-radius: var(--r-lg); padding: 12px 13px; color: inherit; text-decoration: none;
   transition: border-color 0.12s ease, background 0.12s ease, transform 0.12s ease;
 }
 .svc:hover { background: var(--surface-2); border-color: var(--line-2); }
@@ -552,7 +552,7 @@ a.svc:active { transform: scale(0.985); }
 .ico img { position: absolute; inset: 4px; width: calc(100% - 8px); height: calc(100% - 8px); object-fit: contain; }
 .ico .ini {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 500; letter-spacing: 0;
+  font-size: 12px; font-weight: 600; letter-spacing: -0.02em;
   color: var(--text); background: var(--cat-tint, var(--track));
 }
 .ico:has(img) { background: var(--surface-3); }
@@ -576,14 +576,14 @@ a.svc:active { transform: scale(0.985); }
   background: var(--surface-3); border-radius: var(--r-pill); padding: 0 6px;
 }
 .svc .flag.new {
-  top: 12px; right: 12px; width: 6px; height: 6px; padding: 0; font-size: 0;
-  background: var(--accent); border-radius: 50%;
+  top: 10px; right: 10px; width: 8px; height: 8px; padding: 0; font-size: 0;
+  background: var(--accent);
 }
 .svc:has(.flag) .txt { padding-right: 12px; }
 .svc:has(.flag:not(.new)) .txt { padding-right: 48px; }
 @media (max-width: 640px) {
   .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .svc { padding: 12px; }
+  .svc { padding: 11px; }
   .ico { width: 30px; height: 30px; }
 }
 .banner {
@@ -824,7 +824,7 @@ pre.code {
 /* ------------------------------------------------------------------ states */
 .empty {
   background: var(--surface); border: 1px dashed var(--line-2);
-  border-radius: var(--r-lg); padding: 24px 16px; text-align: center; color: var(--text-3); font-size: var(--fs-sm);
+  border-radius: var(--r-lg); padding: 26px 16px; text-align: center; color: var(--text-3); font-size: var(--fs-sm);
 }
 .empty .big { font-size: var(--fs-md); color: var(--text); margin-bottom: 4px; font-weight: 600; }
 .gate { max-width: 360px; margin: 14vh auto; padding: 28px 24px; text-align: center; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); }
@@ -838,13 +838,13 @@ pre.code {
 @media (max-width: 640px) {
   .gate { margin: 10vh 16px; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: var(--s4); }
-  #kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  #kpis .tile .label { font-size: 12px; }
+  #kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  #kpis .tile .label { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #kpis .tile .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tile { padding: 16px; }
+  .tile { padding: 12px 13px; }
   .tile .value { font-size: 24px; }
-  .tile.hero { grid-column: auto; }
-  .tile.hero .value { font-size: 24px; }
+  .tile.hero { grid-column: 1 / -1; }
+  .tile.hero .value { font-size: 36px; }
 }
 
 .storage-help > summary { cursor:pointer; min-height:44px; display:flex; align-items:center; gap:6px; }
@@ -853,7 +853,7 @@ pre.code {
 
 /* Home operations: compact summaries, with touch-accessible detail. */
 .ops { margin-bottom: var(--s6); }
-.ops-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:16px; }
+.ops-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
 .ops-heading h1 { font-size:var(--fs-xl); margin:0; font-weight:500; letter-spacing:-.01em; }
 .ops-stamp { font-size:var(--fs-xs); color:var(--text-3); }
 .ops-hero { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:24px; }
@@ -886,7 +886,7 @@ pre.code {
 .ops-detail a { display:inline-flex; align-items:center; margin-right:14px; min-height:44px; min-width:44px; }
 .ops-tile .ops-detail { padding:8px 0 0; }
 .ops-muted { color:var(--text-3); font-size:var(--fs-xs); padding:16px; }
-.ops-chip { font-size:var(--fs-xs); border:1px solid var(--line); border-radius:var(--r-pill); padding:2px 7px; color:var(--text-2); white-space:nowrap; }
+.ops-chip { font-size: 12px; border:1px solid var(--line); border-radius:var(--r-pill); padding:2px 7px; color:var(--text-2); white-space:nowrap; }
 
 /* Storage protection: shared Home and host rows. */
 .ops-card:has(.protection-row) { align-self:start; }
@@ -917,8 +917,8 @@ pre.code {
 .ops-storage-foot { display:flex; gap:8px; align-items:center; justify-content:space-between; }
 .ops-spark { width:90px; height:22px; color:var(--accent); flex:none; }
 .ops-severity { width:8px; height:8px; border-radius:50%; background:var(--text-3); flex:none; }
-.ops-severity.warning { background:var(--warn); clip-path:polygon(50% 0,100% 100%,0 100%); border-radius:0; }
-.ops-severity.critical { background:var(--crit); border-radius:0; transform:rotate(45deg); }
+.ops-severity.warning { background:var(--warn); }
+.ops-severity.critical { background:var(--crit); }
 .ops-more > summary { min-height:44px; padding:12px 16px; cursor:pointer; font-size:var(--fs-xs); color:var(--text-3); }
 .launcher-heading { font-size:var(--fs-sm); font-weight:600; margin:24px 0 14px; }
 .ports-heading { margin-top:0; font-size:var(--fs-xl); font-weight:500; }
@@ -986,7 +986,7 @@ pre.code {
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
 /* Skeletons stand in where data is still on its way. */
 .skel { display: grid; gap: 10px; }
-.skel-hero { grid-template-columns: minmax(0, 1fr); margin-bottom: 16px; }
+.skel-hero { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 16px; }
 .skel .ops-tile { display: grid; gap: 12px; }
 .sk { display: block; height: 12px; border-radius: var(--r-sm); background: var(--track); position: relative; overflow: hidden; }
 .sk.n { height: 32px; width: 45%; }
@@ -1012,7 +1012,7 @@ pre.code {
 .triage-name .sub { display: block; font-weight: 400; font-size: 11px; line-height: 1.6; }
 .triage-reason { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .triage-row .pill { flex-shrink: 0; font-size: 12px; }
-.triage-detail { padding: 0 16px 16px; overflow-wrap: anywhere; animation: rise var(--dur-2) var(--ease-out); }
+.triage-detail { padding: 0 14px 14px; overflow-wrap: anywhere; animation: rise var(--dur-2) var(--ease-out); }
 .triage-detail .btn { min-height: 44px; }
 .triage-detail .dl { margin-top: 0; }
 .triage-message { margin-bottom: 12px; color: var(--text-2); font-size: 12px; }
@@ -1612,6 +1612,7 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
   <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></symbol>
   <symbol id="i-network" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/></symbol>
   <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
   <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
 </svg>
@@ -1668,6 +1669,7 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
           <button class="ibtn search-btn" id="search" type="button" title="Search (⌘K or /)" aria-label="Search"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg><span class="lab">Search</span><kbd>⌘K</kbd></button>
           <button class="ibtn" id="theme" type="button" title="Theme" aria-label="Toggle theme"><svg class="ic" aria-hidden="true"><use href="#i-contrast"/></svg></button>
           <button class="ibtn" id="refresh" type="button" title="Refresh" aria-label="Refresh"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+          <button class="ibtn hidden" id="signout" type="button" title="Sign out" aria-label="Sign out"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg></button>
         </div>
       </div>
     </header>
@@ -1691,7 +1693,6 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
       </section>
 
       <section id="panel-alerts" class="hidden">
-        <div class="page-head"><h1>Alerts</h1><p>Conditions, failed units, and acknowledged issues across your hosts</p></div>
         <div class="triage-nav seg" role="group" aria-label="Alert views">
           <button class="btn" type="button" data-alert-segment="alerts" aria-pressed="true">Alerts</button>
           <button class="btn" type="button" data-alert-segment="units" aria-pressed="false">Units <span id="units-count">—</span></button>
@@ -1720,7 +1721,6 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
       </section>
 
       <section id="panel-hosts" class="hidden">
-        <div class="page-head"><h1>Hosts</h1><p>Reporting status, agent versions, and inventory for each machine</p></div>
         <div id="agent-fleet" class="agent-fleet" aria-label="Agent offers"></div>
         <div id="agent-error" role="status" class="agent-error"></div>
         <div class="hgrid" id="hosts"></div>
@@ -1764,7 +1764,6 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
         floor would cover.
       -->
       <section id="panel-admin" class="hidden">
-        <div class="page-head"><h1>Admin</h1><p>Host enrollment, notifications, storage, and integrations</p></div>
         <!-- Who is signed in, when the session came from the provider. -->
         <div id="session-line" class="setting session-line hidden"></div>
         <div id="admin"></div>
@@ -2057,7 +2056,7 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
       chip(c.critical ? "crit" : "ok", "critical", '<span class="g" aria-hidden="true">' + (c.critical ? GLYPH.critical : GLYPH.good) + "</span>",
         c.critical || 0, "critical", c.critical ? "Critical alerts" : "Nothing critical") +
       chip("warn" + (c.warning ? " on" : ""), "warning", '<span class="g" aria-hidden="true">' + GLYPH.warning + "</span>",
-        c.warning || 0, "warnings", "Warnings") +
+        c.warning || 0, "warn", "Warnings") +
       chip("info", "info", '<span class="g" aria-hidden="true">' + GLYPH.info + "</span>", c.info || 0, "info", "Info") +
       (a.silenced ? chip("mute", "silenced", "", a.silenced, "silenced", "Acknowledged: shown, never notified") : "") +
       chip(stale.length ? "warn on" : "", "hosts", ic("server", "sm"), (h.length - stale.length) + "/" + h.length, "hosts",
@@ -2305,13 +2304,20 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
   var PROMOTION_HINT = "Promotion is disabled — set OPERATOR_TOKEN or use the signer CLI";
   function offersEnabled() { return capabilities.agent_offers_enabled === true; }
   var agentStatus = null, agentBusy = false;
-  function agentModeLabel(mode) { return {auto:"Initial rollout",promote:"All hosts",hold:"Hold"}[mode] || "Unavailable"; }
+  // Mode names follow the release's canary host, as in "Plex only".
+  function agentCanary() { var c = agentStatus && agentStatus.canary_hosts; return Array.isArray(c) && c.length === 1 ? str(c[0]) : ""; }
+  function agentModeLabel(mode) {
+    var c = agentCanary();
+    return {auto: c ? c.charAt(0).toUpperCase() + c.slice(1) + " only" : "Initial rollout", promote: "All hosts", hold: "Hold"}[mode] || "Unavailable";
+  }
   function renderAgentFleet() {
-    var a = agentStatus;
-    $("agent-fleet").innerHTML = '<div class="agent-heading">' + ic("box") + '<b>Agents</b><span class="pill ' + (a ? a.mode === "hold" ? "warning" : "good" : "") + '">' + esc(a ? agentModeLabel(a.mode) : "Unavailable") + '</span>' + (a ? '<span class="muted">#' + a.sequence + '</span>' : '') + '</div>' +
-      (a && offersEnabled() ? '<div class="agent-controls">' + [ ["promote","Promote all"], ["hold","Hold"], ["auto","Initial rollout"] ].map(function(x) {
-        return '<button class="btn" type="button" data-agent-action="' + x[0] + '"' + (a.ssh_hold || agentBusy ? ' disabled' : '') + '>' + esc(x[1]) + '</button>';
-      }).join('') + '</div>' + (a.ssh_hold ? '<span class="pill warning">SSH hold</span>' : '') : '') + (!offersEnabled() ? '<div class="sub">' + esc(PROMOTION_HINT) + '</div>' : '');
+    var a = agentStatus, c = agentCanary();
+    // A sign-in can change offers; without one, the buttons wait for it, as the original does.
+    var needsSession = capabilities.agent_offers_session === true && !(auth.status && auth.status.signed_in) && !sessionStorage.getItem(OPERATOR_KEY);
+    $("agent-fleet").innerHTML = '<div class="agent-heading">' + ic("box") + '<b>Agents</b><span class="pill ' + (!a ? "" : a.mode === "hold" ? "warning" : "good") + '">' + esc(a ? agentModeLabel(a.mode) : "Unavailable") + '</span>' + (a ? '<span class="muted">#' + a.sequence + '</span>' : '') + '</div>' +
+      (a && offersEnabled() ? '<div class="agent-controls">' + [ ["promote","Promote all"], ["hold","Hold"], ["auto", c ? "Back to " + c + "-only" : "Initial rollout"] ].map(function(x) {
+        return '<button class="btn" type="button" data-agent-action="' + x[0] + '"' + (needsSession || a.ssh_hold || agentBusy ? ' disabled' : '') + '>' + esc(x[1]) + '</button>';
+      }).join('') + '</div>' + (a.ssh_hold ? '<span class="pill warning">SSH hold</span>' : needsSession ? '<a class="btn" href="/auth/login">' + ic("lock","sm") + esc("Sign in with " + str((auth.status && auth.status.provider) || "your account")) + '</a>' : '') : '') + (!offersEnabled() ? '<div class="sub">' + esc(PROMOTION_HINT) + '</div>' : '');
   }
   function refreshAgents() {
     return api("/agent/status").catch(function(err) { if (err.unauthorized) showGate(true); return null; }).then(function(status) {
@@ -2322,10 +2328,11 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
   function changeAgentOffer(action,host) {
     if (agentBusy || !agentStatus || !offersEnabled()) return;
     var seq = agentStatus.sequence;
-    var label = action === "update" ? 'Update ' + host + ' · #' + seq : {promote:'Promote all · #'+seq,hold:'Hold · #'+seq,auto:'Initial rollout · #'+seq}[action];
+    var c = agentCanary(), label = action === "update" ? 'Update ' + host + ' · #' + seq : {promote:'Promote all · #'+seq,hold:'Hold · #'+seq,auto:(c ? 'Back to ' + c + '-only' : 'Initial rollout') + ' · #'+seq}[action];
     if (!confirm(label + '?')) return;
     agentBusy = true; $("agent-error").textContent = ''; renderAgentFleet(); renderHosts();
-    operatorWrite('/agent/offers','POST',{action:action,host:host||'',sequence:seq,confirm:true}).then(function(){
+    var signedIn = capabilities.agent_offers_session === true && auth.status && auth.status.signed_in;
+    (signedIn ? write : operatorWrite)('/agent/offers','POST',{action:action,host:host||'',sequence:seq,confirm:true}).then(function(){
       return api('/hosts').then(function(h){data.hosts=h;});
     }).catch(function(e){ if (e.unauthorized) { showGate(true); return; } $("agent-error").textContent = e.status === 403 ? PROMOTION_HINT : e.message; }).finally(function(){agentBusy=false;refreshAgents();});
   }
@@ -2368,10 +2375,10 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
         '<div class="top"><span class="hico">' + ic("server") + '</span><div style="min-width:0"><div class="hn">' + esc(h.name) + "</div>" +
         '<div class="os" title="' + esc(os) + '">' + esc(os || "—") + "</div></div>" + state + "</div>" +
         '<div class="stats">' +
-          stat("Last seen", esc(ago(h.collected_at)).replace(" ago", ""), staleHosts[h.name] ? "warn" : "", h.collected_at ? new Date(h.collected_at).toLocaleString() : "") +
-          stat("Runs", (h.runs || 0).toLocaleString()) +
-          stat("Warnings", h.warnings || 0, h.warnings ? "warn" : "", "Collector warnings") +
-          stat("Errors", h.errors || 0, h.errors ? "crit" : "", "Collector errors") +
+          stat("seen", esc(ago(h.collected_at)).replace(" ago", ""), staleHosts[h.name] ? "warn" : "", h.collected_at ? new Date(h.collected_at).toLocaleString() : "") +
+          stat("runs", (h.runs || 0).toLocaleString()) +
+          stat("warn", h.warnings || 0, h.warnings ? "warn" : "", "Collector warnings") +
+          stat("err", h.errors || 0, h.errors ? "crit" : "", "Collector errors") +
         "</div>" +
         '</button>' + agentHostUI(h) + '</article>';
     }).join("");
@@ -5062,13 +5069,15 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
   function navEntries() {
     var out = [], seen = {};
     pluginTabs().forEach(function (p) {
-      if (p.id === "cloudflare") return;
+      if (p.id === "cloudflare" || p.id === "uploads") return;
       var g = groupOf(p.id);
       if (g) { if (!seen[g]) { seen[g] = true; out.push({ id: "archive", group: g, title: "Media", icon: "film" }); } return; }
       out.push({ id: p.id, group: "", title: str(p.tab.title), icon: p.tab.icon });
     });
-    return out;
+    var rank = function (e) { return e.id === "network" ? 0 : e.group === "media" ? 1 : 2; };
+    return out.map(function (e, i) { return [e, i]; }).sort(function (a, b) { return rank(a[0]) - rank(b[0]) || a[1] - b[1]; }).map(function (x) { return x[0]; });
   }
+  function navDirect(e) { return e.id === "network" || e.group === "media"; }
   function mediaHash(section) { return pluginHash(section.plugin, section.view === (pluginViews(pluginInfo(section.plugin))[0] || {}).name ? "" : section.view, ""); }
   function entryHash(e) {
     if (e.group === "media") {
@@ -5104,21 +5113,20 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     return [head, viewSeg];
   }
 
-  // Plugin tabs follow the built-ins. On a phone the bar keeps four built-ins
-  // and a More button; Admin and the plugin tabs move into its menu.
+  // Plugin tabs sit between the built-ins and Admin: Network, Media, then the
+  // rest. On a phone, tabs other than Network and Media go into More.
   function renderPluginNav() {
-    var nav = document.querySelector(".tabs"), more = $("tab-more");
+    var nav = document.querySelector(".tabs"), admin = nav.querySelector('.tab[data-panel="admin"]');
     Array.prototype.forEach.call(nav.querySelectorAll("[data-plugin]"), function (t) { t.remove(); });
     var tabs = navEntries();
     tabs.forEach(function (e) {
-      var direct = e.id === "network" || e.group === "media";
-      nav.insertBefore(h("button", { class: "tab", role: "tab", type: "button", "data-plugin": e.id, "data-group": e.group || null, "data-overflow": direct ? null : true,
-        "aria-selected": "false", title: e.title }, [iconNode(e.icon), h("span", { class: "tl", text: e.title })]), more);
+      nav.insertBefore(h("button", { class: "tab", role: "tab", type: "button", "data-plugin": e.id, "data-group": e.group || null, "data-overflow": navDirect(e) ? null : true,
+        "aria-selected": "false", title: e.title }, [iconNode(e.icon), h("span", { class: "tl", text: e.title })]), admin);
     });
     var network = !!pluginInfo("network");
     var portsTab = document.querySelector('.tab[data-panel="ports"]');
     if (portsTab) portsTab.classList.toggle("hidden", network);
-    nav.classList.toggle("has-more", tabs.length > 0);
+    nav.classList.toggle("has-more", tabs.some(function (e) { return !navDirect(e); }));
     syncNavSelection();
     fitTopbar();
   }
@@ -5163,14 +5171,11 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
 
   function openMore() {
     var sheet = $("more-sheet"), items = [];
-    navEntries().forEach(function (e) {
+    navEntries().filter(function (e) { return !navDirect(e); }).forEach(function (e) {
       items.push(h("button", { type: "button", role: "menuitem", "data-more": entryHash(e),
         "aria-current": entryOn(e) ? "page" : null },
         [iconNode(e.icon), e.title]));
     });
-    if (items.length) items.push(h("hr", { "aria-hidden": "true" }));
-    items.push(h("button", { type: "button", role: "menuitem", "data-more": "#/admin",
-      "aria-current": route.view === "fleet" && route.tab === "admin" ? "page" : null }, [iconNode("sliders"), "Admin"]));
     sheet.replaceChildren.apply(sheet, items);
     reveal(sheet, sheetFrames(), motion.d2, motion.out);
     $("more-scrim").classList.remove("hidden");
@@ -6465,6 +6470,8 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     var s = auth.status || {}, line = $("session-line");
     var on = !!(s.signed_in && str(s.email));
     line.classList.toggle("hidden", !on);
+    $("signout").classList.toggle("hidden", !on);
+    $("signout").title = on ? "Signed in as " + str(s.email) : "Sign out";
     if (!on) { line.replaceChildren(); return; }
     var until = Date.parse(s.expires_at);
     line.replaceChildren(
@@ -6474,6 +6481,7 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
       h("button", { class: "btn", type: "button", onclick: signOut }, [iconNode("logout", "sm"), "Sign out"]));
   }
 
+  $("signout").addEventListener("click", function () { signOut(); });
   function signOut() {
     var b = $("session-line").querySelector("button");
     if (b) { b.disabled = true; b.setAttribute("aria-busy", "true"); }
