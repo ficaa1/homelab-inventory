@@ -93,7 +93,7 @@ func (s *server) prepareBackup(p *backup.Plan) ([]string, error) {
 		}
 	}
 	if p.Manifest.Product == "homelab-dash" {
-		issues = append(issues, "Legacy dashboard source: agent credentials need an explicit compatibility decision. Legacy request receipts are retained; requests must stay blocked until receipt import is verified.")
+		issues = append(issues, "Legacy agent compatibility follows the option selected for this preview. Request receipts are checked before restore can proceed.")
 	}
 	return issues, nil
 }

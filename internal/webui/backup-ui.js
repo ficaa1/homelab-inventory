@@ -65,12 +65,13 @@
     plan = await response.json();
     var box = document.getElementById('backup-plan'); box.replaceChildren();
     var summary = document.createElement('p');
-    summary.textContent = plan.source + ' · ' + plan.hosts + ' hosts · ' + plan.runs + ' runs · ' + plan.software_files + ' software files · ' + plan.package_sets + ' package sets · ' + plan.files + ' files (' + plan.bytes.toLocaleString() + ' bytes)';
+    summary.textContent = plan.source + ' · ' + plan.hosts + (plan.hosts === 1 ? ' host · ' : ' hosts · ') + plan.runs + ' runs · ' + plan.software_files + ' software files · ' + plan.package_sets + ' package sets · ' + plan.files + ' files (' + plan.bytes.toLocaleString() + ' bytes)';
     box.appendChild(summary);
-    var digest = document.createElement('p'); digest.style.overflowWrap = 'anywhere'; digest.textContent = 'Verified plan: ' + plan.digest; box.appendChild(digest);
-    var ul = document.createElement('ul'); (plan.issues || []).concat(plan.blockers || []).forEach(function (issue) { var li = document.createElement('li'); li.textContent = issue; ul.appendChild(li); }); box.appendChild(ul);
+    var details = document.createElement('details'), detailsTitle = document.createElement('summary'); detailsTitle.textContent = 'Verified backup details'; details.appendChild(detailsTitle); var digest = document.createElement('p'); digest.textContent = 'Prepared plan SHA-256: ' + plan.digest; details.appendChild(digest); box.appendChild(details);
+    var ul = document.createElement('ul'); (plan.issues || []).forEach(function (issue) { var li = document.createElement('li'); li.textContent = issue; ul.appendChild(li); }); box.appendChild(ul);
+    if ((plan.blockers || []).length) { var title = document.createElement('h4'); title.textContent = 'Resolve before restoring'; box.appendChild(title); var blockers = document.createElement('ul'); plan.blockers.forEach(function (text) { var li = document.createElement('li'); li.textContent = text; blockers.appendChild(li); }); box.appendChild(blockers); }
     var label = document.createElement('label'); label.className = 'backup-field backup-confirm'; label.textContent = 'Type REPLACE to replace this dataset: ';
-    var input = document.createElement('input'); input.id = 'backup-confirm'; input.autocomplete = 'off'; label.appendChild(input); box.appendChild(label);
+    var input = document.createElement('input'); input.id = 'backup-confirm'; input.disabled = (plan.blockers || []).length > 0; input.autocomplete = 'off'; label.appendChild(input); box.appendChild(label);
     var button = document.createElement('button'); button.type = 'button'; button.className = 'btn danger'; button.textContent = 'Restore this backup'; box.appendChild(button); if ((plan.blockers || []).length) button.hidden = true;
     var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn'; cancel.textContent = 'Cancel preview'; box.appendChild(cancel);
     cancel.onclick = function () { perform(async function () { await checked('preview', {method: 'DELETE', headers: headers()}); plan = null; box.replaceChildren(); message('Preview discarded.'); }); };
@@ -82,6 +83,6 @@
       plan = null; box.replaceChildren(); document.getElementById('backup-pass').value = '';
       message('Backup restored. Reload the dashboard and sign in again if requested.');
     }); };
-    message('Preview ready. No active data has changed. Plan expires in 30 minutes.');
+    message((plan.blockers || []).length ? 'Resolve the listed prerequisites, then preview again. Active data is unchanged.' : 'Preview ready. No active data has changed. Plan expires in 30 minutes.');
   }); };
 }());
