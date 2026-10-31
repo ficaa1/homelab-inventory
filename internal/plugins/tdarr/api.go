@@ -24,11 +24,8 @@ import (
 //	POST batch/preview     the reviewed plan, its hash and a two-minute confirmation token
 //	POST batch/execute     recheck everything, validate on the sidecar, submit once
 //
-// Preview and execute take the operator credential, like the actions they mirror.
-
-func (p *Integration) APIOperator(method, path string) bool {
-	return method == "POST" && (path == "batch/preview" || path == "batch/execute")
-}
+// Writes take the normal dashboard login, like the private dashboard; the
+// preview token and reviewed hash are what guard a batch.
 
 func (p *Integration) APITimeout(method, path string) time.Duration {
 	switch path {

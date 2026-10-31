@@ -39,8 +39,7 @@ func TestConfiguredPathsAndProtectedIdentities(t *testing.T) {
 	}
 }
 
-// The page API keeps the action barriers: preview and execute need the
-// operator credential, and an unreviewed plan never reaches the sidecar.
+// The page API keeps the action barriers: an unreviewed plan never reaches the sidecar.
 func TestPageAPIGatesExecution(t *testing.T) {
 	hits := 0
 	sidecar := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits++ }))
@@ -49,11 +48,8 @@ func TestPageAPIGatesExecution(t *testing.T) {
 	if e := p.Configure(plugin.Config{"tdarr_url": "http://service.invalid", "sidecar_url": sidecar.URL}); e != nil {
 		t.Fatal(e)
 	}
-	if p.APIOperator("GET", "status") || p.APIOperator("GET", "batch/candidates") || !p.APIOperator("POST", "batch/preview") || !p.APIOperator("POST", "batch/execute") {
-		t.Fatal("operator routes mismatch")
-	}
 	body := `{"plan":{"selection":[{"kind":"radarr","id":1}],"files":[],"paths":["/worker/movies/a.mkv"],"total_bytes":1,"selected_bytes":1,"withPc":false},"hash":"x","confirmation_token":"forged","confirm":true}`
-	out, err := p.API(context.Background(), plugin.APIRequest{Method: "POST", Path: "batch/execute", Body: []byte(body), Actor: "operator"})
+	out, err := p.API(context.Background(), plugin.APIRequest{Method: "POST", Path: "batch/execute", Body: []byte(body), Actor: "bearer"})
 	if err != nil || out.Status != 409 || hits != 0 {
 		t.Fatalf("forged confirmation: %d %s, sidecar hits %d", out.Status, out.Body, hits)
 	}

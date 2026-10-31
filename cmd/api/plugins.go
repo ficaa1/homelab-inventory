@@ -43,24 +43,10 @@ func (s *server) pluginRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /plugins/{id}/views/{name}", s.auth(s.handlePluginView))
 	mux.HandleFunc("GET /plugins/{id}/images/{ref}", s.auth(s.handlePluginImage))
 	for _, m := range []string{"GET", "POST", "PUT", "DELETE"} {
-		mux.HandleFunc(m+" /plugins/{id}/api/{path...}", s.handlePluginAPIGate)
+		mux.HandleFunc(m+" /plugins/{id}/api/{path...}", s.auth(s.handlePluginAPI))
 	}
 }
 
-// handlePluginAPIGate gives a plugin's operator routes the same gate as
-// operator actions: the operator credential, in place of the dashboard token.
-func (s *server) handlePluginAPIGate(w http.ResponseWriter, r *http.Request) {
-	if s.plugins != nil && s.plugins.APIOperator(r.PathValue("id"), r.Method, r.PathValue("path")) {
-		if _, ok := s.agentSession(r); !ok {
-			w.Header().Set("Cache-Control", "no-store")
-			writeError(w, 403, "operator credential required")
-			return
-		}
-		s.handlePluginAPI(w, withActor(r, "operator"))
-		return
-	}
-	s.auth(s.handlePluginAPI)(w, r)
-}
 
 // handlePluginAPI serves a built-in plugin's own dashboard page. Mutations must
 // be JSON, which a cross-site form cannot send; sessions also pass auth's CSRF check.

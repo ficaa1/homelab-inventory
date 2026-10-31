@@ -182,7 +182,6 @@
       h("label", { class: "tdp-check", title: "Also arm the secondary worker for this batch" }, [pc, "Secondary worker"]),
       h("button", { id: "tdp-preview", class: "btn primary", type: "button", text: "Preview", onclick: preview })
     ]));
-    if (!HI().operatorEnabled()) wrap.appendChild(HI().notice("info", "Preview and queue need the operator credential, and this server has none (OPERATOR_TOKEN). Browsing works; batches do not."));
     wrap.appendChild(h("div", { id: "tdp-rows", class: "pv-card tdp-rows" }));
     return wrap;
   }
@@ -236,7 +235,7 @@
   function updateTotal() {
     var t = total(), el = byId("tdp-total");
     if (el) { clear(el); el.appendChild(h("b", { class: t.count > LIMIT ? "t-warn" : "", text: t.count + "/" + LIMIT })); el.appendChild(document.createTextNode(" files")); el.appendChild(h("span", { class: "sub", text: " · " + sz(t.bytes) + " selected" })); }
-    var p = byId("tdp-preview"); if (p) p.disabled = locked() || t.count === 0 || t.count > LIMIT || !HI().operatorEnabled();
+    var p = byId("tdp-preview"); if (p) p.disabled = locked() || t.count === 0 || t.count > LIMIT;
     var pc = byId("tdp-pc"); if (pc) pc.disabled = st.busy || st.unknown;
   }
 
@@ -335,7 +334,7 @@
     busy(true);
     var box = drawer("Tdarr batch review", [h("h3", { text: "Reviewing batch" }), skel(3)]);
     var body = { selection: Object.keys(st.selected).map(function (k) { return st.selected[k].selection; }), withPc: st.pc };
-    HI().send(ID, "batch/preview", "POST", body, { operator: true }).then(function (v) {
+    HI().send(ID, "batch/preview", "POST", body).then(function (v) {
       if (epoch !== st.epoch || !drawerOpen(box)) return;
       if (!v || !v.plan) throw new Error((v && v.error) || "Preview unavailable");
       review(v, epoch);
@@ -373,7 +372,7 @@
       if (expired()) { again("Preview expired"); return; }
       clearTimeout(st.expiry); busy(true);
       queue.disabled = true; queue.textContent = "Queueing…";
-      HI().send(ID, "batch/execute", "POST", { plan: v.plan, hash: v.hash, confirmation_token: v.confirmation_token, confirm: true }, { operator: true }).then(function (r) {
+      HI().send(ID, "batch/execute", "POST", { plan: v.plan, hash: v.hash, confirmation_token: v.confirmation_token, confirm: true }).then(function (r) {
         st.selected = {}; st.notice = "Queued · " + num(r.queued_files) + " files";
       }, function (e) {
         if (e.canceled) { st.notice = ""; return "canceled"; }
