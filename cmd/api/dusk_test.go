@@ -124,6 +124,8 @@ func TestDuskHTTPPairingPoliciesIsolationAndRestart(t *testing.T) {
 	h := &duskHTTPTest{t: t, s: s, http: httptest.NewServer(s.routes())}
 	defer func() { h.http.Close() }()
 	h.call("POST", "/tv/v1/pair", "", map[string]any{"code": "BAD-CODE", "device_name": "TV"}, 503)
+	h.call("GET", "/tv/v2/capabilities", "", nil, 400)
+	h.call("POST", "/tv/v2/request", "", map[string]any{}, 400)
 	h.call("PUT", "/plugins/dusk", s.token, map[string]any{"enabled": true, "settings": map[string]any{"server_name": "Synthetic household", "discovery": true, "taste": true, "requests": true}}, 200)
 	profile := h.profile("First household profile")
 	other := h.profile("Second household profile")

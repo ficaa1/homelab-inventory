@@ -91,6 +91,16 @@ func (s *server) duskRoutes(m *http.ServeMux) {
 		m.HandleFunc(route, s.auth(s.duskAdminWrite))
 	}
 	m.HandleFunc("POST /tv/v1/pair", s.duskPair)
+	for _, method := range []string{"GET", "POST"} {
+		m.HandleFunc(method+" /tv/{version}/{operation}", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "no-store")
+			if r.PathValue("version") != "v1" {
+				writeError(w, 400, "Unsupported TV protocol version; this server supports version 1")
+				return
+			}
+			writeError(w, 404, "Unknown TV protocol route")
+		})
+	}
 	for _, route := range []string{"GET /tv/v1/capabilities", "GET /tv/v1/media", "GET /tv/v1/browse", "GET /tv/v1/discover", "GET /tv/v1/search", "GET /tv/v1/title/{kind}/{id}", "GET /tv/v1/similar/{kind}/{id}", "GET /tv/v1/taste/picks", "GET /tv/v1/taste/familiar", "POST /tv/v1/request", "POST /tv/v1/preference", "POST /tv/v1/discover/refresh", "POST /tv/v1/taste/verdict"} {
 		m.HandleFunc(route, s.duskTV)
 	}
@@ -543,7 +553,7 @@ func (s *server) duskWrite(w http.ResponseWriter, r *http.Request, ctx context.C
 		if !tvBody(w, r, &v) {
 			return
 		}
-		if !validTitle(v.Kind, v.ID) || !v.Confirmed || v.Season < 0 || v.Season > 1000 || !duskOperationID.MatchString(v.Operation) {
+		if !validTitle(v.Kind, v.ID) || !v.Confirmed || v.Season < 0 || v.Season > 1000 || (v.Kind == "tv" && v.Season < 1) || (v.Kind == "movie" && v.Season != 0) || !duskOperationID.MatchString(v.Operation) {
 			writeError(w, 400, "Invalid confirmed request")
 			return
 		}
