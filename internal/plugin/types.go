@@ -78,6 +78,13 @@ type Plugin interface {
 type AlertSource interface {
 	Alerts(context.Context) ([]Alert, error)
 }
+
+// OverviewSource contributes a small, redacted section to the opening
+// dashboard view. Contributions are optional: the registry calls only enabled
+// and ready plugins and drops a contribution that cannot be encoded safely.
+type OverviewSource interface {
+	Overview(context.Context) map[string]any
+}
 type ImageSource interface {
 	Image(context.Context, string) (string, []byte, error)
 }
