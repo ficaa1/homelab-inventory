@@ -209,7 +209,7 @@
   function renderPick() {
     if (s.error) return failed("Recommendations");
     if (!s.pool) return loading();
-    if (!s.round.length) return HI.stateBox("Nothing left to judge right now.", "Your answers are rebuilding the list; check back in a minute for a fresh round.");
+    if (!s.round.length) return empty("Nothing left to judge right now.", "Your answers are rebuilding the list; check back in a minute for a fresh round.");
     return h("div", {}, [
       h("p", { class: "subtitle" }, ["Tap what you have already seen, and how it went. ", h("b", { text: "Pass" }), " means not seen and not interested. Leave a title alone to keep it."]),
       h("div", { class: "taste-grid" }, s.round.map(function (t) {
@@ -237,7 +237,7 @@
   function renderWall() {
     if (s.error) return failed("The list");
     if (!s.familiar) return loading();
-    if (!s.wall.length) return HI.stateBox("No more famous matches to check.", s.familiar.length ? "" : "This list needs the taste twins model on the server.");
+    if (!s.wall.length) return empty("No more famous matches to check.", s.familiar.length ? "" : "This list needs the taste twins model on the server.");
     return h("div", {}, [
       h("p", { class: "subtitle", text: "Well-known " + (s.kind === "tv" ? "series" : "films") + " that match your taste. Tap every one you have already seen; the poster then offers Loved, Liked and Meh. Untapped means not seen, and it stays in your picks." }),
       h("div", { class: "taste-wall" }, s.wall.map(function (t) {
@@ -318,7 +318,7 @@
           HI.pill(v ? label(v) : (t.effect || "seen"), v ? "info" : EFFECT[t.effect] || "muted")]),
         verdictButtons(t, ALL, v),
         v ? h("button", { class: "btn", type: "button", onclick: function () { setVerdict(k, ""); } }, ["Remove my verdict"]) : null])]);
-    })) : HI.stateBox("Nothing matches.");
+    })) : empty("Nothing matches.");
 
     return h("div", {}, [
       h("p", { class: "subtitle", text: "Everything the model believes you have watched, and how it counts. Tap a title to correct it." }),
