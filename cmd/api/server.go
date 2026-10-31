@@ -203,7 +203,7 @@ func (s *server) agentAuth(next http.HandlerFunc) http.HandlerFunc {
 
 func (s *server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
 	eff := s.effective()
-	writeJSON(w, 200, map[string]any{"operator_enabled": s.operatorToken != "", "agent_offers_enabled": s.operatorToken != "", "actions_enabled": s.actions != nil && s.operatorToken != "", "actions_host": s.actionPolicy.Host, "dashboard_name": eff.DashboardName, "plugins": s.pluginCapabilities()})
+	writeJSON(w, 200, map[string]any{"operator_enabled": s.operatorToken != "", "agent_offers_enabled": s.operatorToken != "" || s.offersBySession(), "agent_offers_session": s.offersBySession(), "actions_enabled": s.actions != nil && s.operatorToken != "", "actions_host": s.actionPolicy.Host, "dashboard_name": eff.DashboardName, "plugins": s.pluginCapabilities()})
 }
 
 func (s *server) handleHealthz(w http.ResponseWriter, r *http.Request) {

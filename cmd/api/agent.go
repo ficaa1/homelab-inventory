@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/ficaa1/homelab-inventory/internal/auth"
 	"io"
 	"mime"
 	"net/http"
@@ -84,8 +85,18 @@ func (s *server) agentSession(r *http.Request) (string, bool) {
 	if s.operatorToken != "" && s.operatorToken != s.apiToken() && len(s.operatorToken) >= 32 && httpx.BearerOK(r, s.operatorToken, httpx.DenyWhenUnset) {
 		return "operator", true
 	}
+	// A signed-in browser session may change offers too; the API bearer never can.
+	if s.browserAuth != nil {
+		if session, ok := s.browserAuth.Session(r); ok && auth.CSRF(r, s.authConfig()) {
+			return session.Email, true
+		}
+	}
 	return "", false
 }
+
+// offersBySession reports whether a browser sign-in can change agent offers.
+func (s *server) offersBySession() bool { return s.browserAuth != nil && s.authConfig().Enabled }
+
 func (s *server) agentOffered(host string, m agentrelease.Manifest, c agentrelease.Control) bool {
 	s.agentOffersMu.Lock()
 	defer s.agentOffersMu.Unlock()
