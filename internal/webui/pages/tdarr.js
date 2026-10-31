@@ -123,7 +123,7 @@
 
   function renderStatus() {
     var el = byId("tdp-status");
-    if (el) el.replaceWith(withId(statusCard(view === "status"), "tdp-status"));
+    if (el) el.replaceWith(withId(statusCard(true), "tdp-status"));
   }
   function withId(el, id) { el.id = id; return el; }
 
@@ -138,7 +138,7 @@
       st.items = v.items; st.ready = true;
     }).catch(function (e) { st.libError = e.message; }).then(function () {
       st.loading = false;
-      if (live && view === "library") { renderRows(); }
+      if (live) { renderRows(); }
     });
   }
 
@@ -164,7 +164,7 @@
 
   function libraryView() {
     var wrap = h("div", { class: "tdp-lib" });
-    wrap.appendChild(withId(statusCard(false), "tdp-status"));
+    wrap.appendChild(withId(statusCard(true), "tdp-status"));
     var seg = h("div", { class: "seg", role: "group", "aria-label": "Media type" }, ["all", "radarr", "sonarr"].map(function (k, i) {
       return h("button", { class: "btn", type: "button", "aria-pressed": st.filter === k ? "true" : "false", text: ["All", "Movies", "TV"][i],
         onclick: function () { st.filter = k; seg.querySelectorAll(".btn").forEach(function (b, j) { b.setAttribute("aria-pressed", j === i ? "true" : "false"); }); renderRows(); } });
@@ -183,6 +183,7 @@
       h("button", { id: "tdp-preview", class: "btn primary", type: "button", text: "Preview", onclick: preview })
     ]));
     wrap.appendChild(h("div", { id: "tdp-rows", class: "pv-card tdp-rows" }));
+    wrap.appendChild(candidatesView());
     return wrap;
   }
 
@@ -326,7 +327,7 @@
     return q ? (q.queued || 0) + (q.processing || 0) : 0;
   }
 
-  function busy(on) { st.busy = on; if (live && view === "library") renderRows(); }
+  function busy(on) { st.busy = on; if (live) renderRows(); }
 
   function preview() {
     if (locked() || !total().count) return;
@@ -398,7 +399,7 @@
     HI().get(ID, "candidates").then(function (v) {
       if (v.status !== "ok" || !Array.isArray(v.items)) throw new Error(v.error || "Candidates unavailable");
       st.cands = v.items;
-    }).catch(function (e) { st.candError = e.message; }).then(function () { if (live && view === "candidates") renderCands(); });
+    }).catch(function (e) { st.candError = e.message; }).then(function () { if (live) renderCands(); });
   }
 
   function candidatesView() {
@@ -446,26 +447,19 @@
     clear(root);
     var page = h("div", { class: "tdp" });
     root.appendChild(page);
-    var refresh = view === "status" ? h("button", { class: "btn tdp-refresh", type: "button", text: "Refresh", onclick: loadStatus }) : null;
+    var refresh = h("button", { class: "btn tdp-refresh", type: "button", text: "Refresh", onclick: function () { loadStatus(); loadLibrary(); loadCands(); } });
     page.appendChild(HI().head(ID, view, refresh));
-    if (view === "status") {
-      page.appendChild(withId(statusCard(true), "tdp-status"));
-    } else if (view === "candidates") {
-      page.appendChild(candidatesView());
-      renderCands();
-    } else {
-      page.appendChild(libraryView());
-      renderRows(); message(st.notice);
-    }
+    page.appendChild(libraryView());
+    renderRows(); renderCands(); message(st.notice);
   }
 
   (window.HI_PAGES = window.HI_PAGES || {}).tdarr = {
     show: function (el, ctx) {
-      root = el; view = ctx.view || "library"; live = true;
+      root = el; view = "library"; live = true;
       render();
       loadStatus();
-      if (view === "library" && !st.items && !st.loading) loadLibrary();
-      if (view === "candidates" && !st.cands) loadCands();
+      if (!st.items && !st.loading) loadLibrary();
+      if (!st.cands) loadCands();
       document.removeEventListener("visibilitychange", onVisible);
       document.addEventListener("visibilitychange", onVisible);
     },

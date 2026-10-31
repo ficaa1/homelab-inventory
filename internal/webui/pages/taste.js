@@ -11,9 +11,9 @@
   var ALL = [["loved", "Loved"], ["liked", "Liked"], ["seen", "Seen"], ["meh", "Meh"], ["disliked", "Disliked"], ["pass", "Pass"], ["ignore", "Not mine"]];
   var ADD = ALL.slice(0, 5);
   var HINT = { seen: "Seen it, no strong feelings", loved: "Seen it and loved it", liked: "Seen it and liked it", meh: "Seen it, didn't do much for me", disliked: "Seen it and disliked it", pass: "Not seen, not interested", ignore: "Watched for someone else; not my taste" };
-  var SOURCE = { letterboxd: "Letterboxd", plex: "Watch history", you: "You" };
+  var SOURCE = { letterboxd: "Letterboxd", plex: "Plex", you: "You" };
   var EFFECT = { "strong like": "ok", like: "ok", dislike: "warn", "strong dislike": "crit" };
-  var WHERE = { available: "In library", partial: "Partly in library", requested: "Requested" };
+  var WHERE = { available: "In Plex", partial: "Partly in Plex", requested: "Requested" };
   var SYNC_WORD = { ok: "ok", partial: "partial", blocked: "blocked", invalid: "unreadable", pending: "not yet" };
   var SYNC_PARTS = [["activity", "Diary"], ["watchlist", "Watchlist"], ["ratings", "Ratings"], ["likes", "Likes"]];
 
@@ -301,7 +301,7 @@
       })) : h("div", { class: "sub", text: "No matches." })) : null]);
 
     var tools = h("div", { class: "tp-tools" }, [
-      seg("Source", [["all", "All"], ["letterboxd", "Letterboxd"], ["plex", "Watch history"], ["you", "Yours"]].map(function (f) {
+      seg("Source", [["all", "All"], ["letterboxd", "Letterboxd"], ["plex", "Plex"], ["you", "Yours"]].map(function (f) {
         return [f[0], f[1] + " ", h("span", { class: "sub", text: String(counts[f[0]] || 0) })];
       }), s.filter, function (v) { s.filter = v; render(); }),
       h("div", { class: "field" }, [HI.iconNode("search", "sm"), h("input", { id: "tp-filter", type: "search", placeholder: "Filter", autocomplete: "off", "aria-label": "Filter titles", value: s.q,
