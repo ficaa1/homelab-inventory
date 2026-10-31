@@ -60,6 +60,9 @@ func Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", contentPolicy)
 		switch r.URL.Path {
+		case "/backup-ui.js":
+			serve(w, r, "backup-ui.js", "text/javascript; charset=utf-8", backupUI)
+			return
 		case "/manifest.webmanifest":
 			serve(w, r, "manifest.webmanifest", "application/manifest+json", manifestJSON)
 			return
@@ -104,4 +107,17 @@ func serve(w http.ResponseWriter, r *http.Request, name, contentType string, bod
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	http.ServeContent(w, r, name, buildTime, strings.NewReader(string(body)))
+}
+
+//go:embed backup-ui.css
+var backupCSS []byte
+
+//go:embed backup-ui.js
+var backupUI []byte
+
+func init() {
+	indexHTML = []byte(strings.Replace(string(indexHTML), "</style>", "\n"+string(backupCSS)+"</style>", 1))
+	indexHTML = []byte(strings.Replace(string(indexHTML), "<!-- backup-ui -->", "", 1))
+	indexHTML = []byte(strings.Replace(string(indexHTML), "</script>", "\n"+string(backupUI)+"</script>", 1))
+	contentPolicy = "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'none'; frame-ancestors 'none'; connect-src 'self'; img-src 'self' data: blob:; manifest-src 'self'; worker-src 'self'; script-src " + inlineHash("script") + "; style-src " + inlineHash("style") + "; style-src-attr 'unsafe-inline'"
 }

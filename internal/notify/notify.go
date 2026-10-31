@@ -58,6 +58,9 @@ type Entry struct {
 // between restarts of the API, because a process that forgets on restart would
 // re-announce the entire alert set every time it is deployed.
 type State struct {
+	// PendingPluginBaselines seeds only newly migrated plugin identities on their
+	// first successful poll. Core transitions continue normally during outages.
+	PendingPluginBaselines map[string]bool `json:"pending_plugin_baselines,omitempty"`
 	// Seeded distinguishes "nothing is wrong" from "this has never run".
 	// Without it, the first evaluation after deployment would notify about
 	// every pre-existing alert at once — technically correct and practically
@@ -92,7 +95,7 @@ func (c Change) Count() int {
 // lowered — a warning that was already outstanding then reads as new, which is
 // the honest answer, because it has never been reported.
 func Diff(prev State, alerts []alert.Alert, min alert.Level, now time.Time) (State, Change) {
-	next := State{Seeded: true, UpdatedAt: now, Active: map[string]Entry{}}
+	next := State{Seeded: true, UpdatedAt: now, Active: map[string]Entry{}, PendingPluginBaselines: prev.PendingPluginBaselines}
 	var ch Change
 
 	for _, a := range alerts {

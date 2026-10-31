@@ -12,6 +12,10 @@ import (
 
 // Rule names are durable notification keys; see the alert table in docs/plugins.md.
 func (m *Media) Alerts(ctx context.Context) ([]plugin.Alert, error) {
+	next := map[string]time.Time{}
+	for key, at := range m.stuck {
+		next[key] = at
+	}
 	alerts := []plugin.Alert{}
 	for _, s := range m.services {
 		if s.id != "sonarr" && s.id != "radarr" {
@@ -61,9 +65,9 @@ func (m *Media) Alerts(ctx context.Context) ([]plugin.Alert, error) {
 			}
 			key := s.id + ":" + strconv.Itoa(r.ID)
 			active[key] = true
-			since, ok := m.stuck[key]
+			since, ok := next[key]
 			if !ok {
-				m.stuck[key] = now
+				next[key] = now
 				continue
 			}
 			title, _ := r.title()
@@ -73,11 +77,15 @@ func (m *Media) Alerts(ctx context.Context) ([]plugin.Alert, error) {
 				alerts = append(alerts, plugin.Alert{Rule: "queue.stuck", Subject: title, Severity: "warning", Summary: s.name + " download needs attention", Detail: "Warning or error observed for over an hour"})
 			}
 		}
-		for key := range m.stuck {
+		for key := range next {
 			if strings.HasPrefix(key, s.id+":") && !active[key] {
-				delete(m.stuck, key)
+				delete(next, key)
 			}
 		}
 	}
+	if err := m.saveStuck(next); err != nil {
+		return nil, err
+	}
+	m.stuck = next
 	return alerts, nil
 }

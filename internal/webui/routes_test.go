@@ -53,6 +53,13 @@ func TestRequestsUseRetainedRoutes(t *testing.T) {
 			}
 		}
 		expr := strings.TrimSpace(rest[:end])
+		if expr == "target" {
+			if !strings.Contains(script, `var paths = {export: '/admin/backup/export', preview: '/admin/backup/preview', restore: '/admin/backup/restore'}`) {
+				t.Fatal("backup request paths changed without review")
+			}
+			checked++
+			continue
+		}
 		if expr == "path" {
 			helpers++
 			continue

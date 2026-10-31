@@ -68,12 +68,16 @@ func (u *Uploads) remote(ctx context.Context, client *http.Client, method, endpo
 	return data, nil
 }
 func (u *Uploads) sendPaperless(ctx context.Context, name string, size int64, body io.Reader) (plugin.UploadResult, error) {
+	token, err := u.paperlessAuth(ctx)
+	if err != nil {
+		return plugin.UploadResult{}, err
+	}
 	reader, length, contentType := multipartBody(nil, "document", name, size, body)
 	// Preserve the host guard, response cap and redirect policy. A longer timeout
 	// is needed only while this request streams the uploaded file.
-	client := *u.host.HTTP()
+	client := *plugin.WithoutRedirects(u.host.HTTP())
 	client.Timeout = plugin.UploadTimeout
-	data, err := u.remote(ctx, &client, "POST", u.paperless+"/api/documents/post_document/", reader, length, contentType, "Token "+u.token)
+	data, err := u.remote(ctx, &client, "POST", u.paperless+"/api/documents/post_document/", reader, length, contentType, "Token "+token)
 	if err != nil {
 		return plugin.UploadResult{}, err
 	}
@@ -169,4 +173,23 @@ func (u *Uploads) sendCalibre(ctx context.Context, name string, size int64, body
 		}
 	}
 	return plugin.UploadResult{}, errors.New(u.safe(message))
+}
+
+// Login happens before reading the upload stream and is never retried after POST.
+func (u *Uploads) paperlessAuth(ctx context.Context) (string, error) {
+	if u.token != "" {
+		return u.token, nil
+	}
+	values := url.Values{"username": {u.paperlessUser}, "password": {u.paperlessPassword}}.Encode()
+	data, err := u.remote(ctx, plugin.WithoutRedirects(u.host.HTTP()), "POST", u.paperless+"/api/token/", strings.NewReader(values), int64(len(values)), "application/x-www-form-urlencoded", "")
+	if err != nil {
+		return "", errors.New("Paperless login refused")
+	}
+	var out struct {
+		Token string `json:"token"`
+	}
+	if json.Unmarshal(data, &out) != nil || out.Token == "" || strings.ContainsAny(out.Token, "\r\n") {
+		return "", errors.New("Paperless returned invalid credentials")
+	}
+	return out.Token, nil
 }

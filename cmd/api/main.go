@@ -30,6 +30,7 @@ import (
 
 	"github.com/ficaa1/homelab-inventory/internal/actions"
 	"github.com/ficaa1/homelab-inventory/internal/alert"
+	"github.com/ficaa1/homelab-inventory/internal/backup"
 	"github.com/ficaa1/homelab-inventory/internal/execallow"
 	"github.com/ficaa1/homelab-inventory/internal/icons"
 	"github.com/ficaa1/homelab-inventory/internal/inventory"
@@ -102,204 +103,239 @@ func run() error {
 		return errors.New("-allow-unauthenticated requires a loopback listen address (e.g. 127.0.0.1:8080)")
 	}
 
-	st, err := store.Open(*dir)
-	if err != nil {
-		return err
-	}
-
-	manager, err := setup.Open(*dir, setup.Tokens{API: os.Getenv("API_TOKEN"), Agent: os.Getenv("AGENT_TOKEN"), Operator: os.Getenv("OPERATOR_TOKEN")}, started, setup.Window, time.Now)
-	if err != nil {
-		return err
-	}
-	tokens := manager.Tokens()
-	if err := validateTokens(tokens.API, tokens.Agent, tokens.Operator); err != nil {
-		return err
-	}
-	if _, err := setupOrigin(os.Getenv("PUBLIC_URL")); err != nil && os.Getenv("PUBLIC_URL") != "" {
-		return fmt.Errorf("invalid PUBLIC_URL: %w", err)
-	}
 	logger := log.New(os.Stderr, "", log.LstdFlags)
-	srv := &server{store: st, log: logger, token: tokens.API, agentToken: tokens.Agent, operatorToken: tokens.Operator, setup: manager, agentBinDir: envOr("AGENT_BIN_DIR", "/usr/share/homelab-inventory/agent"), publicURL: os.Getenv("PUBLIC_URL"), trustedProxy: os.Getenv("TRUSTED_PROXY") == "1", actionPolicy: execallow.Policy{Host: os.Getenv("ACTIONS_HOST")}}
-
-	srv.plugins, err = openPlugins(*dir, logger)
-	if err != nil {
+	// Recover a partially installed backup before opening any stateful manager.
+	if err := backup.Recover(*dir); err != nil {
 		return err
 	}
-	defer srv.plugins.Close()
-
-	// Launcher icons. Fetching is off unless asked for: retrieving one tells a
-	// third-party repository which services run here, which is small but real,
-	// and the dashboard is perfectly usable with lettered tiles instead.
-	fetchIcons := os.Getenv("ICONS_FETCH") == "1"
-	srv.icons = icons.NewCache(st, fetchIcons)
-	srv.icons.Log = logger.Printf
-	if fetchIcons {
-		logger.Println("icon fetching on: icons are downloaded once, cached, and served from here")
-	} else {
-		logger.Println("ICONS_FETCH is not 1; launcher tiles use lettered placeholders")
-	}
-	if *allowOpen {
-		srv.setup = nil
-	}
-	if srv.token == "" && *allowOpen {
-		logger.Println("development mode: API_TOKEN is unset; ordinary routes have no bearer authentication")
-	}
-
-	if srv.token == "" && !*allowOpen {
-		setupAddr := *addr
-		if host, port, err := net.SplitHostPort(setupAddr); err == nil && (host == "" || host == "0.0.0.0" || host == "::") {
-			setupAddr = net.JoinHostPort("localhost", port)
-		}
-		logger.Printf("setup mode: open http://%s/ within 10 minutes to claim this instance", setupAddr)
-	}
-	if srv.token != "" && srv.agentToken == "" {
-		logger.Println("WARNING: AGENT_TOKEN is unset; agents must use API_TOKEN and then hold an admin credential")
-	}
-
-	files, err := execallow.ParseComposeFiles(os.Getenv("ACTIONS_COMPOSE_FILES"))
-	if err != nil {
-		return err
-	}
-	srv.actionPolicy.ComposeFiles = files
-	if os.Getenv("ACTIONS_ENABLED") == "1" {
-		if srv.actionPolicy.Host == "" || srv.operatorToken == "" {
-			return fmt.Errorf("ACTIONS_ENABLED=1 requires ACTIONS_HOST and OPERATOR_TOKEN")
-		}
-		srv.exec = &execallow.Runner{Policy: srv.actionPolicy, Inventory: func() (*inventory.Inventory, error) { return st.Latest(srv.actionPolicy.Host) }}
-		srv.actions, err = actions.Open(*dir, srv.exec)
-		if err != nil {
-			return fmt.Errorf("opening action audit: %w", err)
-		}
-		logger.Printf("restart actions on: %d commands available", len(execallow.Commands()))
-	} else {
-		logger.Println("ACTIONS_ENABLED is not 1; restart execution is off")
-	}
-
-	minLevel, ok := alert.ParseLevel(*notifyLevel)
-	if !ok {
-		return fmt.Errorf("-notify-level must be one of: critical, warning, info")
-	}
-	// The environment is the seed; anything saved from the dashboard's admin
-	// page wins over it. See internal/settings for why every stored field is
-	// a pointer.
-	policy, err := retentionEnv()
-	if err != nil {
-		return err
-	}
-	srv.defaults = settings.Defaults{
-		Auth:             settings.AuthEnv(os.LookupEnv),
-		RunRetention:     &policy,
-		NotifyLevel:      minLevel,
-		NotifyInterval:   *notifyEvery,
-		DigestInterval:   *digestEvery,
-		AppriseURL:       os.Getenv("APPRISE_URL"),
-		DigestAppriseURL: os.Getenv("DIGEST_APPRISE_URL"),
-	}
-
-	// The notifier is always constructed, even with no endpoint configured:
-	// one can now be set from the page, and a nil notifier would mean that
-	// change needed a restart to take effect. Whether anything is actually
-	// sent is decided per cycle by Options.
-	srv.notifier = &notify.Notifier{
-		State:    st,
-		Sender:   &notify.Apprise{URLFn: func() string { return srv.effective().AppriseURL }, Client: &http.Client{Timeout: 15 * time.Second}},
-		Min:      minLevel,
-		Log:      logger,
-		Recorder: &notify.Recorder{State: st},
-		// The digest is a report, not an alarm, and a report has no business
-		// competing with an alarm for the same channel. Its own endpoint is
-		// resolved per cycle like everything else; when none is set it falls
-		// back to the main one, so an unconfigured digest behaves exactly as
-		// it did before this field existed.
-		DigestSender: &notify.Apprise{
-			URLFn: func() string {
-				eff := srv.effective()
-				if eff.DigestAppriseURL != "" {
-					return eff.DigestAppriseURL
-				}
-				return eff.AppriseURL
-			},
-			Client: &http.Client{Timeout: 15 * time.Second},
-		},
-		Options: func() notify.Options {
-			eff := srv.effective()
-			return notify.Options{Min: eff.NotifyLevel, Enabled: eff.Sending()}
-		},
-	}
-
-	if eff := srv.effective(); eff.Sending() {
-		logger.Printf("notifications on: %s and above, evaluated every %s", eff.NotifyLevel, eff.NotifyInterval)
-	} else {
-		logger.Println("notifications are off: no apprise endpoint is set. " +
-			"Set one in the dashboard's Admin tab, or APPRISE_URL in the environment")
-	}
-
-	if _, err := srv.oidc(); err != nil {
-		return fmt.Errorf("opening browser session key: %w", err)
-	}
-
-	httpSrv := &http.Server{
-		Addr:              *addr,
-		Handler:           withLogging(logger, srv.routes()),
-		ReadTimeout:       10 * time.Second,
-		ReadHeaderTimeout: 5 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       120 * time.Second,
-	}
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	go srv.plugins.Loop(ctx)
-
-	// The notification loop lives here rather than in a `alerts --notify`
-	// timer because this is the only always-on process and it already has the
-	// store. The CLI reads a laptop's inventories/, which is the wrong source
-	// of truth for something that should fire at 03:00 whether or not anyone
-	// has run `make collect` lately.
-	// Started unconditionally and gated inside, since the interval is now a
-	// setting: a digest switched on from the page must not need a restart.
-	if *digestEvery > 0 {
-		logger.Printf("digest on: a summary every %s", *digestEvery)
-	} else {
-		logger.Println("digest off (DIGEST_INTERVAL=0); it can be turned on from the Admin tab")
-	}
-	go srv.digestLoop(ctx)
-	go srv.pruneLoop(ctx)
-
-	{
-		go srv.notifier.Loop(ctx, func() time.Duration { return srv.effective().NotifyInterval }, func() ([]alert.Alert, error) {
-			invs, err := st.LatestAll()
-			if err != nil {
-				return nil, err
-			}
-			now := time.Now()
-			rep, err := srv.evaluateAlerts(invs, now)
-			if err != nil {
-				return nil, err
-			}
-			// Silences are applied here rather than inside the notifier, so
-			// that "acknowledged" means the same thing on the dashboard and on
-			// your phone. An alert silenced while outstanding simply leaves the
-			// active set; when the silence lapses it re-enters and notifies
-			// again, which is exactly what a temporary acknowledgement should
-			// do.
-			book, err := srv.silences()
-			if err != nil {
-				logger.Printf("notify: reading silences: %v", err)
-			}
-			return silence.Unsilenced(silence.Apply(rep, &book, now).Alerts), nil
-		})
-	}
-
-	go func() {
-		started := time.Now()
-		n, err := srv.overviewRuns.Warm(st)
+	factory := func() (*applicationRuntime, error) {
+		ready := false
+		st, err := store.Open(*dir)
 		if err != nil {
-			logger.Printf("overview warm: %v", err)
-			return
+			return nil, err
 		}
-		logger.Printf("overview warm: %d runs in %s", n, time.Since(started).Round(time.Millisecond))
-	}()
+
+		manager, err := setup.Open(*dir, setup.Tokens{API: os.Getenv("API_TOKEN"), Agent: os.Getenv("AGENT_TOKEN"), Operator: os.Getenv("OPERATOR_TOKEN")}, started, setup.Window, time.Now)
+		if err != nil {
+			return nil, err
+		}
+		tokens := manager.Tokens()
+		if err := validateTokens(tokens.API, tokens.Agent, tokens.Operator); err != nil {
+			return nil, err
+		}
+		if _, err := setupOrigin(os.Getenv("PUBLIC_URL")); err != nil && os.Getenv("PUBLIC_URL") != "" {
+			return nil, fmt.Errorf("invalid PUBLIC_URL: %w", err)
+		}
+		srv := &server{store: st, log: logger, token: tokens.API, agentToken: tokens.Agent, operatorToken: tokens.Operator, setup: manager, agentBinDir: envOr("AGENT_BIN_DIR", "/usr/share/homelab-inventory/agent"), publicURL: os.Getenv("PUBLIC_URL"), trustedProxy: os.Getenv("TRUSTED_PROXY") == "1", actionPolicy: execallow.Policy{Host: os.Getenv("ACTIONS_HOST")}}
+
+		srv.plugins, err = openPlugins(*dir, logger)
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			if !ready {
+				srv.plugins.Close()
+			}
+		}()
+
+		srv.legacyAgentToken, err = loadLegacyAgent(*dir, tokens.API, tokens.Operator)
+		if err != nil {
+			return nil, err
+		}
+		srv.bindNetworkInventory()
+		srv.plugins.ExcludeCanaryCredentials(tokens.API, tokens.Agent, tokens.Operator, srv.legacyAgentToken)
+
+		// Launcher icons. Fetching is off unless asked for: retrieving one tells a
+		// third-party repository which services run here, which is small but real,
+		// and the dashboard is perfectly usable with lettered tiles instead.
+		fetchIcons := os.Getenv("ICONS_FETCH") == "1"
+		srv.icons = icons.NewCache(st, fetchIcons)
+		srv.icons.Log = logger.Printf
+		if fetchIcons {
+			logger.Println("icon fetching on: icons are downloaded once, cached, and served from here")
+		} else {
+			logger.Println("ICONS_FETCH is not 1; launcher tiles use lettered placeholders")
+		}
+		if *allowOpen {
+			srv.setup = nil
+		}
+		if srv.token == "" && *allowOpen {
+			logger.Println("development mode: API_TOKEN is unset; ordinary routes have no bearer authentication")
+		}
+
+		if srv.token == "" && !*allowOpen {
+			setupAddr := *addr
+			if host, port, err := net.SplitHostPort(setupAddr); err == nil && (host == "" || host == "0.0.0.0" || host == "::") {
+				setupAddr = net.JoinHostPort("localhost", port)
+			}
+			logger.Printf("setup mode: open http://%s/ within 10 minutes to claim this instance", setupAddr)
+		}
+		if srv.token != "" && srv.agentToken == "" {
+			logger.Println("WARNING: AGENT_TOKEN is unset; agents must use API_TOKEN and then hold an admin credential")
+		}
+
+		files, err := execallow.ParseComposeFiles(os.Getenv("ACTIONS_COMPOSE_FILES"))
+		if err != nil {
+			return nil, err
+		}
+		srv.actionPolicy.ComposeFiles = files
+		if os.Getenv("ACTIONS_ENABLED") == "1" {
+			if srv.actionPolicy.Host == "" || srv.operatorToken == "" {
+				return nil, fmt.Errorf("ACTIONS_ENABLED=1 requires ACTIONS_HOST and OPERATOR_TOKEN")
+			}
+			srv.exec = &execallow.Runner{Policy: srv.actionPolicy, Inventory: func() (*inventory.Inventory, error) { return st.Latest(srv.actionPolicy.Host) }}
+			srv.actions, err = actions.Open(*dir, srv.exec)
+			if err != nil {
+				return nil, fmt.Errorf("opening action audit: %w", err)
+			}
+			logger.Printf("restart actions on: %d commands available", len(execallow.Commands()))
+		} else {
+			logger.Println("ACTIONS_ENABLED is not 1; restart execution is off")
+		}
+
+		minLevel, ok := alert.ParseLevel(*notifyLevel)
+		if !ok {
+			return nil, fmt.Errorf("-notify-level must be one of: critical, warning, info")
+		}
+		// The environment is the seed; anything saved from the dashboard's admin
+		// page wins over it. See internal/settings for why every stored field is
+		// a pointer.
+		policy, err := retentionEnv()
+		if err != nil {
+			return nil, err
+		}
+		srv.defaults = settings.Defaults{
+			Auth:             settings.AuthEnv(os.LookupEnv),
+			RunRetention:     &policy,
+			NotifyLevel:      minLevel,
+			NotifyInterval:   *notifyEvery,
+			DigestInterval:   *digestEvery,
+			AppriseURL:       os.Getenv("APPRISE_URL"),
+			DigestAppriseURL: os.Getenv("DIGEST_APPRISE_URL"),
+		}
+
+		if err := applyBackupDefaults(srv); err != nil {
+			return nil, err
+		}
+
+		// The notifier is always constructed, even with no endpoint configured:
+		// one can now be set from the page, and a nil notifier would mean that
+		// change needed a restart to take effect. Whether anything is actually
+		// sent is decided per cycle by Options.
+		srv.notifier = &notify.Notifier{
+			State:    st,
+			Sender:   &notify.Apprise{URLFn: func() string { return srv.effective().AppriseURL }, Client: &http.Client{Timeout: 15 * time.Second}},
+			Min:      minLevel,
+			Log:      logger,
+			Recorder: &notify.Recorder{State: st},
+			// The digest is a report, not an alarm, and a report has no business
+			// competing with an alarm for the same channel. Its own endpoint is
+			// resolved per cycle like everything else; when none is set it falls
+			// back to the main one, so an unconfigured digest behaves exactly as
+			// it did before this field existed.
+			DigestSender: &notify.Apprise{
+				URLFn: func() string {
+					eff := srv.effective()
+					if eff.DigestAppriseURL != "" {
+						return eff.DigestAppriseURL
+					}
+					return eff.AppriseURL
+				},
+				Client: &http.Client{Timeout: 15 * time.Second},
+			},
+			Options: func() notify.Options {
+				eff := srv.effective()
+				return notify.Options{Min: eff.NotifyLevel, Enabled: eff.Sending()}
+			},
+		}
+
+		if eff := srv.effective(); eff.Sending() {
+			logger.Printf("notifications on: %s and above, evaluated every %s", eff.NotifyLevel, eff.NotifyInterval)
+		} else {
+			logger.Println("notifications are off: no apprise endpoint is set. " +
+				"Set one in the dashboard's Admin tab, or APPRISE_URL in the environment")
+		}
+
+		if _, err := srv.oidc(); err != nil {
+			return nil, fmt.Errorf("opening browser session key: %w", err)
+		}
+
+		rt := &applicationRuntime{server: srv, validate: srv.validateRestoredState}
+		rt.close = func() { srv.plugins.Close() }
+		rt.workers = func(ctx context.Context) {
+			rt.launch(ctx, srv.plugins.Loop)
+
+			// The notification loop lives here rather than in a `alerts --notify`
+			// timer because this is the only always-on process and it already has the
+			// store. The CLI reads a laptop's inventories/, which is the wrong source
+			// of truth for something that should fire at 03:00 whether or not anyone
+			// has run `make collect` lately.
+			// Started unconditionally and gated inside, since the interval is now a
+			// setting: a digest switched on from the page must not need a restart.
+			if *digestEvery > 0 {
+				logger.Printf("digest on: a summary every %s", *digestEvery)
+			} else {
+				logger.Println("digest off (DIGEST_INTERVAL=0); it can be turned on from the Admin tab")
+			}
+			rt.launch(ctx, srv.digestLoop)
+			rt.launch(ctx, srv.pruneLoop)
+
+			{
+				rt.launch(ctx, func(ctx context.Context) {
+					srv.notifier.Loop(ctx, func() time.Duration { return srv.effective().NotifyInterval }, func() ([]alert.Alert, error) {
+						return srv.migrationNotificationAlerts(ctx, func() ([]alert.Alert, error) {
+							invs, err := st.LatestAll()
+							if err != nil {
+								return nil, err
+							}
+							now := time.Now()
+							rep, err := srv.evaluateAlerts(invs, now)
+							if err != nil {
+								return nil, err
+							}
+							// Silences are applied here rather than inside the notifier, so
+							// that "acknowledged" means the same thing on the dashboard and on
+							// your phone. An alert silenced while outstanding simply leaves the
+							// active set; when the silence lapses it re-enters and notifies
+							// again, which is exactly what a temporary acknowledgement should
+							// do.
+							book, err := srv.silences()
+							if err != nil {
+								logger.Printf("notify: reading silences: %v", err)
+							}
+							return silence.Unsilenced(silence.Apply(rep, &book, now).Alerts), nil
+						})
+					})
+				})
+			}
+
+			rt.launch(ctx, func(context.Context) {
+				started := time.Now()
+				n, err := srv.overviewRuns.Warm(st)
+				if err != nil {
+					logger.Printf("overview warm: %v", err)
+					return
+				}
+				logger.Printf("overview warm: %d runs in %s", n, time.Since(started).Round(time.Millisecond))
+			})
+
+		}
+		ready = true
+		return rt, nil
+	}
+	lifecycle, err := newApplicationLifecycle(ctx, factory)
+	if err != nil {
+		return err
+	}
+	defer lifecycle.shutdown()
+	httpSrv := &http.Server{
+		Addr:              *addr,
+		Handler:           withLogging(logger, lifecycle),
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
 
 	errCh := make(chan error, 1)
 	go func() {

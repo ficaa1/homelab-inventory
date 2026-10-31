@@ -45,12 +45,13 @@ type Tab struct {
 	Views []ViewRef `json:"views"`
 }
 type Manifest struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	Version     string  `json:"version"`
-	Settings    []Field `json:"settings"`
-	Tab         *Tab    `json:"tab"`
+	Actions     []ActionSpec `json:"actions,omitempty"`
+	ID          string       `json:"id"`
+	Name        string       `json:"name"`
+	Description string       `json:"description"`
+	Version     string       `json:"version"`
+	Settings    []Field      `json:"settings"`
+	Tab         *Tab         `json:"tab"`
 }
 type Config map[string]any
 
