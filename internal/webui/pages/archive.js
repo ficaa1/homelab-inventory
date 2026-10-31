@@ -19,7 +19,7 @@
   // Page state survives switching between the page's own views; hide() ends
   // polling and drops in-flight answers.
   var st = { root: null, body: null, strip: null, tools: null, view: "status", params: null, gen: 0 };
-  var status = null, lastStatus = null, library = null, seeding = null, selection = null;
+  var status = null, lastStatus = null, library = null, libraryActivity = null, seeding = null, selection = null;
   var notice = {}, open = {}, request = 0, ownerBusy = false, ownerNotice = "";
   var libFilter = "all", libQuery = "", libExpanded = {}, libNotice = "", libLoading = false;
   var seedLoading = false;
@@ -501,6 +501,33 @@
   // ------------------------------------------------------------ library view
 
   function libKey(item) { return item.kind + ":" + item.id; }
+  var ACTIVITY_WORD = { downloading: "Downloading", paused: "Paused", importing: "Importing", waiting: "Waiting to import", queued: "Waiting to import", attention: "Needs attention", failed: "Needs attention" };
+  function activityTitle(item) {
+    var a = libraryActivity;
+    return a && (a.titles || []).filter(function (t) { return t.kind === item.kind && t.id === item.id; })[0] || null;
+  }
+  function activitySeason(item, season) {
+    var t = activityTitle(item);
+    return t && (t.seasons || []).filter(function (s) { return s.season === season; })[0] || null;
+  }
+  function activityETA(seconds) {
+    if (seconds < 3600) return Math.max(1, Math.floor(seconds / 60)) + " min left";
+    if (seconds < 86400) return Math.floor(seconds / 3600) + "h " + Math.floor((seconds % 3600) / 60) + "m left";
+    return Math.floor(seconds / 86400) + " d left";
+  }
+  function libraryProgress(p) {
+    if (!p || !ACTIVITY_WORD[p.state]) return "";
+    var word = ACTIVITY_WORD[p.state], pct = null, sub = "", tone = p.state === "failed" || p.state === "attention" ? "critical" : p.state === "paused" ? "warning" : "info";
+    if (p.state === "importing" && p.total) { word += " " + p.imported + "/" + p.total; pct = p.imported / p.total * 100; }
+    else if ((p.state === "downloading" || p.state === "paused") && p.percent != null) { word += " " + p.percent + "%"; pct = p.percent; }
+    if (p.state === "downloading" && p.eta_seconds != null) sub = activityETA(p.eta_seconds);
+    var barHTML = pct != null ? '<span class="arc-lib-progress-bar" aria-hidden="true"><i style="width:' + Math.max(0, Math.min(100, pct)).toFixed(2) + '%"></i></span>' : p.state === "importing" ? '<span class="arc-lib-progress-bar busy" aria-hidden="true"><i></i></span>' : "";
+    return '<div class="arc-lib-progress">' + pill(word, tone) + barHTML + (sub ? '<div class="sub">' + esc(sub) + "</div>" : "") + "</div>";
+  }
+  function libraryProgressSlot(item, season) {
+    var p = season == null ? activityTitle(item) : activitySeason(item, season);
+    return '<div class="arc-lib-progress-slot" data-library-progress="' + esc(libKey(item)) + '"' + (season == null ? "" : ' data-library-season="' + season + '"') + ">" + libraryProgress(p) + "</div>";
+  }
   function libPill(s) {
     var word = { none: "Not archived", tagged: "Tagged", shrunk: "Shrunk", pending_approval: "Pending approval", active: "In progress", failed: "Needs review" }[s.status] || "Not archived";
     var cls = s.status === "shrunk" ? "good" : s.status === "failed" ? "critical" : s.status === "pending_approval" ? "warning" : "info";
@@ -519,6 +546,18 @@
       if (fail(err) || gen !== st.gen || st.view !== "library") return;
       morph(st.body, '<div class="empty" data-key="err"><div class="big">Could not load the library</div>' + esc(err.message) + '<div class="actions arc-center"><button class="btn" type="button" data-library-refresh>Try again</button></div></div>');
     }).then(function () { libLoading = false; });
+  }
+
+  // Activity belongs to the optional read-only Media plugin. A disabled or
+  // unavailable plugin is deliberately silent; archive rows still render.
+  function loadLibraryActivity() {
+    if (st.view !== "library") return;
+    var gen = st.gen;
+    HI.get("media", "activity").then(function (v) {
+      if (gen !== st.gen || st.view !== "library") return;
+      libraryActivity = v;
+      if (library) renderLibrary();
+    }, function () {});
   }
 
   function renderLibrary() {
@@ -545,12 +584,12 @@
         '<td class="arc-lib-size"><strong>' + esc(size(it.sizeBytes)) + '</strong><span class="arc-minibar" aria-hidden="true"><i style="width:' + (it.sizeBytes / maxSize * 100).toFixed(2) + '%"></i></span></td>' +
         '<td class="arc-lib-quality">' + esc(quality || "—") + "</td>" +
         '<td class="arc-lib-tags">' + (it.tags.archive ? "<span>archive</span>" : "") + (it.tags.fourK ? "<span>4k</span>" : "") + (!it.tags.archive && !it.tags.fourK ? '<span class="sub">—</span>' : "") + "</td>" +
-        '<td class="arc-lib-status">' + libPill(s) + '</td><td class="arc-lib-action">' +
+        '<td class="arc-lib-status">' + libPill(s) + libraryProgressSlot(it) + '</td><td class="arc-lib-action">' +
         (it.tags.archive ? (tv ? '<button class="btn" type="button" data-library-action="' + esc(k) + '"' + busy + ">Seasons</button> " : "") +
           '<button class="btn" type="button" data-library-action="' + esc(k) + '|untag"' + busy + ">Un-tag</button>" :
           '<button class="btn" type="button" data-library-action="' + esc(k) + '"' + busy + ">Archive</button>") + "</td></tr>" +
         (tv ? '<tr id="' + sid + '" class="arc-season-row' + (exp ? "" : " hidden") + '" data-key="s:' + esc(k) + '"><td colspan="7"><div class="arc-seasons">' + (it.seasons || []).map(function (se) {
-          return '<div class="arc-season"><b>' + (se.season ? "Season " + se.season : "Specials") + "</b><span>" + esc(size(se.sizeBytes)) + (se.selected ? " · <b>to archive</b>" : "") + "</span><div>" + libPill(se.archiveStatus || { status: "none" }) + "</div>" +
+          return '<div class="arc-season"><b>' + (se.season ? "Season " + se.season : "Specials") + "</b><span>" + esc(size(se.sizeBytes)) + (se.selected ? " · <b>to archive</b>" : "") + "</span><div>" + libPill(se.archiveStatus || { status: "none" }) + libraryProgressSlot(it, se.season) + "</div>" +
             (se.season > 0 && !se.selected && !blocked ? '<button class="btn" type="button" data-library-action="' + esc(k) + "|s" + se.season + '">Archive</button>' : "<span></span>") + "</div>";
         }).join("") + "</div></td></tr>" : "");
     }).join("") || '<tr data-key="none"><td colspan="7" class="arc-none">No matches</td></tr>';
@@ -800,8 +839,8 @@
 
   function loadSelection() {
     var gen = st.gen;
-    HI.get(ID, "selection").then(function (v) { selection = v; draft = null; preview = null; if (gen === st.gen) render(); }).catch(function (err) {
-      if (fail(err) || gen !== st.gen || st.view !== "selection") return;
+    HI.get(ID, "selection").then(function (v) { selection = v; draft = null; preview = null; if (gen === st.gen) { if (st.view === "admin") renderSelection(); else render(); } }).catch(function (err) {
+      if (fail(err) || gen !== st.gen || (st.view !== "selection" && st.view !== "admin")) return;
       morph(st.body, '<div class="empty" data-key="err"><div class="big">Scoring settings unavailable</div>' + esc(err.message) + "</div>");
     });
   }
@@ -1051,6 +1090,7 @@
     if (poll.busy) { poll.again = true; return; }
     poll.busy = true; poll.ran = true;
     var gen = st.gen;
+    if (st.view === "library") loadLibraryActivity();
     HI.get(ID, "status").then(function (v) {
       if (gen !== st.gen) return;
       applyStatus(v);
@@ -1173,7 +1213,7 @@
   function onInput(e) {
     var t = e.target;
     if (t.id === "arc-lib-search") { libQuery = t.value; renderLibrary(); }
-    else if (st.view === "selection" && t.type === "number" && /^arc-sc-/.test(t.id)) { readSelection(); selectionChanged(); }
+    else if ((st.view === "selection" || st.view === "admin") && t.type === "number" && /^arc-sc-/.test(t.id)) { readSelection(); selectionChanged(); }
   }
   function onKey(e) {
     var t = e.target;
@@ -1191,17 +1231,15 @@
   (window.HI_PAGES = window.HI_PAGES || {}).archive = {
     show: function (root, ctx) {
       HI = window.HI;
-      var views = ["status", "library", "seeding", "selection"];
+      var views = ["status", "library", "seeding"];
       st.view = views.indexOf(ctx.view) >= 0 ? ctx.view : "status";
       st.params = ctx.params;
       st.gen++;
-      if (!st.root) {
-        document.addEventListener("visibilitychange", onVisibility);
-        root.addEventListener("click", onClick);
-        root.addEventListener("input", onInput);
-        root.addEventListener("keydown", onKey);
-        root.addEventListener("toggle", onToggle, true);
-      }
+      document.addEventListener("visibilitychange", onVisibility);
+      root.addEventListener("click", onClick);
+      root.addEventListener("input", onInput);
+      root.addEventListener("keydown", onKey);
+      root.addEventListener("toggle", onToggle, true);
       st.root = root;
       root.textContent = "";
       root.className = "arc-page";
@@ -1214,11 +1252,27 @@
       var t = ctx.params && (ctx.params.get("title") || ctx.params.get("hash"));
       if (t && !pending) pending = { view: st.view, title: ctx.params.get("title"), hash: ctx.params.get("hash") };
       if (st.view === "seeding") { seeding = seeding || null; loadSeeding(); }
-      if (st.view === "library") loadLibrary(false);
+      if (st.view === "library") { loadLibrary(false); loadLibraryActivity(); }
       if (st.view === "selection") { selection = null; draft = null; preview = null; }
       render();
       poll.busy = false; poll.again = false;
       tick();
+    },
+    admin: function (root) {
+      HI = window.HI;
+      st.gen++;
+      st.view = "admin";
+      document.addEventListener("visibilitychange", onVisibility);
+      st.root = root;
+      st.body = root;
+      st.strip = st.tools = null;
+      root.className = "arc-page arc-admin";
+      root.addEventListener("click", onClick);
+      root.addEventListener("input", onInput);
+      root.addEventListener("keydown", onKey);
+      selection = null; draft = null; preview = null; scBusy = false;
+      renderSelection();
+      loadSelection();
     },
     hide: function () {
       st.gen++;

@@ -245,6 +245,13 @@
   .arc-page .arc-lib-tags { grid-column: 2; grid-row: 2; text-align: right; }
   .arc-page .arc-lib-status { grid-column: 1; grid-row: 4; }
   .arc-page .arc-lib-action { grid-column: 2; grid-row: 4; align-self: center; }
+.arc-page .arc-lib-progress-slot { margin-top: 6px; }
+.arc-page .arc-lib-progress { display: grid; gap: 4px; min-width: 0; }
+.arc-page .arc-lib-progress .pill { justify-self: start; }
+.arc-page .arc-lib-progress-bar { display: block; height: 5px; border-radius: 3px; background: var(--track); overflow: hidden; max-width: 180px; }
+.arc-page .arc-lib-progress-bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .4s ease; }
+.arc-page .arc-lib-progress-bar.busy i { width: 35%; animation: arc-page-slide 1.6s ease-in-out infinite alternate; }
+.arc-page .arc-lib-progress .sub { font-size: var(--fs-xs); }
   .arc-page .arc-season-row:not(.hidden) { display: block; margin: -4px 0 8px; }
   .arc-page .arc-season-row td { display: block; border: 0; padding: 0; }
   .arc-page .arc-seasons { padding: 0 0 4px 8px; }
