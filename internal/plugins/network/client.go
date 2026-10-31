@@ -43,7 +43,9 @@ func (n *Network) get(ctx context.Context, path string, q url.Values, out any, u
 		}
 	}
 	key := path + "?" + cacheQuery.Encode()
+	n.cacheMu.Lock()
 	c, found := n.cache[key]
+	n.cacheMu.Unlock()
 	if !useCache || !found || n.host.Now().Sub(c.at) >= 30*time.Second {
 		c = cached{at: n.host.Now()}
 		target, err := url.Parse(n.base + path)
@@ -76,14 +78,16 @@ func (n *Network) get(ctx context.Context, path string, q url.Values, out any, u
 			resp.Body.Close()
 		}
 		cancel()
-		if useCache {
-			if n.cache == nil || len(n.cache) >= 24 || n.cacheBytes+len(c.data) > 16<<20 {
+		if useCache && ctx.Err() == nil {
+			n.cacheMu.Lock()
+			if n.cache == nil || len(n.cache) >= 128 || n.cacheBytes+len(c.data) > 16<<20 {
 				n.cache = map[string]cached{}
 				n.cacheBytes = 0
 			}
 			n.cacheBytes -= len(n.cache[key].data)
 			n.cache[key] = c
 			n.cacheBytes += len(c.data)
+			n.cacheMu.Unlock()
 		}
 	}
 	if c.err != nil {

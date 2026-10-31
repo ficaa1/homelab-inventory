@@ -40,7 +40,16 @@ func scalar(v *float64) any {
 
 var containerID = regexp.MustCompile(`^[0-9a-f]{12}([0-9a-f]{52})?$`)
 
-func (n *Network) buildView(ctx context.Context, name string, view *plugin.View) {
+// trafficSet is node_exporter traffic per host, busiest first, with the range
+// samples behind the fleet chart. Each source's error is kept separately.
+type trafficSet struct {
+	hosts            []*hostTraffic
+	rxRange, txRange []sample
+	nodeErr, rxErr   error
+	txErr            error
+}
+
+func (n *Network) collectTraffic(ctx context.Context) trafficSet {
 	hosts := map[string]*hostTraffic{}
 	host := func(s sample) *hostTraffic {
 		instance := s.Metric["instance"]
@@ -54,12 +63,12 @@ func (n *Network) buildView(ctx context.Context, name string, view *plugin.View)
 		}
 		return h
 	}
-	var nodeErr error
+	var set trafficSet
 	for _, kind := range []string{"rx", "tx", "errors", "drops"} {
 		samples, err := n.query(ctx, n.hostQuery(kind), false, true)
 		if err != nil {
-			if nodeErr == nil {
-				nodeErr = err
+			if set.nodeErr == nil {
+				set.nodeErr = err
 			}
 			continue
 		}
@@ -77,15 +86,13 @@ func (n *Network) buildView(ctx context.Context, name string, view *plugin.View)
 			}
 		}
 	}
-	var rxRange, txRange []sample
-	var rxErr, txErr error
 	if len(hosts) > 0 {
-		rxRange, rxErr = n.query(ctx, n.hostQuery("rx"), true, true)
-		txRange, txErr = n.query(ctx, n.hostQuery("tx"), true, true)
-		for _, s := range rxRange {
+		set.rxRange, set.rxErr = n.query(ctx, n.hostQuery("rx"), true, true)
+		set.txRange, set.txErr = n.query(ctx, n.hostQuery("tx"), true, true)
+		for _, s := range set.rxRange {
 			host(s).receive = s.Points
 		}
-		for _, s := range txRange {
+		for _, s := range set.txRange {
 			host(s).transmit = s.Points
 		}
 	}
@@ -106,6 +113,13 @@ func (n *Network) buildView(ctx context.Context, name string, view *plugin.View)
 		}
 		return ordered[i].instance < ordered[j].instance
 	})
+	set.hosts = ordered
+	return set
+}
+
+func (n *Network) buildView(ctx context.Context, name string, view *plugin.View) {
+	set := n.collectTraffic(ctx)
+	ordered, rxRange, txRange, nodeErr, rxErr, txErr := set.hosts, set.rxRange, set.txRange, set.nodeErr, set.rxErr, set.txErr
 	if name == "traffic" {
 		view.Title = "Traffic"
 		for i, h := range ordered {
