@@ -41,3 +41,13 @@ or swap the installer and its checksums.
 
 **Plugins** run inside the API and are trusted code. They can only reach the
 addresses you configured for them, and cannot send HTML or scripts to the page.
+
+
+**Dusk devices** have independent, revocable, scoped credentials. Pairing codes
+expire after 15 minutes and redeem once; only hashes persist. Redemption permits
+10 attempts per socket address per minute, including across restart (reverse
+proxy forwarding headers never decide this identity). A shared proxy can therefore
+share one pairing limit. Keep pairing behind HTTPS on untrusted networks. Start
+with read-only scopes and grant each write permission deliberately. Device tokens
+cannot access inventory, administrator, agent or operator routes. Dusk is disabled
+by default. Its local feedback, imports and request receipts are private state.

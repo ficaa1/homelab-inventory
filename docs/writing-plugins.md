@@ -146,3 +146,15 @@ budget across all series. `bytes_s` is also a table column format.
 A plugin writes only in `Host.CacheDir()`, except an Uploads destination folder
 the owner configured explicitly. Uploads refuses the API data directory and its
 subdirectories, including symlink aliases, and never overwrites a destination entry.
+
+
+## Shared Media data
+
+Dusk consumes the typed `internal/mediadata` contract through Registry's Media
+methods. The bridge holds the same lifecycle lock as views, settings, images and
+alerts; callers never obtain the Media instance, HTTP client or connection keys.
+Dusk configuration is a typed non-secret snapshot. Dependency capabilities are
+read on each request, independent of source health. Refreshes coalesce for thirty
+seconds and settings changes invalidate that result. Media's explicit TV request
+method is separate from its read methods and requires a selected server policy;
+core durably reserves each profile-scoped operation before invoking it.

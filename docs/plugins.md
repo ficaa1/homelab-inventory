@@ -1,7 +1,6 @@
 # Plugins
 
-Plugins add tabs to the dashboard. Three ship with it: **Media**, **Uploads** and
-**Network**. They are already installed and start switched off.
+Plugins add tabs to the dashboard. Four ship with it: **Media**, **Uploads**, **Network** and **Dusk**. They are already installed and start switched off.
 
 ## Turn one on
 
@@ -88,7 +87,7 @@ If a plugin fails three polls in a row it raises `plugin.unreachable`.
 | `media.queue.stuck` | A download has had a warning for over an hour |
 | `network.probe.down` | A blackbox probe has failed for 10 minutes |
 
-**Media.** Every request is a GET. Usernames, IPs, devices, paths and tracker
+**Media dashboard.** Every request is a GET. Usernames, IPs, devices, paths and tracker
 URLs are never shown; a stream says "a user". Posters come through the API, so the
 browser never contacts another server. Results are cached for 20 seconds.
 Upcoming shows 7 days by default (1 to 30).
@@ -106,3 +105,49 @@ probe and container names come from your metric labels, so anyone who can see
 the dashboard sees them.
 
 Writing your own plugin: see [Writing plugins](writing-plugins.md).
+
+## Dusk
+
+Pairs household televisions with Media without copying any upstream API keys.
+Dusk starts disabled. It adds setup controls under **Admin → Plugins → Dusk**,
+not a new dashboard tab.
+
+1. Configure any Media sources you use. Sonarr and Radarr add downloads/library;
+   Tautulli adds playback; Overseerr adds metadata, search and recommendations.
+2. Enable Dusk, then add a household profile. Each profile keeps its own hidden
+   titles, taste feedback, import, request policy and optional viewing history.
+3. Optionally select a Tautulli account to enrich that household's recommendations
+   and familiar titles. No account is selected automatically.
+4. To allow requests, enable Dusk requests and save a policy for that household.
+   Choose the Overseerr requester, manual/automatic approval, and separate movie
+   and TV server, quality profile and root folder. You can configure only one
+   media kind. The selected requester's upstream approval permissions must agree
+   with your policy; Dusk does not change upstream account permissions.
+5. Create a pairing code, choosing the profile and permissions. Read access is the
+   default; requests, preferences, refresh and taste are separate opt-ins. Enter
+   the server address and code on the TV within 15 minutes.
+
+Revoke a device in the same panel to disconnect it immediately. Deleting a
+household revokes its devices and outstanding codes. Turning Dusk off blocks all
+TV access while preserving configuration. Turning Media off removes its features;
+a temporary upstream outage leaves features configured and reports unavailable.
+
+**Discovery and Taste.** The portable default uses Overseerr's metadata feed and
+similar-title recommendations, reranked with local likes and selected viewing
+history. Explicit feedback overrides inferred history. Familiar shows selected
+recent history or available titles. Optional Letterboxd CSV imports accept pasted
+`Name`, `Year`, `Rating`, `Watched`, `Watchlist` columns (only Name required), up to
+64 KiB and 500 rows. Standard watched/ratings exports work; for a watchlist export
+add a `Watchlist` column with `true` values. URL columns are ignored. Names match
+through bounded Media search, three per discovery read, with exact year matching
+when supplied. Reimport to retry unmatched names after a source outage. Imports
+and feedback stay local; nothing writes to Letterboxd or Plex. No datasets or
+trained models are bundled or needed.
+
+**Requests.** Only an explicit authorized TV action submits a request. Ordinary
+Media reads remain read-only. Durable profile-scoped receipts prevent duplicate
+and ambiguous requests across devices and restarts. An `unknown` outcome is never
+replayed: inspect it upstream before taking any other action. There is no automatic
+receipt deletion or reset button. Back up the private data directory.
+
+The [versioned TV protocol](dusk/protocol-v1.md) includes synthetic examples.

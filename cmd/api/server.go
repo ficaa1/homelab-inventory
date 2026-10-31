@@ -55,6 +55,9 @@ type server struct {
 	authTestMu             sync.Mutex
 	authTestGeneration     uint64
 	authTestMessage        string
+	duskOnce               sync.Once
+	dusk                   *duskState
+	duskErr                error
 	plugins                *plugin.Registry
 	setup                  *setup.Manager
 	agentBinDir, publicURL string
@@ -92,6 +95,7 @@ func (s *server) routes() http.Handler {
 	s.setupRoutes(mux)
 	s.authRoutes(mux)
 	s.pluginRoutes(mux)
+	s.duskRoutes(mux)
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.HandleFunc("POST /inventory", s.agentAuth(s.handleIngest))
 	mux.HandleFunc("GET /agent/manifest", s.agentAuth(s.handleAgentManifest))
