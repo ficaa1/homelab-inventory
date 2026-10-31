@@ -1,104 +1,93 @@
 /* Tdarr page: the page lives under .tdp, its drawers under .tdp-drawer.
-   Sizes and spacing follow the private dashboard's Tdarr section. */
+   The rules are the private dashboard's Tdarr section, with tdarr- read as
+   tdp-, plus the Library pieces it borrows (arc-title, library-*). */
+.tdp .arc-title { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); margin-bottom: 8px; min-width: 0; }
+.tdp .library-find { display: flex; gap: 8px; align-items: center; }
+.tdp .library-tools { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: var(--s4); flex-wrap: wrap; }
+.tdp .library-filters { display: flex; padding: 3px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); }
+.tdp .library-filters button { border: 0; background: none; color: var(--text-3); border-radius: var(--r-sm); padding: 6px 14px; cursor: pointer; font-size: var(--fs-sm); font-weight: 500; }
+.tdp .library-filters button[aria-pressed="true"] { background: var(--surface-3); color: var(--text); }
+.tdp .library-year { color: var(--text-3); font-size: var(--fs-xs); margin-left: 8px; }
+.tdp .library-bar { display: block; width: 100%; height: 4px; border-radius: 3px; background: var(--track); margin-top: 8px; overflow: hidden; }
+.tdp .library-bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; min-width: 1px; }
+.tdp .library-keep { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 16px 0; }
+.tdp-drawer .arc-eyebrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: var(--fs-xs); color: var(--text-3); }
+.tdp-drawer .library-season-picker { border: 1px solid var(--line-2); border-radius: var(--r); padding: 14px; margin: 16px 0; }
+.tdp-drawer .library-season-picker legend { color: var(--text-2); font-size: var(--fs-xs); padding: 0 5px; }
+.tdp-drawer .library-season-picker label { display: flex; align-items: center; gap: 8px; padding: 8px 0; font-size: var(--fs-sm); }
+.tdp-drawer .library-season-picker label span { margin-left: auto; color: var(--text-3); }
+@media (max-width: 900px) {
+  .tdp .library-tools { align-items: stretch; flex-direction: column; gap: 12px; }
+  .tdp .library-filters { align-self: flex-start; }
+  .tdp .library-find { width: 100%; }
+}
+@media (max-width: 640px) {
+  .tdp .library-keep, .tdp-drawer .library-season-picker label { min-height: 44px; min-width: 44px; box-sizing: border-box; }
+}
+
+#drawer:has(.tdp-drawer) .close { min-width:44px; min-height:44px; }
+.tdp #tdp-search, .tdp .tdp-cand-search { width:230px; color:var(--text); background:var(--surface); border:1px solid var(--line-2); border-radius:var(--r); padding:9px 12px; font:inherit; }
+.tdp #tdp-status, .tdp .tdp-row, .tdp .tdp-selection { padding:12px 14px; }
+.tdp-drawer .actions .btn { min-height:44px; }
+.tdp-drawer .library-season-picker label { min-height:44px; }
+
+.tdp .tdp-metrics, .tdp .tdp-node > div:first-child, .tdp .tdp-selection { display:flex; align-items:center; gap:16px; }
+.tdp .tdp-metrics { padding:4px 0 16px; justify-content:space-between; }
+.tdp .tdp-metrics b { font-size:24px; font-variant-numeric:tabular-nums; }
+.tdp .tdp-node { padding:12px 0; border-top:1px solid var(--line); }
+.tdp .tdp-node > div:first-child { gap:8px; flex-wrap:wrap; }
+.tdp .tdp-dot { width:7px; height:7px; border-radius:50%; background:var(--muted); }
+.tdp .tdp-dot.on { background:var(--good); }
+.tdp .tdp-dot.paused { background:var(--warning); }
+.tdp .tdp-active { display:flex; gap:12px; justify-content:space-between; margin-top:10px; }
+.tdp .tdp-active span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tdp .tdp-row { display:grid; grid-template-columns:minmax(0,1fr) 130px auto; align-items:center; gap:16px; margin-bottom:8px; }
+.tdp .tdp-title { display:flex; align-items:center; gap:12px; min-height:44px; cursor:pointer; min-width:0; }
+.tdp .tdp-title > span { min-width:0; overflow-wrap:anywhere; }
+.tdp .tdp-title input, .tdp-drawer .library-season-picker input { width:20px; height:20px; flex-shrink:0; accent-color:var(--accent); }
+.tdp .tdp-title .sub { display:block; }
+.tdp .tdp-locked { opacity:.55; }
+.tdp .tdp-lock { font-size:12px; }
+.tdp .tdp-selection { position:sticky; top:calc(var(--arc-sticky-top, var(--top-h)) + 8px); z-index:2; margin-top:16px; box-shadow:var(--shadow); flex-wrap:wrap; }
+.tdp .tdp-selection .library-keep { margin:0; min-height:44px; }
+.tdp-drawer .tdp-file > summary { min-height:44px; cursor:pointer; }
+.tdp-drawer .tdp-file > summary > .sub { display:block; margin-top:6px; }
+.tdp-drawer .tdp-file > summary > .tdp-skip { display:inline-block; margin-top:6px; }
+.tdp-drawer .tdp-file .tdp-path { color:var(--text-3); font-size:var(--fs-xs); }
+.tdp-drawer .tdp-file { padding:12px 0; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:6px; overflow-wrap:anywhere; }
+.tdp-drawer .tdp-skip { border:1px solid var(--line); border-radius:var(--r); padding:4px 8px; font-size:11px; align-self:flex-start; color:var(--muted); }
+.tdp button, .tdp input[type=search] { min-height:44px; }
+@media (max-width:600px) {
+  .tdp .tdp-row { grid-template-columns:minmax(0,1fr) auto; gap:8px 12px; }
+  .tdp .tdp-title { grid-column:1/-1; }
+  .tdp #tdp-search, .tdp .tdp-cand-search { width:100%; min-width:0; flex:1; }
+  .tdp .tdp-selection { gap:8px; }
+  .tdp .tdp-metrics { gap:8px; font-size:12px; }
+  .tdp .tdp-node .sub { font-size:11px; }
+}
+
+/* Public only: an Archive-busy pill on a title, and the "Worth compressing"
+   list of files the scanner thinks would shrink. */
+.tdp .tdp-title .pill, .tdp-drawer .library-season-picker .pill { margin-left: 8px; }
 .tdp .tdp-pad { padding: 14px 16px; }
-.tdp .spacer { flex: 1; }
-.tdp .btn { min-height: 44px; }
-.tdp .tdp-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); margin-bottom: 8px; min-width: 0; padding: 12px 14px; }
-
-.tdp .tdp-metrics { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 0 16px; }
-.tdp .tdp-metrics b { font-size: 24px; font-variant-numeric: tabular-nums; }
-.tdp .tdp-status .tdp-why { font-size: var(--fs-sm); color: var(--text-2); padding-bottom: 12px; overflow-wrap: anywhere; }
-.tdp .tdp-node { padding: 12px 0; border-top: 1px solid var(--line); min-width: 0; }
-.tdp .tdp-node-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.tdp .tdp-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); flex: none; }
-.tdp .tdp-dot.on { background: var(--ok); }
-.tdp .tdp-dot.paused { background: var(--warn); }
-.tdp .tdp-active { display: flex; gap: 12px; justify-content: space-between; margin-top: 10px; min-width: 0; }
-.tdp .tdp-file { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tdp .tdp-bar { display: block; width: 100%; height: 4px; border-radius: 3px; background: var(--track); margin-top: 8px; overflow: hidden; }
-.tdp .tdp-bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; min-width: 1px; }
-
-.tdp .tdp-tools { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: var(--s4); flex-wrap: wrap; }
-.tdp .tdp-tools .seg { padding: 3px; gap: 0; }
-.tdp .tdp-tools .seg .btn { padding: 6px 14px; font-size: var(--fs-sm); font-weight: 500; }
-.tdp .tdp-find { display: flex; gap: 8px; align-items: center; }
-.tdp .tdp-search { width: 230px; min-width: 0; min-height: 44px; color: var(--text); background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); padding: 9px 12px; font: inherit; }
-.tdp .tdp-search:focus { outline: none; border-color: var(--accent); }
-
-.tdp .tdp-notice { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
-.tdp .tdp-notice .banner { flex: 1 1 260px; margin: 0; }
-.tdp .tdp-notice.hidden { display: none; }
-.tdp .tdp-selbar { position: sticky; top: calc(var(--top-h) + 8px); z-index: 2; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 16px; box-shadow: var(--shadow); }
-.tdp .tdp-selbar #tdp-total b { font-variant-numeric: tabular-nums; }
-.tdp .tdp-selbar #tdp-total b.t-warn { color: var(--warn); }
-.tdp .tdp-check { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 16px 0; margin: 0; min-height: 44px; cursor: pointer; }
-
-.tdp .tdp-row.tdp-card { display: grid; grid-template-columns: minmax(0, 1fr) 130px auto; align-items: center; gap: 16px; }
-.tdp .tdp-locked { opacity: 0.55; }
-.tdp .tdp-lock { font-size: 12px; }
-.tdp .tdp-title { display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer; min-width: 0; }
-.tdp .tdp-title > span { min-width: 0; overflow-wrap: anywhere; }
-.tdp .tdp-title input { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--accent); }
-.tdp .tdp-title .sub { display: block; }
-.tdp .tdp-title .pill { margin-left: 8px; }
-.tdp .tdp-year { color: var(--text-3); font-size: var(--fs-xs); margin-left: 8px; }
-.tdp .tdp-size { min-width: 0; }
-
-/* Worth compressing: one list card below the titles. */
 .tdp .tdp-cands { display: grid; gap: var(--s3); min-width: 0; margin-top: var(--s5); }
-.tdp .tdp-rows .tdp-row {
+.tdp .tdp-cand {
   display: grid; grid-template-columns: minmax(0, 1fr) 150px 120px; align-items: center; gap: 16px;
   padding: 8px 16px; border-top: 1px solid var(--line); min-width: 0;
 }
-.tdp .tdp-rows > h3 + .tdp-row { border-top: 0; }
-.tdp .tdp-rows .tdp-row > :last-child { justify-self: end; }
+.tdp .tdp-rows > h3 + .tdp-cand { border-top: 0; }
+.tdp .tdp-cand > :last-child { justify-self: end; }
 .tdp .tdp-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .tdp .tdp-line { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--fs-sm); }
 .tdp .tdp-line b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .tdp .tdp-line .pill { flex: none; font-size: 11px; padding: 0 6px; line-height: 16px; }
 .tdp .tdp-name .sub { font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tdp .tdp-rows .tdp-size { display: grid; gap: 5px; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
-.tdp .tdp-rows .tdp-size strong { font-weight: 500; }
-.tdp .tdp-rows .tdp-bar { margin-top: 0; }
+.tdp .tdp-cand .tdp-size { display: grid; gap: 5px; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.tdp .tdp-cand .tdp-size strong { font-weight: 500; }
+.tdp .tdp-cand .library-bar { margin-top: 0; }
 .tdp .tdp-of { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
-
-@media (max-width: 900px) {
-  .tdp .tdp-tools { align-items: stretch; flex-direction: column; gap: 12px; }
-  .tdp .tdp-tools .seg { align-self: flex-start; }
-  .tdp .tdp-find { width: 100%; }
-}
 @media (max-width: 600px) {
-  .tdp .tdp-row.tdp-card { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; }
-  .tdp .tdp-title { grid-column: 1 / -1; }
-  .tdp .tdp-search { width: 100%; flex: 1; }
-  .tdp .tdp-selbar { gap: 8px; }
-  .tdp .tdp-metrics { gap: 8px; font-size: 12px; }
-  .tdp .tdp-node .sub { font-size: 11px; }
-  .tdp .tdp-rows .tdp-row { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 8px 12px; }
-  .tdp .tdp-rows .tdp-row > .tdp-name { grid-column: 1 / -1; }
-  .tdp .tdp-rows .tdp-size { grid-template-columns: auto minmax(40px, 1fr); align-items: center; gap: 10px; }
+  .tdp .tdp-cand { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 8px 12px; }
+  .tdp .tdp-cand > .tdp-name { grid-column: 1 / -1; }
+  .tdp .tdp-cand .tdp-size { grid-template-columns: auto minmax(40px, 1fr); align-items: center; gap: 10px; }
 }
-
-/* Drawers: season picker, review, outcome. */
-.tdp-drawer input[type=checkbox] { width: 20px; height: 20px; flex: none; margin: 0; accent-color: var(--accent); }
-.tdp-drawer .tdp-eyebrow { font-size: var(--fs-xs); font-weight: 600; color: var(--text-3); margin-bottom: 6px; }
-.tdp-drawer > .sub { margin-top: 2px; }
-.tdp-drawer .tdp-seasons { border: 0; margin: 14px 0 0; padding: 0; display: grid; }
-.tdp-drawer .tdp-season { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 2px; border-top: 1px solid var(--line); font-size: var(--fs-sm); cursor: pointer; }
-.tdp-drawer .tdp-season:first-of-type { border-top: 0; }
-.tdp-drawer .tdp-season.tdp-locked { opacity: 0.6; }
-.tdp-drawer .tdp-season-size { margin-left: auto; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.tdp-drawer .tdp-msg { margin-top: 12px; font-size: var(--fs-sm); color: var(--text-2); overflow-wrap: anywhere; }
-.tdp-drawer .tdp-msg:empty { display: none; }
-.tdp-drawer .tdp-actions { margin-top: 16px; justify-content: flex-end; }
-.tdp-drawer .tdp-actions .btn { min-height: 44px; min-width: 88px; }
-.tdp-drawer .tdp-files { margin-top: 14px; border-top: 1px solid var(--line); }
-.tdp-drawer .tdp-file { border-bottom: 1px solid var(--line); padding: 10px 0; overflow-wrap: anywhere; }
-.tdp-drawer .tdp-file > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 36px; cursor: pointer; font-size: var(--fs-sm); }
-.tdp-drawer .tdp-file > summary b { flex: 1 1 100%; font-weight: 600; }
-.tdp-drawer .tdp-file > summary .sub { font-size: var(--fs-xs); }
-.tdp-drawer .tdp-file.tdp-skipped > summary b { color: var(--text-3); font-weight: 500; }
-.tdp-drawer .tdp-path { margin-top: 6px; font-family: var(--mono); font-size: var(--fs-xs); color: var(--text-3); }
-.tdp-drawer .tdp-why { margin-top: 4px; font-size: var(--fs-xs); color: var(--text-2); }
-.tdp-drawer .tdp-hash { margin-top: 14px; font-family: var(--mono); font-size: var(--fs-xs); color: var(--text-3); }
-.tdp-drawer .banner { margin-top: 12px; }
