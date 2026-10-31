@@ -210,3 +210,38 @@ func TestRemoteDestinationsGuardedFormsAndSafeFailures(t *testing.T) {
 		t.Fatal("unsafe recent history")
 	}
 }
+
+func TestLegacyPaperlessLoginBeforeStreaming(t *testing.T) {
+	calls := []string{}
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.URL.Path)
+		switch r.URL.Path {
+		case "/api/token/":
+			r.ParseForm()
+			if r.Form.Get("username") != "example" || r.Form.Get("password") != "synthetic-password" {
+				t.Error("login shape")
+			}
+			w.Write([]byte(`{"token":"synthetic-api-key"}`))
+		case "/api/documents/post_document/":
+			if r.Header.Get("Authorization") != "Token synthetic-api-key" {
+				t.Error("missing exchanged token")
+			}
+			r.ParseMultipartForm(1024)
+			file, _, e := r.FormFile("document")
+			if e != nil {
+				t.Error(e)
+			} else {
+				file.Close()
+			}
+			w.Write([]byte(`"task-fixture"`))
+		default:
+			t.Error("unexpected endpoint")
+		}
+	}))
+	defer fake.Close()
+	registry, _, _ := configured(t, plugin.Config{"paperless_url": fake.URL, "paperless_user": "example", "paperless_password": "synthetic-password"})
+	result, e := registry.Upload(context.Background(), "uploads", "paperless", "example.pdf", 3, strings.NewReader("pdf"), "fixture-admin")
+	if e != nil || result.Name != "example.pdf" || len(calls) != 2 {
+		t.Fatalf("legacy login/upload: %+v %v", result, e)
+	}
+}

@@ -173,7 +173,11 @@ func (t hostTransport) RoundTrip(req *http.Request) (resp *http.Response, err er
 		}
 		return nil, errors.New("plugin HTTP request failed")
 	}
-	resp.Body = &cappedBody{body: resp.Body, left: MaxHTTPBody}
+	limit := int64(MaxHTTPBody)
+	if value, ok := req.Context().Value(responseLimitKey{}).(int64); ok && value > 0 && value <= 128<<20 {
+		limit = value
+	}
+	resp.Body = &cappedBody{body: resp.Body, left: limit}
 	return resp, nil
 }
 
@@ -184,6 +188,12 @@ type guardedTransport struct{ h *host }
 func (t guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req.URL == nil || (req.URL.Scheme != "http" && req.URL.Scheme != "https") || !t.h.permits(authority(req.URL)) || (req.Host != "" && !strings.EqualFold(req.Host, req.URL.Host)) {
 		return nil, errors.New("plugin outbound host is not configured")
+	}
+	if long, _ := req.Context().Value(longActionKey{}).(bool); long {
+		transport := t.h.transport.Clone()
+		transport.ResponseHeaderTimeout = 6 * time.Minute
+		defer transport.CloseIdleConnections()
+		return transport.RoundTrip(req)
 	}
 	return t.h.transport.RoundTrip(req)
 }

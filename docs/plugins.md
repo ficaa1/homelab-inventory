@@ -160,3 +160,41 @@ matches appear; credentials from Overseerr never authorize new destinations.
 The integration never invokes Overseerr's connection-test POST. Requests use
 `X-API-User` to act as the selected requester and verify current request and
 approval permissions before submitting.
+
+### Migration integrations
+
+Archive, Cloudflare, Security canaries and Tdarr are optional built-ins. Fresh
+installations leave them disabled. Admin backup previews name the integrations
+that legacy configuration will enable; restored configuration is applied only
+when the operator confirms replacement.
+
+| Integration | Active functionality | External state |
+| --- | --- | --- |
+| Archive | Policy status, paginated library/seeding, cached-release approvals, policy tags/scoring, queue controls, reviewed restore/purge | Existing media-policy service owns workers, leases, jobs and media |
+| Media | Per-title and per-season download/import progress, including import-history joins | Existing Arr services |
+| Network | Optional Prometheus metrics/probes, route-provider routes, inventory VPN facts, seeding-only qBittorrent reads, native bounded speed measurements/history | Existing exporters, route provider and qBittorrent |
+| Cloudflare | Zone identity/plan, paginated DNS and complete UTC day/week hourly analytics | Cloudflare zone (read permissions only) |
+| Security | Fake bearer/path canaries, durable deduplicated trip history and transition alerts | Local plugin cache; no credential values in trip history |
+| Tdarr | Status, compression candidates, exact library-file preview and guarded batch execution | Existing Tdarr, media-policy, Arr, Tautulli and shrink sidecar |
+| Uploads | Mounted folder (including a Copyparty-served folder), Calibre-Web, Paperless API token or legacy username/password login | Existing destination files and service databases |
+
+Plugin action IDs and fields are compiled into the binary. The browser renders
+plain forms, asks for explicit confirmation and never retries a submission.
+External changes require the separate operator credential; local Taste feedback
+uses normal administrator authentication. Plugins cannot accept arbitrary HTTP
+paths or commands. Unknown write outcomes require upstream inspection.
+
+Tdarr requires explicit Arr and Tdarr media roots and an optional protected-title
+identity list. It checks fresh library/lease state, exact Arr identities, eligible
+candidates, idle Plex and Tdarr, and the existing host-side `/validate` guard.
+Each reviewed preview expires after two minutes and is consumed once. A durable
+submission receipt is written before `/shrink`; matching receipts prevent replay
+after a restart. An uncertain or failed submission must be reconciled by an
+operator before manually removing its `submission-<plan-hash>.receipt`. The
+public source supplies no private library paths or protected title defaults.
+
+Network speed measurement uses owner-configured latency/upload and range-download
+endpoints. It runs only after an operator action, cancels on plugin shutdown,
+retains cooldown/backoff across restarts, and keeps bounded payload, concurrency
+and time limits. It can consume several gigabytes of traffic. No background
+measurement or measurement during restore is started.

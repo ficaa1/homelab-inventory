@@ -35,6 +35,9 @@ func byteSize(n float64) string {
 	return ""
 }
 func (m *Media) View(ctx context.Context, name string, _ url.Values) (plugin.View, error) {
+	if name == "activity" {
+		return m.libraryActivity(ctx), nil
+	}
 	if name != "now" && name != "library" {
 		return plugin.View{}, plugin.ErrNotFound
 	}

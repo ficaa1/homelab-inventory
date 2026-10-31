@@ -29,6 +29,7 @@ type stateFile struct {
 	Plugins map[string]json.RawMessage `json:"plugins"`
 }
 type entry struct {
+	seeds          Config
 	mediaRefresh   *mediaRefreshCache
 	op             sync.Mutex // serializes calls on a plugin instance
 	mu             sync.Mutex // protects cached status independently of live calls
@@ -94,6 +95,10 @@ func Open(data string, builtins []Builtin, logger *log.Logger) (r *Registry, err
 			opened.Close()
 		}
 	}(r)
+	seeds, seedErr := loadBackupSeeds(data)
+	if seedErr != nil {
+		return nil, seedErr
+	}
 	for _, b := range builtins {
 		if !idPattern.MatchString(b.ID) || b.New == nil || r.entries[b.ID] != nil {
 			return nil, errors.New("invalid or duplicate builtin plugin")
@@ -109,7 +114,7 @@ func Open(data string, builtins []Builtin, logger *log.Logger) (r *Registry, err
 		if p == nil {
 			return nil, errors.New("nil builtin plugin")
 		}
-		e := &entry{plugin: p, manifest: p.Manifest(), host: h, test: make(chan struct{}, 1), state: "disabled", stored: storedPlugin{Settings: Config{}}}
+		e := &entry{seeds: seeds[b.ID], plugin: p, manifest: p.Manifest(), host: h, test: make(chan struct{}, 1), state: "disabled", stored: storedPlugin{Settings: Config{}}}
 		r.entries[b.ID] = e
 		if e.manifest.ID != b.ID {
 			return nil, errors.New("builtin plugin ID mismatch")
@@ -122,7 +127,7 @@ func Open(data string, builtins []Builtin, logger *log.Logger) (r *Registry, err
 				return nil, errors.New("invalid stored plugin settings")
 			}
 		}
-		e.config, err = resolve(e.manifest, e.stored.Settings, e.stored.Enabled)
+		e.config, err = resolveWithSeeds(e.manifest, e.stored.Settings, e.stored.Enabled, e.seeds)
 		if err != nil {
 			e.state = "error"
 			var invalid *ValidationError
@@ -261,7 +266,7 @@ func (r *Registry) Update(id string, u Update) (ItemStatus, error) {
 	if u.Enabled != nil {
 		next.Enabled = *u.Enabled
 	}
-	cfg, err := resolve(e.manifest, next.Settings, next.Enabled)
+	cfg, err := resolveWithSeeds(e.manifest, next.Settings, next.Enabled, e.seeds)
 	if err != nil {
 		return ItemStatus{}, err
 	}
@@ -320,7 +325,7 @@ func (r *Registry) Test(ctx context.Context, id string, patch Config) (TestResul
 	defer e.op.Unlock()
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	cfg, err := resolve(e.manifest, Merge(e.stored.Settings, patch), true)
+	cfg, err := resolveWithSeeds(e.manifest, Merge(e.stored.Settings, patch), true, e.seeds)
 	if err != nil {
 		return TestResult{}, err
 	}

@@ -5141,6 +5141,22 @@ body.has-up-bubble main.wrap { padding-bottom: 88px; }
     } else {
       var blocks = Array.isArray(v.blocks) ? v.blocks : [];
       body = h("div", { class: "pv-blocks" });
+      (v.actions || []).forEach(function (a) {
+        var values = {}, controls = [], message = h("span", {role:"status"});
+        (a.fields || []).forEach(function(f) {
+          var input = (f.key === "items" || f.key === "selections") ? h("textarea") : f.type === "select" ? h("select") : h("input", {type:f.type === "bool" ? "checkbox" : f.type === "number" ? "number" : "text"});
+          (f.options || []).forEach(function(o) {input.appendChild(h("option",{value:o.value},[o.label]));});
+          controls.push(h("label",{},[f.label," ",input])); values[f.key] = function(){if (!f.required && f.type !== "bool" && input.value === "") return undefined; return f.type === "bool" ? input.checked : f.type === "number" ? Number(input.value) : input.value;};
+        });
+        var button = h("button",{class:"btn",type:"button",onclick:function(){
+          if (!confirm(a.label + "?" + (a.operator ? " This changes the external service." : ""))) return;
+          var fields = {}; Object.keys(values).forEach(function(k){fields[k]=values[k]();});
+          button.disabled=true; message.textContent="Working…";
+          (a.operator ? operatorWrite : write)("/plugins/"+encodeURIComponent(pv.plugin)+"/actions/"+encodeURIComponent(a.id),"POST",{confirmed:true,values:fields}).then(function(result){pv.data=result;renderPluginView();},function(e){button.disabled=false;message.textContent=e.message;});
+        }},[a.label]);
+        body.appendChild(h("details",{class:"card"},[h("summary",{},[a.label]),h("div",{class:"plug-group"},controls.concat([button,message]))]));
+      });
+
       if (err) body.appendChild(notice("warn", "Could not refresh: " + err.message + ". Showing the last view that loaded."));
       if (!blocks.length) body.appendChild(stateBox("Nothing to show yet", name + " returned an empty view."));
       appendBlocks(body, blocks, 1, "b");
@@ -7675,5 +7691,6 @@ body.has-up-bubble main.wrap { padding-bottom: 88px; }
   boot();
 })();
 </script>
+<!-- backup-ui -->
 </body>
 </html>

@@ -19,6 +19,7 @@ import (
 )
 
 type Uploads struct {
+	paperlessUser, paperlessPassword                  string
 	host                                              plugin.Host
 	folder, paperless, token, calibre, user, password string
 	folderMax, remoteMax                              int64
@@ -41,6 +42,8 @@ func (*Uploads) Manifest() plugin.Manifest {
 		{Key: "folder_path", Label: "Folder path", Type: plugin.Text, Group: "Folder", Help: "Absolute destination outside the API data directory; use /uploads in Docker."},
 		{Key: "folder_max_mb", Label: "Maximum file size (MiB)", Type: plugin.Number, Default: 100, Group: "Folder", Help: "Whole number from 1 to 2048."},
 		{Key: "paperless_url", Label: "URL", Type: plugin.URL, Group: "Paperless-ngx"},
+		{Key: "paperless_user", Label: "Username", Type: plugin.Text, Group: "Paperless-ngx"},
+		{Key: "paperless_password", Label: "Password", Type: plugin.Secret, Group: "Paperless-ngx"},
 		{Key: "paperless_token", Label: "API token", Type: plugin.Secret, Group: "Paperless-ngx"},
 		{Key: "calibre_url", Label: "URL", Type: plugin.URL, Group: "Calibre-Web"},
 		{Key: "calibre_user", Label: "Username", Type: plugin.Text, Group: "Calibre-Web"},
@@ -117,7 +120,7 @@ func (u *Uploads) Configure(c plugin.Config) error {
 		if paperless == "" {
 			return &plugin.FieldError{Key: "paperless_url", Message: "URL is required with a token"}
 		}
-		if token == "" {
+		if token == "" && (text(c, "paperless_user") == "" || text(c, "paperless_password") == "") {
 			return &plugin.FieldError{Key: "paperless_token", Message: "API token is required"}
 		}
 	}
@@ -143,6 +146,8 @@ func (u *Uploads) Configure(c plugin.Config) error {
 		return err
 	}
 	u.folder, u.paperless, u.token, u.calibre, u.user, u.password = folder, paperless, token, calibre, user, password
+	u.paperlessUser = text(c, "paperless_user")
+	u.paperlessPassword = text(c, "paperless_password")
 	u.folderMax, u.remoteMax = folderMax, remoteMax
 	return nil
 }
@@ -228,12 +233,14 @@ func (u *Uploads) View(_ context.Context, name string, _ url.Values) (plugin.Vie
 }
 func (u *Uploads) Close() error {
 	u.folder, u.paperless, u.token, u.calibre, u.user, u.password = "", "", "", "", "", ""
+	u.paperlessUser = ""
+	u.paperlessPassword = ""
 	u.recent = nil
 	u.loaded = false
 	return nil
 }
 func (u *Uploads) safe(s string) string {
-	for _, secret := range []string{u.token, u.password} {
+	for _, secret := range []string{u.token, u.password, u.paperlessPassword} {
 		if secret != "" {
 			s = strings.ReplaceAll(s, secret, "[redacted]")
 		}
@@ -267,7 +274,11 @@ func (u *Uploads) Test(ctx context.Context) plugin.TestResult {
 				}
 			}
 		case "paperless":
-			_, err = u.remote(checkCtx, u.host.HTTP(), "GET", u.paperless+"/api/", nil, 0, "", "Token "+u.token)
+			var token string
+			token, err = u.paperlessAuth(checkCtx)
+			if err == nil {
+				_, err = u.remote(checkCtx, plugin.WithoutRedirects(u.host.HTTP()), "GET", u.paperless+"/api/", nil, 0, "", "Token "+token)
+			}
 		case "calibre":
 			_, err = u.calibreLogin(checkCtx)
 		}

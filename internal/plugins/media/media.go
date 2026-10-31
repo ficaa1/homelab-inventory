@@ -40,7 +40,7 @@ func (*Media) Manifest() plugin.Manifest {
 		fields = append(fields, plugin.Field{Key: s.id + "_url", Label: "URL", Type: plugin.URL, Group: s.name}, plugin.Field{Key: s.id + "_key", Label: "API key", Type: plugin.Secret, Group: s.name})
 	}
 	fields = append(fields, plugin.Field{Key: "upcoming_days", Label: "Upcoming days", Type: plugin.Number, Default: 7, Help: "Days to show, from 1 to 30."})
-	return plugin.Manifest{ID: "media", Name: "Media", Description: "Read-only playback, downloads, upcoming releases and library summaries.", Version: "1", Settings: fields, Tab: &plugin.Tab{Title: "Media", Icon: "film", Views: []plugin.ViewRef{{Name: "now", Title: "Now"}, {Name: "library", Title: "Library"}}}}
+	return plugin.Manifest{ID: "media", Name: "Media", Description: "Read-only playback, downloads, upcoming releases and library summaries.", Version: "1", Settings: fields, Tab: &plugin.Tab{Title: "Media", Icon: "film", Views: []plugin.ViewRef{{Name: "now", Title: "Now"}, {Name: "library", Title: "Library"}, {Name: "activity", Title: "Import activity"}}}}
 }
 func (m *Media) Configure(c plugin.Config) error {
 	configured := []service{}
