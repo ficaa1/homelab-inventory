@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -57,8 +58,9 @@ func text(k, label string, required bool) plugin.Field {
 func (t *Integration) Manifest() plugin.Manifest {
 	profile := text("profile", "Household profile", true)
 	return plugin.Manifest{ID: "taste", Name: "Taste", Description: "Household recommendations, explicit verdicts and Letterboxd preferences", Version: "1", Settings: []plugin.Field{text("bindings", "Profile bindings JSON", true), {Key: "letterboxd_url", Label: "Letterboxd public endpoint", Type: plugin.URL}, text("twins_artifact", "Optional licensed JSON artifact filename", false)}, Tab: &plugin.Tab{Title: "Taste", Icon: "film", Views: []plugin.ViewRef{{Name: "picks", Title: "Picks"}, {Name: "known", Title: "Known"}, {Name: "familiar", Title: "Familiar"}, {Name: "watchlist", Title: "Watchlist"}, {Name: "import", Title: "Import and sync"}}}, Actions: []plugin.ActionSpec{
-		{ID: "feedback", Label: "Record verdict", Fields: []plugin.Field{profile, {Key: "kind", Label: "Kind", Type: plugin.Select, Required: true, Options: []plugin.Option{{Value: "movie", Label: "Film"}, {Value: "tv", Label: "Series"}}}, {Key: "id", Label: "TMDB ID", Type: plugin.Number, Required: true}, text("title", "Title", true), text("year", "Year", false), {Key: "verdict", Label: "Verdict (empty clears)", Type: plugin.Select, Options: []plugin.Option{{Value: "loved", Label: "Loved"}, {Value: "liked", Label: "Liked"}, {Value: "seen", Label: "Seen"}, {Value: "meh", Label: "Meh"}, {Value: "disliked", Label: "Disliked"}, {Value: "pass", Label: "Pass"}, {Value: "ignore", Label: "Ignore"}}}}},
+		{ID: "feedback", Label: "Record verdict", Fields: []plugin.Field{profile, {Key: "kind", Label: "Kind", Type: plugin.Select, Required: true, Options: []plugin.Option{{Value: "movie", Label: "Film"}, {Value: "tv", Label: "Series"}}}, {Key: "id", Label: "TMDB ID", Type: plugin.Number, Required: true}, text("title", "Title", true), text("year", "Year", false), {Key: "verdict", Label: "Verdict (empty clears)", Type: plugin.Select, Options: []plugin.Option{{Value: "", Label: "Clear verdict"}, {Value: "loved", Label: "Loved"}, {Value: "liked", Label: "Liked"}, {Value: "seen", Label: "Seen"}, {Value: "meh", Label: "Meh"}, {Value: "disliked", Label: "Disliked"}, {Value: "pass", Label: "Pass"}, {Value: "ignore", Label: "Ignore"}}}}},
 		{ID: "hide", Label: "Hide or restore recommendation", Fields: []plugin.Field{profile, text("kind", "movie or tv", true), {Key: "id", Label: "TMDB ID", Type: plugin.Number, Required: true}, {Key: "hidden", Label: "Hidden", Type: plugin.Bool}}},
+		{ID: "search", Label: "Find a title", Fields: []plugin.Field{profile, text("query", "Title to search", true)}},
 		{ID: "refresh", Label: "Refresh model", Fields: []plugin.Field{profile}},
 		{ID: "sync", Label: "Sync Letterboxd now", Fields: []plugin.Field{profile}},
 		{ID: "import", Label: "Import Letterboxd export ZIP (base64)", Fields: []plugin.Field{profile, text("export", "Base64 ZIP", true)}},
@@ -226,6 +228,20 @@ func (t *Integration) Action(ctx context.Context, action string, v plugin.Config
 			return plugin.View{}, errors.New("invalid title ID")
 		}
 		e = t.Hidden(ctx, id, str("kind"), int(n), v["hidden"] == true)
+	case "search":
+		query := strings.TrimSpace(str("query"))
+		if query == "" || len(query) > 100 {
+			return plugin.View{}, errors.New("query required")
+		}
+		rows, err := t.source.Search(ctx, query)
+		if err != nil {
+			return plugin.View{}, err
+		}
+		items := []plugin.Item{}
+		for _, r := range rows {
+			items = append(items, plugin.Item{Title: r.Title, Subtitle: r.Year, Meta: fmt.Sprint(r.Kind, ":", r.ID)})
+		}
+		return plugin.View{Title: "Taste search", UpdatedAt: t.host.Now(), Actions: t.Manifest().Actions, Blocks: []plugin.Block{{Type: "list", Title: "Matching titles", Items: items, Empty: "No matches"}}}, nil
 	case "refresh":
 		h.model.Refresh()
 	case "sync":
@@ -336,6 +352,23 @@ func (t *Integration) View(ctx context.Context, name string, q url.Values) (plug
 		if kind != "" && kind != "tv" && kind != "movie" {
 			return v, errors.New("invalid kind")
 		}
+		if name == "picks" && kind != "" {
+			if m := h.model.Model(); m != nil {
+				availability := map[string]string{}
+				for _, p := range rows {
+					availability[fmt.Sprint(p.Kind, ":", p.ID)] = p.Availability
+				}
+				rows = nil
+				for _, p := range m.Picks {
+					k := fmt.Sprint(p.Kind, ":", p.ID)
+					a := availability[k]
+					if a == "" {
+						a = "unknown"
+					}
+					rows = append(rows, engine.Pick{BrowseTitle: p.BrowseTitle, Reason: p.Reason, Rating: p.Rating, Availability: a, Because: p.Because, Seeds: p.Seeds})
+				}
+			}
+		}
 		for _, p := range rows {
 			key := fmt.Sprint(p.Kind, ":", p.ID)
 			if _, judged := verdicts[key]; (judged && name != "watchlist") || hidden[key] || (kind != "" && p.Kind != kind) {
@@ -345,9 +378,29 @@ func (t *Integration) View(ctx context.Context, name string, q url.Values) (plug
 		}
 		v.Blocks = append(v.Blocks, plugin.Block{Type: "notice", Tone: "info", Text: "Model status: " + r.Status})
 	}
-	if len(items) > 500 {
-		items = items[:500]
+	sort.SliceStable(items, func(i, j int) bool {
+		if name == "known" {
+			return items[i].Title < items[j].Title
+		}
+		return false
+	})
+	offset := 0
+	if raw := q.Get("offset"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 0 || n > len(items) {
+			return v, errors.New("invalid page")
+		}
+		offset = n
 	}
+	end := min(offset+500, len(items))
+	if end < len(items) {
+		params := map[string]string{"profile": id, "offset": strconv.Itoa(end)}
+		if k := q.Get("kind"); k != "" {
+			params["kind"] = k
+		}
+		v.Blocks = append(v.Blocks, plugin.Block{Type: "list", Title: "More", Items: []plugin.Item{{Title: "Next page", Link: &plugin.Link{View: name, Params: params}}}})
+	}
+	items = items[offset:end]
 	v.Blocks = append(v.Blocks, plugin.Block{Type: "list", Title: id + " · " + name, Items: items, Empty: "No titles yet"})
 	return v, nil
 }
@@ -461,4 +514,40 @@ func (t *Integration) Picks(ctx context.Context, profile, kind string, familiar 
 		out["built_at"] = m.BuiltAt
 	}
 	return out, nil
+}
+
+func (t *Integration) HiddenKeys(profile string) ([]string, error) {
+	h, e := t.household(profile)
+	if e != nil {
+		return nil, e
+	}
+	r, e := h.preferences.Apply(engine.Report{})
+	return r.Hidden, e
+}
+func (t *Integration) Similar(ctx context.Context, profile, kind string, id int) (engine.Report, error) {
+	h, e := t.household(profile)
+	if e != nil {
+		return engine.Report{}, e
+	}
+	title, e := t.source.Details(ctx, kind, id)
+	if e != nil {
+		return engine.Report{}, e
+	}
+	r, e := h.preferences.Apply(h.feed.Similar(ctx, title.BrowseTitle))
+	if e != nil {
+		return r, e
+	}
+	verdicts, e := h.feedback.Load()
+	if e != nil {
+		return r, e
+	}
+	filtered := r.Titles[:0]
+	for _, p := range r.Titles {
+		v, ok := verdicts[fmt.Sprint(p.Kind, ":", p.ID)]
+		if !ok || v.Verdict == "ignore" {
+			filtered = append(filtered, p)
+		}
+	}
+	r.Titles = filtered
+	return r, nil
 }

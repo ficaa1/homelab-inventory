@@ -404,6 +404,23 @@ func (s *server) duskTV(w http.ResponseWriter, r *http.Request) {
 		s.duskWrite(w, r, ctx, d, dev, op)
 		return
 	}
+	if s.plugins.TasteBound(dev.ProfileID) && (op == "discover" || strings.HasPrefix(op, "taste/") || strings.HasPrefix(op, "similar/")) {
+		var out any
+		var e error
+		if strings.HasPrefix(op, "similar/") {
+			out, e = s.plugins.TasteSimilar(ctx, dev.ProfileID, kind, id)
+		} else if strings.HasPrefix(op, "taste/") {
+			out, e = s.plugins.TastePicks(ctx, dev.ProfileID, kind, op == "taste/familiar")
+		} else {
+			out, e = s.plugins.TasteDiscovery(ctx, dev.ProfileID, false)
+		}
+		if e != nil {
+			writeError(w, 503, "Taste profile unavailable")
+			return
+		}
+		writeJSON(w, 200, out)
+		return
+	}
 	readOp := strings.Split(op, "/")[0]
 	if readOp == "taste" {
 		readOp = "discover"
@@ -426,9 +443,18 @@ func (s *server) duskTV(w http.ResponseWriter, r *http.Request) {
 	}
 	if titles, ok := out.(mediadata.Titles); ok {
 		titles = d.personal.Explicit(dev.ProfileID, titles)
+		if s.plugins.TasteBound(dev.ProfileID) {
+			hidden, e := s.plugins.TasteHiddenKeys(dev.ProfileID)
+			if e != nil {
+				writeError(w, 503, "Profile preferences unavailable")
+				return
+			}
+			titles.Hidden = hidden
+		}
 		out = titles
 	}
 	if detail, ok := out.(mediadata.Detail); ok {
+		d.decorateLegacy(&detail.Title)
 		detail.RequestsEnabled = caps["features"].(map[string]bool)["requests"]
 		b, _ := json.Marshal(detail)
 		v := map[string]any{}
@@ -502,6 +528,14 @@ func (s *server) duskWrite(w http.ResponseWriter, r *http.Request, ctx context.C
 			writeError(w, 400, "Invalid preference")
 			return
 		}
+		if s.plugins.TasteBound(dev.ProfileID) {
+			if s.plugins.TasteHidden(ctx, dev.ProfileID, v.Kind, v.ID, *v.Hidden) != nil {
+				writeError(w, 503, "Preference storage unavailable")
+				return
+			}
+			writeJSON(w, 200, map[string]string{"state": "ok"})
+			return
+		}
 		if d.personal.SetHidden(dev.ProfileID, v.Kind, v.ID, *v.Hidden) != nil {
 			writeError(w, 503, "Preference storage unavailable")
 			return
@@ -517,12 +551,29 @@ func (s *server) duskWrite(w http.ResponseWriter, r *http.Request, ctx context.C
 		if !tvBody(w, r, &v) {
 			return
 		}
+		if s.plugins.TasteBound(dev.ProfileID) {
+			if !validTitle(v.Kind, v.ID) || s.plugins.TasteFeedback(ctx, dev.ProfileID, v.Kind, v.ID, v.Verdict, v.Title, v.Year) != nil {
+				writeError(w, 400, "Invalid verdict")
+				return
+			}
+			writeJSON(w, 200, map[string]string{"state": "ok"})
+			return
+		}
 		if !validTitle(v.Kind, v.ID) || d.personal.Verdict(dev.ProfileID, v.Kind, v.ID, v.Verdict, v.Title, v.Year) != nil {
 			writeError(w, 400, "Invalid verdict")
 			return
 		}
 	case "discover/refresh":
 		if !tvBody(w, r, &struct{}{}) {
+			return
+		}
+		if s.plugins.TasteBound(dev.ProfileID) {
+			v, e := s.plugins.TasteDiscovery(ctx, dev.ProfileID, true)
+			if e != nil {
+				writeError(w, 503, "Taste profile unavailable")
+				return
+			}
+			writeJSON(w, 200, v)
 			return
 		}
 		v, e := s.plugins.MediaRead(ctx, "refresh", "", 0, "")
@@ -549,6 +600,10 @@ func (s *server) duskWrite(w http.ResponseWriter, r *http.Request, ctx context.C
 		}
 		if !validTitle(v.Kind, v.ID) || !v.Confirmed || v.Season < 0 || v.Season > 1000 || (v.Kind == "tv" && v.Season < 1) || (v.Kind == "movie" && v.Season != 0) || !duskOperationID.MatchString(v.Operation) {
 			writeError(w, 400, "Invalid confirmed request")
+			return
+		}
+		if state, exists := d.legacyRequest(v); exists {
+			writeJSON(w, 200, mediadata.RequestResult{State: state})
 			return
 		}
 		target := dev.ProfileID + ":" + v.Kind + ":" + strconv.Itoa(v.ID) + ":" + strconv.Itoa(v.Season)

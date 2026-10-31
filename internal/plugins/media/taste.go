@@ -150,6 +150,9 @@ func (o *Media) RecommendationsPage(ctx context.Context, kind string, id, page i
 	}
 	out := []tastedata.SuggestedTitle{}
 	for _, r := range *rows.Results {
+		if r.MediaType == "" {
+			r.MediaType = kind
+		}
 		if v, ok := r.suggested(kind); ok {
 			out = append(out, v)
 		}

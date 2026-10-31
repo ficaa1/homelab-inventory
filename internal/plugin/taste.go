@@ -87,3 +87,34 @@ func (r *Registry) TastePicks(ctx context.Context, profile, kind string, familia
 	}
 	return p.Picks(ctx, profile, kind, familiar)
 }
+
+func (r *Registry) TasteHiddenKeys(profile string) ([]string, error) {
+	e := r.entries["taste"]
+	if e == nil {
+		return nil, ErrNotFound
+	}
+	e.op.Lock()
+	defer e.op.Unlock()
+	p, ok := e.plugin.(interface {
+		HiddenKeys(string) ([]string, error)
+	})
+	if !ok || !e.stored.Enabled || !e.ready {
+		return nil, ErrNotFound
+	}
+	return p.HiddenKeys(profile)
+}
+func (r *Registry) TasteSimilar(ctx context.Context, profile, kind string, id int) (engine.Report, error) {
+	e := r.entries["taste"]
+	if e == nil {
+		return engine.Report{}, ErrNotFound
+	}
+	e.op.Lock()
+	defer e.op.Unlock()
+	p, ok := e.plugin.(interface {
+		Similar(context.Context, string, string, int) (engine.Report, error)
+	})
+	if !ok || !e.stored.Enabled || !e.ready {
+		return engine.Report{}, ErrNotFound
+	}
+	return p.Similar(ctx, profile, kind, id)
+}
