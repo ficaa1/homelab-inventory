@@ -279,3 +279,39 @@ func TestExplicitTastePrecedesHistoryWithThreeSeedBound(t *testing.T) {
 		t.Fatal(calls, err)
 	}
 }
+
+func TestImportedWatchlistSurvivesOutsideTrending(t *testing.T) {
+	s, _ := New(t.TempDir())
+	if _, err := s.Import("p", "Name,Year,Watchlist\nOutside trends,2020,true\nHidden,2020,true\nAvailable,2020,true\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Enrich(context.Background(), "p", func(_ context.Context, q string) ([]mediadata.Title, error) {
+		ids := map[string]int{"Outside trends": 1, "Hidden": 2, "Available": 3}
+		return []mediadata.Title{title(ids[q], q)}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetHidden("p", "movie", 2, true); err != nil {
+		t.Fatal(err)
+	}
+	available := title(3, "Available")
+	available.Poster = "/poster.jpg"
+	available.Availability = "available"
+	out, err := s.Apply(context.Background(), "p", mediadata.Discovery{Titles: []mediadata.Title{available}, Watchlist: []mediadata.Title{available, available}}, nil)
+	if err != nil || len(out.Watchlist) != 2 {
+		t.Fatal(out, err)
+	}
+	if out.Watchlist[0].ID != 3 || out.Watchlist[0].Poster != "/poster.jpg" || out.Watchlist[1].ID != 1 || out.Watchlist[1].Availability != "unknown" {
+		t.Fatal(out.Watchlist)
+	}
+}
+func TestSuccessfulSeedExpansionSetsEmptyStatus(t *testing.T) {
+	s, _ := New(t.TempDir())
+	_ = s.Verdict("p", "movie", 1, "liked", "Seed", "2020")
+	out, err := s.Apply(context.Background(), "p", mediadata.Discovery{}, func(context.Context, string, int) (mediadata.Discovery, error) {
+		return mediadata.Discovery{Titles: []mediadata.Title{title(2, "Pick")}}, nil
+	})
+	if err != nil || out.Status != "ok" {
+		t.Fatal(out, err)
+	}
+}

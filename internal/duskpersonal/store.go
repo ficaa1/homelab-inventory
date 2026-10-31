@@ -388,7 +388,45 @@ func (s *Store) Apply(ctx context.Context, profile string, report mediadata.Disc
 		return out
 	}
 	report.Recent = filter(report.Recent)
+
 	report.Watchlist = filter(report.Watchlist)
+	// Imported watchlists remain useful even when their titles leave trending.
+	metadata := map[string]mediadata.Title{}
+	for _, t := range allTitles(report) {
+		metadata[key(t.Kind, t.ID)] = t
+	}
+	watchSeen := map[string]bool{}
+	watchlist := []mediadata.Title{}
+	for _, t := range report.Watchlist {
+		k := key(t.Kind, t.ID)
+		if !watchSeen[k] && len(watchlist) < 100 {
+			watchSeen[k] = true
+			watchlist = append(watchlist, t)
+		}
+	}
+	keys := []string{}
+	for k, f := range v.Feedback {
+		if f.Verdict == "watchlist" {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if watchSeen[k] || v.Hidden[k] || len(watchlist) >= 100 {
+			continue
+		}
+		f := v.Feedback[k]
+		t, ok := metadata[k]
+		if !ok {
+			t = mediadata.Title{ID: f.ID, Kind: f.Kind, Title: f.Title, Year: f.Year, Availability: "unknown"}
+		}
+		watchSeen[k] = true
+		watchlist = append(watchlist, t)
+	}
+	report.Watchlist = watchlist
+	if report.Status == "" && len(report.Titles) > 0 {
+		report.Status = "ok"
+	}
 	return report, nil
 }
 func (s *Store) Taste(profile, kind string, report mediadata.Discovery, familiar bool) any {
