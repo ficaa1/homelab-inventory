@@ -58,12 +58,20 @@ func validTarget(t UploadTarget) bool {
 	}
 	return true
 }
+
+// The upload routes check a plugin's interface before taking its lock: a slow
+// call on another plugin (the Archive's seeding preview) would otherwise hold
+// up the upload bubble and the Uploaded list. e.plugin never changes.
 func (r *Registry) UploadTargets() []TargetStatus {
 	out := []TargetStatus{}
 	for _, id := range r.ids() {
 		e := r.entries[id]
+		u, ok := e.plugin.(Uploader)
+		if !ok {
+			continue
+		}
 		e.op.Lock()
-		if u, ok := e.plugin.(Uploader); ok && e.stored.Enabled && e.ready {
+		if e.stored.Enabled && e.ready {
 			for _, t := range u.UploadTargets() {
 				if validTarget(t) {
 					out = append(out, TargetStatus{e.manifest.ID, e.manifest.Name, t})
@@ -78,13 +86,15 @@ func (r *Registry) UploadTargets() []TargetStatus {
 func (r *Registry) FolderFiles(ctx context.Context) ([]FolderFile, error) {
 	for _, id := range r.ids() {
 		e := r.entries[id]
+		b, ok := e.plugin.(FolderBrowser)
+		if !ok {
+			continue
+		}
 		e.op.Lock()
 		if e.stored.Enabled && e.ready {
-			if b, ok := e.plugin.(FolderBrowser); ok {
-				out, err := b.FolderFiles(ctx)
-				e.op.Unlock()
-				return out, err
-			}
+			out, err := b.FolderFiles(ctx)
+			e.op.Unlock()
+			return out, err
 		}
 		e.op.Unlock()
 	}
@@ -93,13 +103,15 @@ func (r *Registry) FolderFiles(ctx context.Context) ([]FolderFile, error) {
 func (r *Registry) OpenFolderFile(ctx context.Context, name string) (io.ReadCloser, int64, error) {
 	for _, id := range r.ids() {
 		e := r.entries[id]
+		b, ok := e.plugin.(FolderBrowser)
+		if !ok {
+			continue
+		}
 		e.op.Lock()
 		if e.stored.Enabled && e.ready {
-			if b, ok := e.plugin.(FolderBrowser); ok {
-				f, size, err := b.OpenFolderFile(ctx, name)
-				e.op.Unlock()
-				return f, size, err
-			}
+			f, size, err := b.OpenFolderFile(ctx, name)
+			e.op.Unlock()
+			return f, size, err
 		}
 		e.op.Unlock()
 	}
