@@ -138,7 +138,7 @@
       var p = j.progress || {}, phase = j.phase, idx = STEPS.map(function (s) { return s[0]; }).indexOf(phase);
       html += '<div class="arc-eyebrow">' + pill(a.paused ? "held" : "running", a.paused ? "warning" : "good") +
         '<span>' + (j.manuallyApproved ? "Approved" : "Automatic") + ' · started ' + esc(elapsed(j.started)) + ' ago</span></div>' +
-        '<h3>' + esc(title(j.target)) + '</h3><div class="arc-code">' + esc(j.release.title) + '</div>';
+        '<h3>' + esc(title(j.target)) + '</h3><div class="arc-code">' + esc((j.release || {}).title) + '</div>';
       if (phase === "downloading" && p.bytesTotal > 0) {
         html += '<div class="arc-figs"><span><b>' + esc(gb(p.bytesTotal - (p.bytesLeft || 0))) + '</b> of ' + esc(gb(p.bytesTotal)) + '</span></div>';
       }
@@ -220,7 +220,7 @@
   }
 
   function breakdown(c) {
-    var s = c.score, n = function(v) { return Number(v || 0).toFixed(1).replace(/\.0$/, ''); };
+    var s = c.score || {}, n = function(v) { return Number(v || 0).toFixed(1).replace(/\.0$/, ''); };
     if (!s.mode) return '<div class="src">Details unavailable</div>';
     var remaining = 100, segments = [s.sizeFit, s.savings, s.seeders, s.group, s.features].map(function(v) {
       var width = Math.max(0, Math.min(remaining, Number(v) || 0)); remaining -= width;
@@ -250,17 +250,17 @@
       ' · ' + esc(d.mode === "2160p" || d.target.fourK ? "4K HDR" : "1080p or 4K HDR") + '</span>' +
       '<button class="btn" type="button" data-archive-action="search" data-archive-id="' + i + '"' + (v.archiveEnabled ? '' : ' disabled') + '>Search</button>' +
       (notice[key] ? '<span role="status">' + esc(notice[key]) + '</span>' : '') + '</div>';
-    if (!list.length) return html + (d.rejected && d.rejected["not freeleech"] ? '<div class="arc-v">' + d.rejected["not freeleech"] + ' non-freeleech</div>' : '') + '</div>';
+    if (!list.length) return html + (d.rejected && d.rejected["not freeleech"] ? '<div class="arc-v">' + esc(d.rejected["not freeleech"]) + ' non-freeleech</div>' : '') + '</div>';
     html += '<div class="arc-rel head"><span>Release</span><span>Size</span><span>GB/h</span><span>Seeders</span><span>Score</span><span>Auto pick</span><span></span></div>';
     html += shown.map(function (c, ci) {
       var pick = d.release && c.title === d.release.title && !c.rejection, mine = queued && queued.releaseId === c.id;
       var verdict = pick ? '<span class="arc-v ok">✓ auto pick</span>' : !c.rejection ? '<span class="arc-v ok">passes</span>' : reason(c.rejection);
       var detailID = "score-" + encodeURIComponent(key + ":" + c.indexerId + ":" + c.id), expanded = !!notice[detailID];
-      return '<div class="arc-release" data-key="' + esc(detailID) + '"><div class="arc-rel' + (mine ? ' queued' : pick ? ' pick' : '') + '"><div class="t">' + esc(c.title) + '<small>' + esc(c.group || 'unknown group') + ' · ' + esc(c.score.codec || '?') + (c.audioUnverified ? ' · audio unverified' : '') + '</small></div>' +
+      return '<div class="arc-release" data-key="' + esc(detailID) + '"><div class="arc-rel' + (mine ? ' queued' : pick ? ' pick' : '') + '"><div class="t">' + esc(c.title) + '<small>' + esc(c.group || 'unknown group') + ' · ' + esc((c.score || {}).codec || '?') + (c.audioUnverified ? ' · audio unverified' : '') + '</small></div>' +
         '<div class="c" data-k="size"><b>' + esc(gb(c.size)) + '</b><span class="sub">−' + (before > 0 ? Math.round((1 - c.size / before) * 100) : 0) + '%</span></div>' +
-        '<div class="c" data-k="GB/h">' + Number(c.score.gbPerHour).toFixed(1) + '</div>' +
+        '<div class="c" data-k="GB/h">' + Number((c.score || {}).gbPerHour).toFixed(1) + '</div>' +
         '<div class="c" data-k="seeders">' + esc(c.seeders) + '</div>' +
-        '<div class="c" data-k="score"><button class="btn arc-score-toggle" type="button" aria-expanded="' + expanded + '" aria-controls="' + detailID + '" data-score-toggle="' + detailID + '">Score ' + Number(c.score.total).toFixed(0) + '</button></div>' +
+        '<div class="c" data-k="score"><button class="btn arc-score-toggle" type="button" aria-expanded="' + expanded + '" aria-controls="' + detailID + '" data-score-toggle="' + detailID + '">Score ' + Number((c.score || {}).total).toFixed(0) + '</button></div>' +
         '<div class="c">' + verdict + '</div>' +
         '<div class="a">' + (mine ? '<span class="arc-v">queued</span>' : '<button class="btn' + (pick ? ' primary' : '') + '" type="button" data-archive-action="approve" data-archive-id="' + i + ':' + ci + '"' + (blocked ? ' disabled' : '') + '>Approve</button>') + '</div></div><div id="' + detailID + '" class="arc-breakdown' + (expanded ? '' : ' hidden') + '">' + breakdown(c) + '</div></div>';
     }).join('');
@@ -306,7 +306,7 @@
           if (reason && reasons.indexOf(reason) < 0) reasons.push(reason);
           return reason ? '' : '<button class="btn" type="button" data-archive-action="' + action + '" data-archive-id="' + esc(h.id) + '">' + (action === "restore" ? 'Restore' : 'Purge') + '</button>';
         }).join('');
-        return '<tr><td><b>' + esc(title(j.target)) + '</b><span class="arc-code">' + esc(j.release.title) + '</span><span class="sub">' +
+        return '<tr><td><b>' + esc(title(j.target)) + '</b><span class="arc-code">' + esc((j.release || {}).title) + '</span><span class="sub">' +
           (j.manuallyApproved ? 'Approved · ' : '') + esc(j.sidecarsCarried || 0) + ' subtitle file' + (j.sidecarsCarried === 1 ? '' : 's') + ' carried' + (j.sidecarMessage ? ' · ' + esc(j.sidecarMessage) : '') + '</span></td><td>' +
           esc(gb(before)) + ' → <b>' + esc(gb(after)) + '</b><div class="sub">' + (after == null ? 'not verified' : esc(gb(before - after)) + ' saved') + '</div></td><td>' +
           (h.status === 'ended' ? 'Library unchanged' : esc(date(h.undoUntil)) + '<div class="sub">original ' + (h.inRecycle == null ? 'unknown' : h.inRecycle ? 'in recycle bin' : 'gone') + '</div>') + '</td><td>' +
