@@ -983,9 +983,9 @@ pre.code {
 */
 :root {
   --dur-1: 140ms; --dur-2: 220ms; --dur-3: 280ms;
-  --ease-out: cubic-bezier(.22, 1, .36, 1);
-  --ease-in: var(--ease-out);
-  --ease-spring: var(--ease-out);
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease-in: cubic-bezier(.4, 0, .7, .2);
+  --ease-spring: cubic-bezier(.2, .8, .2, 1);
 }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
 /* Skeletons stand in where data is still on its way. */
