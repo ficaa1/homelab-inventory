@@ -1,0 +1,7 @@
+{
+  "kind": "movie",
+  "id": 123,
+  "season": 0,
+  "operation": "synthetic-operation-001",
+  "confirmed": true
+}

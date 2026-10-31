@@ -1,0 +1,19 @@
+{
+  "api_version": 1,
+  "server_name": "Homelab",
+  "device_id": "device-example",
+  "profile": {
+    "id": "profile-example",
+    "name": "Living room"
+  },
+  "features": {
+    "media": true,
+    "upcoming": true,
+    "discover": true,
+    "search": true,
+    "requests": false,
+    "taste": true,
+    "preferences": false,
+    "refresh": false
+  }
+}

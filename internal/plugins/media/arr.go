@@ -25,6 +25,7 @@ type mediaTitle struct {
 	}
 }
 type queueItem struct {
+	Episode                                                         *struct{ SeasonNumber int }
 	ID, SeriesID, MovieID                                           int
 	DownloadID, Status, TrackedDownloadStatus, TrackedDownloadState string
 	Size, Sizeleft                                                  float64

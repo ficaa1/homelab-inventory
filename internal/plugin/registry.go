@@ -29,6 +29,7 @@ type stateFile struct {
 	Plugins map[string]json.RawMessage `json:"plugins"`
 }
 type entry struct {
+	mediaRefresh   *mediaRefreshCache
 	op             sync.Mutex // serializes calls on a plugin instance
 	mu             sync.Mutex // protects cached status independently of live calls
 	test           chan struct{}
@@ -283,6 +284,7 @@ func (r *Registry) Update(id string, u Update) (ItemStatus, error) {
 	}
 	e.stored = next
 	e.config = cfg
+	e.mediaRefresh = nil
 	e.ready = next.Enabled
 	e.message = ""
 	e.failures = 0
