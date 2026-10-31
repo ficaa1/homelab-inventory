@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -127,5 +128,31 @@ func TestPrepareBackupPreservesNullableOverrides(t *testing.T) {
 	got, e = os.ReadFile(filepath.Join(dir, "state-plugins.json"))
 	if e != nil || !bytes.Contains(got, []byte(`"secret":null`)) || !bytes.Contains(got, []byte(`"unknown":7`)) {
 		t.Fatal("raw plugin settings changed", e, string(got))
+	}
+}
+func TestMigrateUploadOwnerPreservesExplicitIdentity(t *testing.T) {
+	for _, owner := range []string{"-1", "2345"} {
+		dir := t.TempDir()
+		if _, e := migrateBackupPlugins(dir, map[string]string{"UPLOAD_OWNER": owner, "UPLOAD_DIR": "/mounted-fixture"}, true); e != nil {
+			t.Fatal(e)
+		}
+		b, e := os.ReadFile(filepath.Join(dir, "state-plugins.json"))
+		if e != nil {
+			t.Fatal(e)
+		}
+		var state struct {
+			Plugins map[string]struct {
+				Settings map[string]any `json:"settings"`
+			} `json:"plugins"`
+		}
+		if e = json.Unmarshal(b, &state); e != nil {
+			t.Fatal(e)
+		}
+		expected, _ := strconv.ParseFloat(owner, 64)
+		for _, field := range []string{"folder_uid", "folder_gid"} {
+			if state.Plugins["uploads"].Settings[field] != expected {
+				t.Fatal("owner mapping lost", field, state.Plugins["uploads"].Settings)
+			}
+		}
 	}
 }

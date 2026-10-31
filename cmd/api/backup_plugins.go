@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -84,6 +85,14 @@ func migrateBackupPlugins(dir string, config map[string]string, private bool) ([
 					cfg["seed_hours"] = v.Hours()
 				}
 			case "uploads":
+				if owner, ok := config["UPLOAD_OWNER"]; ok {
+					value, e := strconv.ParseInt(owner, 10, 32)
+					if e != nil || value < -1 {
+						return nil, backup.ErrInvalid
+					}
+					cfg["folder_uid"] = value
+					cfg["folder_gid"] = value
+				}
 				enabled = config["UPLOAD_DIR"] != "" || config["PAPERLESS_USER"] != "" && config["PAPERLESS_PASSWORD"] != "" || config["CALIBRE_WEB_USER"] != "" && config["CALIBRE_WEB_PASSWORD"] != ""
 				if config["PAPERLESS_USER"] == "" || config["PAPERLESS_PASSWORD"] == "" {
 					delete(cfg, "paperless_url")
