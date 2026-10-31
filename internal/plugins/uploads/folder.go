@@ -53,13 +53,18 @@ func (u *Uploads) OpenFolderFile(ctx context.Context, name string) (io.ReadClose
 	if err != nil {
 		return nil, 0, errors.New("folder unavailable")
 	}
+	want, err := root.Lstat(name)
+	if err != nil || !want.Mode().IsRegular() {
+		root.Close()
+		return nil, 0, plugin.ErrNotFound
+	}
 	f, err := root.Open(name)
 	if err != nil {
 		root.Close()
 		return nil, 0, plugin.ErrNotFound
 	}
 	info, err := f.Stat()
-	if err != nil || !info.Mode().IsRegular() {
+	if err != nil || !info.Mode().IsRegular() || !os.SameFile(want, info) {
 		f.Close()
 		root.Close()
 		return nil, 0, plugin.ErrNotFound
