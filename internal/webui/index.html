@@ -1661,7 +1661,7 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
           <button class="tab" role="tab" data-panel="alerts" aria-selected="false" title="Alerts"><svg class="ic" aria-hidden="true"><use href="#i-bell"/></svg><span class="tl">Alerts</span><span class="count" id="c-alerts"></span></button>
           <button class="tab" role="tab" data-panel="hosts" aria-selected="false" title="Hosts"><svg class="ic" aria-hidden="true"><use href="#i-server"/></svg><span class="tl">Hosts</span><span class="count" id="c-hosts"></span></button>
           <button class="tab" role="tab" data-panel="ports" aria-selected="false" title="Ports"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg><span class="tl">Ports</span></button>
-          <button class="tab" role="tab" data-panel="admin" data-overflow aria-selected="false" title="Admin"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg><span class="tl">Admin</span></button>
+          <button class="tab" role="tab" data-panel="admin" aria-selected="false" title="Admin"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg><span class="tl">Admin</span></button>
           <button class="tab tab-more" role="tab" id="tab-more" type="button" aria-selected="false" aria-haspopup="true" aria-expanded="false" aria-controls="more-sheet" title="More"><svg class="ic" aria-hidden="true"><use href="#i-more"/></svg><span class="tl">More</span></button>
         </nav>
         <div class="actions-bar">
@@ -1768,6 +1768,7 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
         <!-- Who is signed in, when the session came from the provider. -->
         <div id="session-line" class="setting session-line hidden"></div>
         <div id="admin"></div>
+        <div id="plugin-admin-sections"></div>
         <!-- Sign-in: outside #admin for the same reason as the plugins below. -->
         <section id="signin" class="setting hidden" aria-labelledby="signin-h">
           <h4 id="signin-h"><svg class="ic" aria-hidden="true"><use href="#i-key"/></svg>Sign-in<span id="signin-state"></span></h4>
@@ -1834,6 +1835,7 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
   // opened. The fleet endpoints deliberately do not carry this.
   var hostCache = {};
   var route = { view: "fleet", tab: "home", host: "" };
+  var portsMount = null;
   var openGroups = {};      // group key -> collapsed state, kept across renders
   var portHost = "";        // which host the ports grid is showing
 
@@ -1973,7 +1975,15 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     // Where a failed sign-in lands; the gate reads the error from it.
     if (parts[0] === "login") return { view: "fleet", tab: "home", host: "", login: true };
     if (parts[0] === "home" || parts[0] === "alerts" || parts[0] === "hosts" ||
-        parts[0] === "ports" || parts[0] === "admin") {
+        parts[0] === "ports" || parts[0] === "admin" || parts[0] === "network" || parts[0] === "media") {
+      if (parts[0] === "ports" && pluginInfo("network")) return { view: "plugin", plugin: "network", pview: "", params: "", tab: route.tab, host: "" };
+      if (parts[0] === "network" && pluginInfo("network")) return { view: "plugin", plugin: "network", pview: "", params: "", tab: route.tab, host: "" };
+      if (parts[0] === "media" && mediaSections().length) {
+        var lastPlugin = String(groupLast.media || "").split("/")[0];
+        var last = mediaSections().filter(function (x) { return x.plugin + "/" + x.view === groupLast.media; })[0] || mediaSections().filter(function (x) { return x.plugin === lastPlugin; })[0] || mediaSections()[0];
+        return { view: "plugin", plugin: last.plugin, pview: last.view, params: "", tab: route.tab, host: "" };
+      }
+      if (parts[0] === "network") return { view: "fleet", tab: "ports", host: "" };
       return { view: "fleet", tab: parts[0], host: "", sub: parts[0] === "admin" && parts[1] === "plugins" ? "plugins" : "" };
     }
     return { view: "fleet", tab: "home", host: "" };
@@ -2280,6 +2290,18 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
   }
 
   var capabilities = {};
+  function applyBrand(name) {
+    name = String(name || "homelab-inventory").trim() || "homelab-inventory";
+    document.title = name;
+    var apple = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    if (apple) apple.setAttribute("content", name);
+    [".brand-word", "#gate h2"].forEach(function (sel) {
+      document.querySelectorAll(sel).forEach(function (el) { el.textContent = name; });
+    });
+    document.querySelectorAll(".setup-top").forEach(function (el) {
+      var logo = el.querySelector(".logo"); el.replaceChildren(logo || document.createTextNode(""), document.createTextNode(name));
+    });
+  }
   var PROMOTION_HINT = "Promotion is disabled — set OPERATOR_TOKEN or use the signer CLI";
   function offersEnabled() { return capabilities.agent_offers_enabled === true; }
   var agentStatus = null, agentBusy = false;
@@ -2621,6 +2643,26 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     }).join("");
     renderGrid("ports-grid", portHost);
     renderPortsTable();
+  }
+
+  // Built-in Ports is shared with the Network page. Moving the existing nodes
+  // keeps the grid/table implementation, keyboard handlers and state in one
+  // place; hiding Network restores the standalone tab for deployments without
+  // the Network plugin.
+  function mountPorts(root) {
+    if (!root) return;
+    if (portsMount && portsMount.root === root) return;
+    if (portsMount) unmountPorts();
+    var panel = $("panel-ports"), nodes = [];
+    while (panel && panel.firstChild) { var node = panel.firstChild; nodes.push(node); root.appendChild(node); }
+    portsMount = { root: root, panel: panel, nodes: nodes };
+    renderPortsPanel();
+  }
+  function unmountPorts() {
+    if (!portsMount) return;
+    var p = portsMount.panel;
+    portsMount.nodes.forEach(function (n) { p.appendChild(n); });
+    portsMount = null;
   }
 
   // ------------------------------------------------------------ host view
@@ -4572,10 +4614,26 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     if (!s) { $("admin").innerHTML = adminHostsHTML() + recentActionsHTML() + skeleton(4); renderActionLog(); return; }
 
     $("admin").innerHTML = adminHostsHTML() + recentActionsHTML() + adminVerdict(s) +
-      '<div class="admin-grid"><div>' + adminNotify(s) + adminLog(s) + "</div><div>" + adminStorage() + "</div></div>";
+      '<div class="admin-grid"><div>' + adminGeneral(s) + adminNotify(s) + adminLog(s) + "</div><div>" + adminStorage() + "</div></div>";
+    mountPluginAdmins();
     renderActionLog();
     wireStorage();
     wireAdmin();
+  }
+
+  function mountPluginAdmins() {
+    var box = $("plugin-admin-sections");
+    if (!box) return;
+    box.replaceChildren();
+    (capabilities.plugins || []).forEach(function (p) {
+      if (!p || !p.id || !PAGES[p.id] || typeof PAGES[p.id].admin !== "function") return;
+      var sec = h("section", { class: "setting plugin-admin", "data-plugin-admin": p.id }, [
+        h("h4", {}, [iconNode((p.tab && p.tab.icon) || "puzzle", "sm"), str(p.name) || p.id])]);
+      var body = h("div", { class: "plugin-admin-body" });
+      sec.appendChild(body); box.appendChild(sec);
+      try { PAGES[p.id].admin(body, { id: p.id, name: p.name, first: true }); }
+      catch (e) { body.appendChild(h("div", { class: "src", role: "alert", text: "Could not render this section." })); }
+    });
   }
 
   function storageSize(n) {
@@ -4628,6 +4686,16 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
       (s.error ? '<div class="src">' + esc(s.error) + '</div>' : '') +
       (s.nextPrune ? '<div class="src">Next prune ' + esc(new Date(s.nextPrune).toLocaleString()) + '</div>' : '') +
       '</div>' + (stale ? '<h4 style="margin-top:18px">Stale hosts</h4>' + stale : '') + '</section>';
+  }
+  function adminGeneral(s) {
+    return '<div class="setting"><h4>' + iconNode("sliders", "sm").outerHTML + 'Dashboard</h4>' +
+      '<p>Set the name shown in the browser, gate, desktop brand, and installed app.</p>' +
+      '<div class="form"><div><label for="a-dashboard-name">Dashboard name</label>' +
+      '<input id="a-dashboard-name" value="' + esc(s.dashboard_name || "homelab-inventory") + '" maxlength="80"></div>' +
+      '<div class="row"><label style="margin:0"><input type="checkbox" id="a-icons-fetch" style="width:auto"' +
+      (s.icons_fetch ? " checked" : "") + '> fetch launcher icons</label></div>' +
+      '<div class="src">Fetching tells a third-party icon repository which service slugs this dashboard uses. It is off unless enabled here or by ICONS_FETCH.</div>' +
+      '<div class="actions"><button class="btn" id="a-dashboard-save">Save</button><span id="a-dashboard-msg" class="src"></span></div></div></div>';
   }
   function storageRefresh() {
     return api("/storage/runs").then(function (s) { data.runStorage = s; renderAdmin(); renderKPIs(); });
@@ -4833,6 +4901,11 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
   }
 
   function wireAdmin() {
+    var general = $("a-dashboard-save");
+    if (general) general.addEventListener("click", function () {
+      saveSettings({ dashboard_name: $("a-dashboard-name").value.trim(), icons_fetch: $("a-icons-fetch").checked }, "a-dashboard-msg")
+        .then(function () { applyBrand(data.settings && data.settings.dashboard_name); });
+    });
     $("a-save").addEventListener("click", function () {
       saveSettings({
         notify_level: $("a-level").value,
@@ -4963,44 +5036,53 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     return ((info && info.tab && info.tab.views) || []).filter(function (v) { return v && VIEW_NAME.test(v.name); });
   }
 
-  // Tabs that share tab.group sit behind one sidebar entry, each a section of
-  // that page. A group of one is an ordinary tab.
-  var GROUP_ORDER = { media: ["archive", "tdarr", "taste", "media"] };
-  var GROUP_ICON = { media: "film" };
-  var groupLast = {};   // group -> the member plugin last shown
-  function groupMembers(group) {
-    var order = GROUP_ORDER[group] || [];
-    return pluginTabs().filter(function (p) { return p.tab.group === group; }).sort(function (a, b) {
-      var i = order.indexOf(a.id), j = order.indexOf(b.id);
-      return (i < 0 ? order.length : i) - (j < 0 ? order.length : j) || (a.id < b.id ? -1 : 1);
+  // Media is one flat row of deployment-neutral sections. The fallback view
+  // makes this work while a plugin manifest is being upgraded in place.
+  var groupLast = {};
+  function mediaSections() {
+    var defs = [
+      { key: "archive-status", title: "Archive", plugin: "archive", view: "status", icon: "archive" },
+      { key: "archive-library", title: "Library", plugin: "archive", view: "library", icon: "archive" },
+      { key: "tdarr", title: "Tdarr", plugin: "tdarr", view: "library", icon: "film" },
+      { key: "archive-seeding", title: "Seeding", plugin: "archive", view: "seeding", icon: "upload" },
+      { key: "taste", title: "Taste", plugin: "taste", view: "picks", icon: "film" }
+    ];
+    var out = defs.filter(function (d) { return !!pluginInfo(d.plugin); }).map(function (d) {
+      var info = pluginInfo(d.plugin), views = pluginViews(info), v = views.filter(function (x) { return x.name === d.view; })[0];
+      if (!v && views.length) d = Object.assign({}, d, { view: views[0].name });
+      return d;
     });
-  }
-  function groupOf(id) {
-    var p = pluginInfo(id), g = p && str(p.tab.group);
-    return g && VIEW_NAME.test(g) && groupMembers(g).length > 1 ? g : "";
-  }
-  function groupTitle(g) { return g.charAt(0).toUpperCase() + g.slice(1); }
-  // One entry per ungrouped tab and one per group, in tab order.
-  function navEntries() {
-    var seen = {}, out = [];
-    pluginTabs().forEach(function (p) {
-      var g = groupOf(p.id);
-      if (!g) { out.push({ id: p.id, group: "", title: str(p.tab.title), icon: p.tab.icon }); return; }
-      if (seen[g]) return;
-      seen[g] = true;
-      out.push({ id: groupMembers(g)[0].id, group: g, title: groupTitle(g), icon: GROUP_ICON[g] || p.tab.icon });
+    var media = pluginInfo("media");
+    if (media) pluginViews(media).forEach(function (v) {
+      out.push({ key: "media-" + v.name, title: v.name === "library" ? "Services" : str(v.title) || v.name, plugin: "media", view: v.name, icon: "film", extra: true });
     });
     return out;
   }
+  function groupOf(id) { return pluginInfo(id) && pluginInfo(id).tab.group === "media" ? "media" : ""; }
+  function navEntries() {
+    var out = [], seen = {};
+    pluginTabs().forEach(function (p) {
+      if (p.id === "cloudflare") return;
+      var g = groupOf(p.id);
+      if (g) { if (!seen[g]) { seen[g] = true; out.push({ id: "archive", group: g, title: "Media", icon: "film" }); } return; }
+      out.push({ id: p.id, group: "", title: str(p.tab.title), icon: p.tab.icon });
+    });
+    return out;
+  }
+  function mediaHash(section) { return pluginHash(section.plugin, section.view === (pluginViews(pluginInfo(section.plugin))[0] || {}).name ? "" : section.view, ""); }
   function entryHash(e) {
-    var id = e.group && groupLast[e.group] && pluginInfo(groupLast[e.group]) ? groupLast[e.group] : e.id;
-    return pluginHash(id, pluginLastView[id] || "", "");
+    if (e.group === "media") {
+      var sections = mediaSections(), lastPlugin = String(groupLast.media || "").split("/")[0], last = sections.filter(function (x) { return x.plugin + "/" + x.view === groupLast.media; })[0] || sections.filter(function (x) { return x.plugin === lastPlugin; })[0];
+      var first = last || sections[0];
+      return first ? mediaHash(first) : "#/media";
+    }
+    return pluginHash(e.id, pluginLastView[e.id] || "", "");
   }
   function entryOn(e) {
     return route.view === "plugin" && (e.group ? groupOf(route.plugin) === e.group : route.plugin === e.id);
   }
-  // The page header for a plugin: its views as tabs, and for a grouped plugin
-  // the group title with its members as sections above them.
+  // The page header for a plugin: media's flat section row, then a plugin's
+  // own sub-views only when it has more than one.
   function pluginHead(id, current, trailing, attrs) {
     var info = pluginInfo(id), views = pluginViews(info), g = groupOf(id);
     var name = info ? str(info.tab.title) || str(info.name) : id;
@@ -5009,11 +5091,11 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
         return h("button", { class: "btn", type: "button", "aria-pressed": on(x) ? "true" : "false", "data-fk": "seg-" + x.key, onclick: function () { pick(x); } }, [x.title]);
       }));
     };
-    var viewSeg = views.length > 1 ? seg(name + " views", views.map(function (x) { return { key: x.name, title: str(x.title) || x.name }; }),
+    var viewSeg = views.length > 1 && (!g || id === "taste") ? seg(name + " views", views.map(function (x) { return { key: x.name, title: str(x.title) || x.name }; }),
       function (x) { return x.key === current; }, function (x) { go(pluginHash(id, x.key === views[0].name ? "" : x.key, "")); }) : null;
-    var bar = [h("h2", { text: g ? groupTitle(g) : name })];
-    if (g) bar.push(seg(groupTitle(g) + " sections", groupMembers(g).map(function (p) { return { key: "g-" + p.id, id: p.id, title: str(p.tab.title) }; }),
-      function (x) { return x.id === id; }, function (x) { go(pluginHash(x.id, pluginLastView[x.id] || "", "")); }));
+    var bar = [h("h2", { text: g ? "Media" : name })];
+    if (g) bar.push(seg("Media sections", mediaSections().map(function (x) { return { key: x.key, section: x, title: x.title }; }),
+      function (x) { return x.section.plugin === id && x.section.view === current; }, function (x) { go(mediaHash(x.section)); }));
     else if (viewSeg) bar.push(viewSeg);
     if (trailing) bar.push(trailing);
     var head = h("div", attrs || { class: "pv-head" }, bar);
@@ -5029,9 +5111,13 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     Array.prototype.forEach.call(nav.querySelectorAll("[data-plugin]"), function (t) { t.remove(); });
     var tabs = navEntries();
     tabs.forEach(function (e) {
-      nav.insertBefore(h("button", { class: "tab", role: "tab", type: "button", "data-plugin": e.id, "data-group": e.group || null, "data-overflow": true,
+      var direct = e.id === "network" || e.group === "media";
+      nav.insertBefore(h("button", { class: "tab", role: "tab", type: "button", "data-plugin": e.id, "data-group": e.group || null, "data-overflow": direct ? null : true,
         "aria-selected": "false", title: e.title }, [iconNode(e.icon), h("span", { class: "tl", text: e.title })]), more);
     });
+    var network = !!pluginInfo("network");
+    var portsTab = document.querySelector('.tab[data-panel="ports"]');
+    if (portsTab) portsTab.classList.toggle("hidden", network);
     nav.classList.toggle("has-more", tabs.length > 0);
     syncNavSelection();
     fitTopbar();
@@ -5142,7 +5228,10 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
   // refreshes on its own schedule or when the refresh button is pressed.
   function openPluginView() {
     var g = groupOf(route.plugin);
-    if (g) groupLast[g] = route.plugin;
+    if (g) {
+      var info = pluginInfo(route.plugin), views = pluginViews(info);
+      groupLast[g] = route.plugin + "/" + (route.pview || (views[0] && views[0].name) || "");
+    }
     if (Object.prototype.hasOwnProperty.call(PAGES, route.plugin)) {
       if (pv.key) { var keep = activePage; activePage = null; leavePluginView(); activePage = keep; }
       showPage(route.plugin, PAGES[route.plugin]);
@@ -6660,7 +6749,7 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
   // X-Upload-Name. The server decides; the checks here only explain early
   // what it would refuse.
 
-  var up = { targets: [], files: [], queue: [], xhr: null, drag: 0, seen: true };
+  var up = { targets: [], files: [], queue: [], xhr: null, drag: 0, seen: true, pane: "upload", uploaded: null, uploadedErr: "" };
 
   function loadUploadTargets() {
     return api("/uploads/targets").then(function (list) {
@@ -6719,9 +6808,32 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
   function openUpSheet(files) {
     if (files && files.length) up.files = Array.prototype.slice.call(files);
     up.seen = true;
+    up.pane = "upload";
     if (!upSheetOpen()) openDrawer("", "Upload");
     renderUpSheet(true);
     renderUpBubble();
+  }
+
+  function folderTarget() { return up.targets.filter(function (t) { return t.id === "folder"; })[0] || null; }
+  function loadUploaded() {
+    up.uploadedErr = "";
+    return api("/uploads/files").then(function (list) { up.uploaded = Array.isArray(list) ? list : []; }, function (err) {
+      if (err.unauthorized) { showGate(true); return; }
+      up.uploaded = []; up.uploadedErr = err.message || "Unavailable";
+    }).then(function () { renderUpSheet(); });
+  }
+  function uploadedPane() {
+    var files = up.uploaded || [];
+    if (up.uploadedErr) return h("div", { class: "empty", text: up.uploadedErr });
+    if (!up.uploaded) return h("div", { class: "empty", text: "Loading…" });
+    return files.length ? h("ul", { class: "up-queue uploaded-list" }, files.map(function (f) {
+      var row = h("li", { class: "up-row" }, [iconNode("file", "sm"), h("span", { class: "nm", text: f.name }), h("span", { class: "st", text: sizeOf(f.size) })]);
+      row.appendChild(h("button", { class: "btn", type: "button", text: "Download", onclick: function () {
+        var headers = {"X-Requested-By":"homelab-inventory"}; if (token) headers.Authorization = "Bearer " + token;
+        fetch("/uploads/files/" + encodeURIComponent(f.name), { headers: headers }).then(function (r) { if (!r.ok) throw new Error("Download failed"); return r.blob(); }).then(function (b) { var u = URL.createObjectURL(b), a = document.createElement("a"); a.href = u; a.download = f.name; a.click(); setTimeout(function () { URL.revokeObjectURL(u); }, 1000); }).catch(function (e) { up.uploadedErr = e.message; renderUpSheet(); });
+      } }));
+      return row;
+    })) : h("div", { class: "empty", text: "No uploaded files yet." });
   }
 
   function sizeOf(n) { return n === 0 ? "0 B" : bytes(n); }
@@ -6735,6 +6847,17 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     if (!opening && !upSheetOpen()) return;
     var focusKey = document.activeElement && document.activeElement.getAttribute ? document.activeElement.getAttribute("data-up") : null;
     var kids = [], active = upActive();
+    var folder = folderTarget();
+    if (!up.files.length && folder) {
+      kids.push(h("div", { class: "up-tabs", role: "tablist" }, [
+        h("button", { class: "btn", type: "button", role: "tab", "aria-selected": up.pane === "upload" ? "true" : "false", text: "Upload", onclick: function () { up.pane = "upload"; renderUpSheet(); } }),
+        h("button", { class: "btn", type: "button", role: "tab", "aria-selected": up.pane === "uploaded" ? "true" : "false", text: "Uploaded", onclick: function () { up.pane = "uploaded"; renderUpSheet(); if (!up.uploaded) loadUploaded(); } })]));
+      if (up.pane === "uploaded") {
+        kids.push(h("h3", { text: "Uploaded" })); kids.push(uploadedPane());
+        kids.push(h("div", { class: "actions" }, [h("button", { class: "btn", type: "button", text: "Refresh", onclick: loadUploaded })]));
+        var uploadedSheet = h("div", { class: "up-sheet" }, kids); $("drawer-body").replaceChildren(uploadedSheet); return;
+      }
+    }
     if (up.files.length) {
       var files = up.files;
       kids.push(h("h3", { id: "up-title", text: files.length === 1 ? "Upload a file" : "Upload " + files.length + " files" }));
@@ -6969,6 +7092,7 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
       .then(function (r) {
         data.alerts = r[0]; data.hosts = r[1]; data.ports = r[2];
         data.services = r[3]; data.silences = r[4]; data.runStorage = r[5]; capabilities = r[6] || {};
+        applyBrand(capabilities.dashboard_name);
         hostCache = {};   // a refresh must not leave a host page showing an old run
         $("gate").classList.add("hidden");
         $("app").classList.remove("hidden");
@@ -7812,6 +7936,7 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     var p = activePage.page;
     activePage = null;
     try { if (p.hide) p.hide(); } catch (e) { /* a page failing to stop must not block navigation */ }
+    unmountPorts();
     $("plugin-body").textContent = "";
   }
 
@@ -7854,6 +7979,9 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
       var parts = pluginHead(id, current, trailing);
       return parts.length === 1 ? parts[0] : h("div", { class: "pv-heads" }, parts);
     },
+    mediaSections: mediaSections,
+    services: function () { return data.services; },
+    ports: function (root) { mountPorts(root); return true; },
     // Hand one file to the upload sheet for this plugin's own destination; the
     // sheet sends it with progress and errors. False when it is not configured.
     upload: function (id, target, file) {

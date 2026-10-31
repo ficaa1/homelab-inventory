@@ -10,7 +10,8 @@ registers itself and reaches the kit when shown).
   "use strict";
   (window.HI_PAGES = window.HI_PAGES || {}).example = {
     show: function (root, ctx) { /* ctx: id, view, params (URLSearchParams), first */ },
-    hide: function () { /* stop timers, abort fetches, revoke blob URLs */ }
+    hide: function () { /* stop timers, abort fetches, revoke blob URLs */ },
+    admin: function (root, ctx) { /* optional Admin section for this plugin */ }
   };
 })();
 ```
@@ -30,6 +31,14 @@ while `HI.visible()` is false). `window.HI` is the kit:
 | `openDrawer(html, label)`, `closeDrawer()` | the side sheet |
 | `go(hash)`, `link(id, view, params)` | navigation |
 | `upload(id, target, file)` | send a file to one of the plugin's upload targets through the upload sheet |
+| `ports(root)` | mount the core Ports grid/table into a page (used by Network) |
+| `services()` | return the current core service catalog for safe page joins |
+
+An enabled plugin page may also expose `admin(root, ctx)`. When Admin is open,
+the dashboard calls it for that plugin and renders the supplied section under
+the core settings. The hook is page-owned: it should use `HI.get`/`HI.send`,
+build DOM with `h`, and leave no timers or event handlers behind after the
+plugin is disabled or the page is hidden.
 
 The views in the tab come from the plugin's manifest, so keep its `Tab.Views`
 and the page's sections in step. The dashboard's CSP forbids inline handlers

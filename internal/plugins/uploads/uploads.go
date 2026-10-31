@@ -171,7 +171,7 @@ func (u *Uploads) Configure(c plugin.Config) error {
 func (u *Uploads) UploadTargets() []plugin.UploadTarget {
 	out := []plugin.UploadTarget{}
 	if u.folder != "" {
-		out = append(out, plugin.UploadTarget{ID: "folder", Label: "Folder", Help: "Save a file without replacing existing files.", MaxBytes: u.folderMax})
+		out = append(out, plugin.UploadTarget{ID: "folder", Label: "Uploads", Help: "Save a file without replacing existing files.", MaxBytes: u.folderMax})
 	}
 	if u.paperless != "" {
 		out = append(out, plugin.UploadTarget{ID: "paperless", Label: "Paperless-ngx", Accept: []string{".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".gif", ".txt"}, MaxBytes: u.remoteMax})

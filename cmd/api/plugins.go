@@ -30,11 +30,14 @@ func openPlugins(data string, logger *log.Logger) (*plugin.Registry, error) {
 	r, err := plugin.Open(data, builtInPlugins(), logger)
 	if err == nil {
 		r.BindTasteSource()
+		r.BindNetworkDNS()
 	}
 	return r, err
 }
 func (s *server) pluginRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /uploads/targets", s.auth(s.handleUploadTargets))
+	mux.HandleFunc("GET /uploads/files", s.auth(s.handleUploadFiles))
+	mux.HandleFunc("GET /uploads/files/{name}", s.auth(s.handleUploadFile))
 	mux.HandleFunc("POST /plugins/{id}/upload/{target}", s.auth(s.handlePluginUpload))
 	mux.HandleFunc("POST /plugins/{id}/actions/{action}", s.handlePluginAction)
 	mux.HandleFunc("GET /plugins", s.auth(s.handlePlugins))
@@ -46,7 +49,6 @@ func (s *server) pluginRoutes(mux *http.ServeMux) {
 		mux.HandleFunc(m+" /plugins/{id}/api/{path...}", s.auth(s.handlePluginAPI))
 	}
 }
-
 
 // handlePluginAPI serves a built-in plugin's own dashboard page. Mutations must
 // be JSON, which a cross-site form cannot send; sessions also pass auth's CSRF check.
@@ -144,6 +146,7 @@ func (s *server) handlePluginUpdate(w http.ResponseWriter, r *http.Request) {
 		s.pluginError(w, err)
 		return
 	}
+	s.plugins.BindNetworkDNS()
 	writeJSON(w, 200, out)
 }
 func (s *server) handlePluginTest(w http.ResponseWriter, r *http.Request) {

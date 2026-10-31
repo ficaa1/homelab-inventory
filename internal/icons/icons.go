@@ -96,6 +96,14 @@ type Cache struct {
 	mu sync.Mutex
 }
 
+// SetFetch changes the outbound lookup policy for future misses. Cached icons
+// remain available when fetching is turned off.
+func (c *Cache) SetFetch(fetch bool) {
+	c.mu.Lock()
+	c.Fetch = fetch
+	c.mu.Unlock()
+}
+
 // NewCache returns a cache with a short timeout — an icon is decoration, and
 // must never be able to hold up a page.
 func NewCache(store StateStore, fetch bool) *Cache {

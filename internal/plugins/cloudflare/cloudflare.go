@@ -45,6 +45,30 @@ func (p *Integration) Configure(c plugin.Config) error {
 	return nil
 }
 func (p *Integration) Close() error { p.token = ""; p.base = ""; return nil }
+
+func (p *Integration) DNSRecords(ctx context.Context) ([]plugin.DNSRecord, error) {
+	if err := p.resolveZone(ctx); err != nil {
+		return nil, err
+	}
+	var out struct {
+		Success bool `json:"success"`
+		Result  []struct {
+			Name, Type string
+			Proxied    bool
+		} `json:"result"`
+	}
+	if err := p.read(ctx, "/zones/"+p.zone+"/dns_records?per_page=100", nil, &out); err != nil || !out.Success {
+		if err != nil {
+			return nil, err
+		}
+		return nil, errors.New("DNS read refused")
+	}
+	result := make([]plugin.DNSRecord, 0, len(out.Result))
+	for _, r := range out.Result {
+		result = append(result, plugin.DNSRecord{Name: safe(r.Name, p.token), Type: safe(r.Type, p.token), Proxied: r.Proxied})
+	}
+	return result, nil
+}
 func (p *Integration) read(ctx context.Context, path string, body any, out any) error {
 	method := "GET"
 	var b []byte

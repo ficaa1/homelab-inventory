@@ -6,7 +6,7 @@
   var ID = "network";
   var REFRESH = 60000;
   var VIEW_LOADS = {
-    overview: ["summary", "metrics", "routes"],
+    overview: ["summary", "metrics", "routes", "torrents"],
     vpn: ["summary", "metrics"],
     traffic: ["metrics", "traffic"],
     routes: ["routes"],
@@ -313,21 +313,40 @@
   function routesCard(full) {
     var r = s.data.routes;
     if (!r) return card("hn-wide", "link", "Routes", [], [s.err.routes ? muted("Unavailable") : skel()]);
-    var routes = Array.isArray(r.routes) ? r.routes : [], stale = !!r.stale || !!s.err.routes;
+    var routes = Array.isArray(r.routes) ? r.routes : [], dns = Array.isArray(r.dns) ? r.dns : [], stale = !!r.stale || !!s.err.routes;
+    var catalog = HI.services && HI.services(), list = catalog ? (catalog.groups || []).reduce(function (a, g) { return a.concat(g.services || []); }, []).concat(catalog.missing || []) : [];
+    function targetService(target) {
+      var m = /^(?:https?:\/\/)?((?:\d{1,3}\.){3}\d{1,3}):(\d{1,5})/.exec(String(target || ""));
+      if (!m) return null;
+      var want = m[1] + ":" + Number(m[2]);
+      for (var i = 0; i < list.length; i++) {
+        var urls = [list[i].url].concat(list[i].alt_urls || []);
+        for (var j = 0; j < urls.length; j++) { var x = /^(?:https?:\/\/)?((?:\d{1,3}\.){3}\d{1,3}):(\d{1,5})/.exec(String(urls[j] || "")); if (x && x[1] + ":" + Number(x[2]) === want) return list[i]; }
+      }
+      return null;
+    }
+    var dnsBy = Object.create(null); dns.forEach(function (d) { var k = String(d.name || "").toLowerCase().replace(/\.$/, ""); (dnsBy[k] || (dnsBy[k] = [])).push(d); });
+    var dnsOK = r.cloudflareDns === "ok";
     var chips = [chip(r.status === "ok" ? String(routes.length) : "—")];
+    if (!dnsOK && r.cloudflareDns) chips.push(chip(/^needs /.test(r.cloudflareDns) ? r.cloudflareDns : "DNS —", r.cloudflareDns === "not configured" ? "" : "warn", "Cloudflare DNS: " + state(r.cloudflareDns)));
     if (stale && r.status !== "not configured") chips.push(ageChip(since(r.generatedAt) != null && !s.err.routes ? since(r.generatedAt) : s.when.routes ? (Date.now() - s.when.routes) / 1000 : null));
     var shown = full ? routes : routes.slice(0, 12);
     var rows = shown.map(function (x) {
+      var svc = targetService(x.target), records = dnsBy[String(x.hostname || "").toLowerCase()] || [];
       var f = [["Target", String(x.target || "").replace(/^https?:\/\//, "")]];
+      if (dnsOK) (records.length ? records : [{ type: "DNS", proxied: false, missing: true }]).forEach(function (d) { f.push(["DNS " + d.type, d.missing ? "—" : d.proxied ? "Proxied" : "DNS only"]); });
       if (x.sso != null) f.push(["SSO", x.sso ? "Yes" : "No"]);
       var host = String(x.hostname || "");
       return details("route-" + host + "-" + x.target, "hn-row hn-route", [
-        h("span", { class: "hn-glyph" }, [HI.iconNode("link")]),
-        h("span", { class: "hn-name" }, [h("b", { text: host }), h("span", { class: "hn-sub2", text: "→ " + x.target })]),
+        h("span", { class: "hn-glyph" }, [svc ? HI.iconNode(svc.icon_slug || svc.icon || "puzzle") : HI.iconNode("link")]),
+        h("span", { class: "hn-name" }, [h("b", { text: svc ? svc.name : host }), h("span", { class: "hn-sub2", text: svc ? host : "→ " + x.target })]),
+        dnsOK ? h("span", { class: "hn-mark " + (records.length ? "ok" : "warn"), title: records.length ? "DNS record" : "No DNS record", text: records.length ? "✓" : "!" }) : null,
         x.sso === true ? h("span", { class: "hn-mark ok", title: "SSO" }, [HI.iconNode("key", "sm")]) : null],
         [facts(f), /^[a-z0-9.-]+$/.test(host) ? h("a", { href: "https://" + host, target: "_blank", rel: "noopener noreferrer", text: "Open ↗" }) : null]);
     });
+    var loose = dns.filter(function (d) { return !d.matchesRoute; });
     var body = rows.length ? rows : [muted(r.status === "ok" ? "—" : state(r.status))];
+    if (loose.length) body.push(details("dns-unmatched", "hn-row", [h("span", { class: "hn-name", text: loose.length + " unmatched DNS records" })], [h("div", {}, loose.map(function (d) { return h("div", { class: "hn-dnsrow" }, [h("span", { text: d.name }), chip(d.type || "DNS"), d.proxied ? chip("proxied", "ok") : null]); }))]));
     if (!full && routes.length > shown.length) body.push(h("div", { class: "hn-more" }, [link("routes", "All " + routes.length + " routes")]));
     return card("hn-wide" + (stale ? " hn-stale" : ""), "link", "Routes", chips, body);
   }
@@ -528,15 +547,10 @@
     var ctrl = mine.ctrl = new AbortController(), timeout = setTimeout(function () { ctrl.abort(); }, 25000);
     if (SPEED_VIEWS[mine.view]) loadSpeed();
     mine.loading = true;
-    // One at a time: the plugin answers in turn, and the first answer can paint.
-    keys.reduce(function (p, key) {
-      return p.then(function () {
-        if (s !== mine) return;
-        return HI.get(ID, key, ctrl.signal).then(function (v) { mine.data[key] = v; mine.when[key] = Date.now(); delete mine.err[key]; },
-          function (e) { if (e && e.unauthorized) throw e; if (e && e.name === "AbortError" && !HI.visible()) return; mine.err[key] = (e && e.message) || "unavailable"; })
-          .then(function () { if (s === mine) render(); });
-      });
-    }, Promise.resolve()).catch(function () { }).then(function () {
+    Promise.all(keys.map(function (key) {
+      return HI.get(ID, key, ctrl.signal).then(function (v) { mine.data[key] = v; mine.when[key] = Date.now(); delete mine.err[key]; },
+        function (e) { if (e && e.unauthorized) throw e; if (e && e.name === "AbortError" && !HI.visible()) return; mine.err[key] = (e && e.message) || "unavailable"; });
+    })).catch(function () { }).then(function () {
       clearTimeout(timeout);
       mine.loading = false; mine.ctrl = null; mine.at = Date.now();
       if (s !== mine) return;
@@ -573,6 +587,7 @@
       if (!report() || source("wan")) main.push(wanCard());
       main.push(qualityCard());
       main.push(routesCard(false));
+      main.push(seedingCard());
     } else if (v === "vpn") {
       main = main.concat(vpnSection(true));
       main.push(qbitCard());
@@ -585,6 +600,7 @@
       main.push(seedingCard());
     }
     s.main.replaceChildren.apply(s.main, main);
+    if (v === "overview" && s.ports) HI.ports(s.ports);
     var head = HI.head(ID, v, stamp());
     s.head.replaceWith(head);
     s.head = head;
@@ -605,10 +621,13 @@
       if (!prev) document.addEventListener("visibilitychange", onVisible);
       s.head = h("div");
       s.main = h("div", { class: "hn-grid" + (view === "traffic" || view === "seeding" ? " hn-one" : "") });
+      s.ports = h("div", { class: "hn-ports" });
       var kids = [s.head];
       if (SPEED_VIEWS[view]) kids.push(speedCard());
       kids.push(s.main);
+      if (view === "overview") kids.push(s.ports);
       root.replaceChildren(h("div", { class: "hn" }, kids));
+      if (view === "overview") HI.ports(s.ports);
       render();
       load();
     },

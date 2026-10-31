@@ -27,6 +27,7 @@ var (
 
 type Network struct {
 	inventory                    func() ([]plugin.NetworkHost, error)
+	dnsRecords                   func(context.Context) ([]plugin.DNSRecord, error)
 	speed                        *speed.Speedtester
 	extra                        plugin.Config
 	host                         plugin.Host
@@ -37,6 +38,10 @@ type Network struct {
 	// Optional exporter names for the page's WAN, quality and VPN panels.
 	vpnContainer, diagPrefix, wanDevice string
 	answers                             map[string]answer
+}
+
+func (n *Network) SetDNSRecordsSource(source func(context.Context) ([]plugin.DNSRecord, error)) {
+	n.dnsRecords = source
 }
 
 var _ plugin.AlertSource = (*Network)(nil)
