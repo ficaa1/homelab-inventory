@@ -4,6 +4,7 @@ package dusk
 import (
 	"context"
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
+	"net"
 	"net/url"
 	"strings"
 )
@@ -12,6 +13,7 @@ type Dusk struct {
 	discovery *advertiser
 	response  string
 	host      plugin.Host
+	listen    func() (*net.UDPConn, error)
 }
 
 func New(h plugin.Host) plugin.Plugin { return &Dusk{host: h} }

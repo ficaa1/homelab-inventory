@@ -86,3 +86,11 @@ with host networking. Native installations need no network-mode change. This is
 optional; default installer networking is unchanged. Hardware/webOS multicast
 support and routed networks must be checked locally; manual URL entry works when
 discovery is unavailable.
+
+For the cross-repository UDP contract fixture, run
+`DUSK_DISCOVERY_MODULE=/absolute/path/to/dusk/service/discovery.js make`.
+It injects a loopback-only Go listener and redirects the real Node client's UDP
+send to `127.0.0.1:1900`; it never joins or sends to a multicast group. It checks
+response parsing, expiry metadata, disabling advertisements and closing the
+listener. Port 1900 on loopback must be available. Without that environment
+variable the cross-repository fixture is skipped; parser/lifecycle unit tests run.

@@ -87,7 +87,11 @@ func (d *Dusk) Start() error {
 	}
 	response := d.response
 	addr := &net.UDPAddr{IP: net.IPv4(239, 255, 255, 250), Port: 1900}
-	conn, err := net.ListenMulticastUDP("udp4", nil, addr)
+	listen := d.listen
+	if listen == nil {
+		listen = func() (*net.UDPConn, error) { return net.ListenMulticastUDP("udp4", nil, addr) }
+	}
+	conn, err := listen()
 	if err != nil {
 		if d.host != nil {
 			d.host.Logf("LAN discovery unavailable: check host multicast networking")
