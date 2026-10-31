@@ -100,6 +100,8 @@ func (r *Registry) Alerts() []alert.Alert {
 	return out
 }
 func (r *Registry) Loop(ctx context.Context) {
+	r.activate()
+	defer r.deactivate()
 	ticker := time.NewTicker(PollInterval)
 	defer ticker.Stop()
 	for {

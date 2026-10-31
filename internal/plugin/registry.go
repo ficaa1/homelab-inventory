@@ -41,6 +41,7 @@ type entry struct {
 	stored                     storedPlugin
 	config                     Config
 	ready                      bool
+	active                     bool
 	state, message             string
 	checked                    *time.Time
 	failures                   int
@@ -247,7 +248,7 @@ func (e *entry) configError(err error) error {
 func (e *entry) restore() {
 	e.host.configure(e.manifest, e.config)
 	if e.ready {
-		if err := e.plugin.Configure(cloneConfig(e.config)); err != nil {
+		if err := e.configureLive(e.config); err != nil {
 			e.ready = false
 			e.state = "error"
 			e.message = e.host.safe(err.Error())
@@ -303,7 +304,13 @@ func (r *Registry) Update(id string, u Update) (ItemStatus, error) {
 	e.alertPollSeen = false
 	e.alertPollOK = false
 	if next.Enabled {
-		e.state = "ok"
+		if err = e.start(); err != nil {
+			e.ready = false
+			e.state = "error"
+			e.message = e.host.safe(err.Error())
+		} else {
+			e.state = "ok"
+		}
 	} else {
 		e.state = "disabled"
 		e.alerts = nil
@@ -442,6 +449,56 @@ func (r *Registry) Close() {
 		e.mu.Lock()
 		_ = e.plugin.Close()
 		e.host.transport.CloseIdleConnections()
+		e.mu.Unlock()
+		e.op.Unlock()
+	}
+}
+
+// startPlugin runs only after configuration has become live, never while validating a patch.
+func startPlugin(p Plugin) error {
+	if s, ok := p.(interface{ Start() error }); ok {
+		return s.Start()
+	}
+	return nil
+}
+func (e *entry) start() error {
+	if !e.active {
+		return nil
+	}
+	return startPlugin(e.plugin)
+}
+func (e *entry) configureLive(c Config) error {
+	if err := e.plugin.Configure(cloneConfig(c)); err != nil {
+		return err
+	}
+	return e.start()
+}
+
+// Activate listeners only from the runtime worker loop, never preview registries.
+func (r *Registry) activate() {
+	for _, e := range r.entries {
+		e.op.Lock()
+		e.mu.Lock()
+		e.active = true
+		if e.ready {
+			if err := e.start(); err != nil {
+				e.ready = false
+				e.state = "error"
+				e.message = e.host.safe(err.Error())
+			}
+		}
+		e.mu.Unlock()
+		e.op.Unlock()
+	}
+}
+func (r *Registry) deactivate() {
+	for _, e := range r.entries {
+		e.op.Lock()
+		e.mu.Lock()
+		e.active = false
+		if _, ok := e.plugin.(interface{ Start() error }); ok {
+			_ = e.plugin.Close()
+		}
 		e.mu.Unlock()
 		e.op.Unlock()
 	}

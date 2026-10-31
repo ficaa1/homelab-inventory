@@ -187,3 +187,10 @@ Security's optional `RequestObserver` is called before normal routing and can
 only cause refusal. Real API, agent and operator credentials are excluded by
 core. Network receives `NetworkHost` projections through `BindNetworkSource`;
 plugins do not receive the inventory store or its private configuration.
+
+A plugin that owns a background listener may implement `Start() error`. Core calls
+it only after the runtime worker loop activates an enabled configuration, and on live updates/restoration; preview registries do not activate listeners;
+it is never called for staging validation or temporary Test settings. Configure
+must only validate and prepare listener settings. Start must replace/join prior
+workers, and Close must stop/join them and allow a later Start. Start errors surface as plugin errors; optional listeners may log a safe diagnostic
+and keep the main plugin available. Keep listeners opt-in and avoid exposing private data.
