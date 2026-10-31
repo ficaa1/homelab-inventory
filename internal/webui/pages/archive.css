@@ -278,3 +278,14 @@
   .arc-page button, .arc-page summary, .arc-sheet button, .arc-sheet .arc-picker label { min-height: 44px; min-width: 44px; box-sizing: border-box; }
   .arc-page .arc-reason > summary { display: inline-flex; align-items: center; }
 }
+
+/* Private parity: the Library's three tiles stay compact on narrow screens. */
+@media (max-width: 900px) {
+  .arc-page .arc-lib-kpis .tile { padding: 12px 10px; }
+  .arc-page .arc-lib-kpis .tile .value { font-size: 20px; }
+}
+@media (max-width: 640px) {
+  .arc-page .arc-lib-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .arc-page .arc-lib-kpis .tile .label { font-size: 12px; }
+  .arc-page .arc-lib-kpis .tile .sub { display: none; }
+}

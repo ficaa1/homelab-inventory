@@ -50,7 +50,7 @@ var _ plugin.AlertSource = (*Network)(nil)
 
 func New(h plugin.Host) plugin.Plugin { return &Network{host: h} }
 func (*Network) Manifest() plugin.Manifest {
-	return plugin.Manifest{ID: "network", Name: "Network", Description: "Read optional network metrics, routes and seeding health, and run bounded speed measurements.", Version: "1", Actions: []plugin.ActionSpec{speedAction()}, Tab: &plugin.Tab{Title: "Network", Icon: "network", Views: []plugin.ViewRef{{Name: "overview", Title: "Overview"}, {Name: "vpn", Title: "VPN"}, {Name: "traffic", Title: "Traffic"}, {Name: "routes", Title: "Routes"}, {Name: "seeding", Title: "Seeding"}, {Name: "speedtest", Title: "Speed test"}}}, Settings: []plugin.Field{
+	return plugin.Manifest{ID: "network", Name: "Network", Description: "Read optional network metrics, routes and seeding health, and run bounded speed measurements.", Version: "1", Actions: []plugin.ActionSpec{speedAction()}, Tab: &plugin.Tab{Title: "Network", Icon: "globe", Views: []plugin.ViewRef{{Name: "overview", Title: "Overview"}, {Name: "vpn", Title: "VPN"}, {Name: "traffic", Title: "Traffic"}, {Name: "routes", Title: "Routes"}, {Name: "seeding", Title: "Seeding"}, {Name: "speedtest", Title: "Speed test"}}}, Settings: []plugin.Field{
 		{Key: "routes_url", Label: "HTTP route-provider URL", Type: plugin.URL},
 		{Key: "qbit_url", Label: "qBittorrent URL", Type: plugin.URL},
 		{Key: "qbit_user", Label: "qBittorrent username", Type: plugin.Text},
