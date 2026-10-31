@@ -45,7 +45,7 @@ func actions() []plugin.ActionSpec {
 	}...)
 }
 func (*Integration) Manifest() plugin.Manifest {
-	return plugin.Manifest{ID: "archive", Name: "Archive", Description: "Control an existing media-policy service with explicit operator confirmation.", Version: "1", Actions: actions(), Settings: []plugin.Field{{Key: "policy_url", Label: "Media-policy URL", Type: plugin.URL, Required: true}, {Key: "policy_token", Label: "Bearer token", Type: plugin.Secret}}, Tab: &plugin.Tab{Title: "Archive", Icon: "archive", Views: []plugin.ViewRef{{Name: "status", Title: "Status"}, {Name: "library", Title: "Library"}, {Name: "seeding", Title: "Seeding"}, {Name: "selection", Title: "Selection"}}}}
+	return plugin.Manifest{ID: "archive", Name: "Archive", Description: "Control an existing media-policy service with explicit operator confirmation.", Version: "1", Actions: actions(), Settings: []plugin.Field{{Key: "policy_url", Label: "Media-policy URL", Type: plugin.URL, Required: true}, {Key: "policy_token", Label: "Bearer token", Type: plugin.Secret}}, Tab: &plugin.Tab{Title: "Archive", Icon: "archive", Views: []plugin.ViewRef{{Name: "status", Title: "Status"}, {Name: "library", Title: "Library"}, {Name: "seeding", Title: "Seeding"}, {Name: "selection", Title: "Scoring"}}}}
 }
 func (p *Integration) Configure(c plugin.Config) error {
 	base, _ := c["policy_url"].(string)
