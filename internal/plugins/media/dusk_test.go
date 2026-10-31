@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -132,5 +133,40 @@ func TestDuskUnavailableFeedKeepsNullCounts(t *testing.T) {
 	dl := v["downloads"].(map[string]any)
 	if dl["titles"] == nil {
 		t.Fatal("missing empty titles")
+	}
+}
+
+func TestDuskGuardRejectsCrossAuthorityRedirect(t *testing.T) {
+	var escaped atomic.Int32
+	sink := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		escaped.Add(1)
+		t.Error("TV operation followed cross-authority redirect")
+	}))
+	defer sink.Close()
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Api-Key") != "synthetic-secret" {
+			t.Error("origin missing configured credential")
+		}
+		http.Redirect(w, r, sink.URL+"/capture", http.StatusTemporaryRedirect)
+	}))
+	defer origin.Close()
+	var mediaInstance *Media
+	registry, err := plugin.Open(t.TempDir(), []plugin.Builtin{{ID: "media", New: func(h plugin.Host) plugin.Plugin { mediaInstance = New(h).(*Media); return mediaInstance }}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer registry.Close()
+	on := true
+	if _, err := registry.Update("media", plugin.Update{Enabled: &on, Settings: plugin.Config{"overseerr_url": origin.URL, "overseerr_key": "synthetic-secret"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mediaInstance.TVRead(context.Background(), "title", "movie", 42, ""); err == nil {
+		t.Fatal("redirect returned successful metadata")
+	}
+	if _, err := mediaInstance.TVOptions(context.Background()); err == nil {
+		t.Fatal("redirect returned successful request choices")
+	}
+	if escaped.Load() != 0 {
+		t.Fatal("credential-bearing TV operation reached unconfigured authority")
 	}
 }

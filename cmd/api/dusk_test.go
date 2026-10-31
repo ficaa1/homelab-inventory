@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -69,9 +70,14 @@ func (h *duskHTTPTest) features(token string) map[string]any {
 }
 func TestDuskHTTPPairingPoliciesIsolationAndRestart(t *testing.T) {
 	var posts atomic.Int32
+	var outage atomic.Bool
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("X-Api-Key") != "synthetic-upstream-secret" {
 			t.Error("upstream credential missing")
+		}
+		if outage.Load() {
+			w.WriteHeader(503)
+			return
 		}
 		switch r.URL.Path {
 		case "/api/v1/user":
@@ -133,6 +139,12 @@ func TestDuskHTTPPairingPoliciesIsolationAndRestart(t *testing.T) {
 	if h.features(token)["discover"] != true || h.features(token)["requests"] != false {
 		t.Fatal("configured capability policy incorrect")
 	}
+	outage.Store(true)
+	h.call("GET", "/tv/v1/search?q=outage", token, nil, 502)
+	if h.features(token)["discover"] != true || h.features(token)["search"] != true {
+		t.Fatal("temporary outage removed configured capabilities")
+	}
+	outage.Store(false)
 	for _, path := range []string{"/dusk/admin", "/plugins", "/hosts", "/settings"} {
 		h.call("GET", path, token, nil, 401)
 	}
@@ -166,13 +178,36 @@ func TestDuskHTTPPairingPoliciesIsolationAndRestart(t *testing.T) {
 	h.call("GET", "/tv/v1/taste/picks?kind=movie", token, nil, 200)
 	h.call("POST", "/tv/v1/discover/refresh", token, map[string]any{}, 200)
 	request := map[string]any{"kind": "movie", "id": 42, "season": 0, "operation": "synthetic-operation-01", "confirmed": true}
-	out := h.call("POST", "/tv/v1/request", token, request, 200)
-	if out["state"] != "pending" {
-		t.Fatalf("request result %v", out)
+	start := make(chan struct{})
+	results := make(chan map[string]any, 2)
+	var requests sync.WaitGroup
+	for _, credential := range []string{token, second} {
+		requests.Add(1)
+		go func(credential string) {
+			defer requests.Done()
+			<-start
+			results <- h.call("POST", "/tv/v1/request", credential, request, 200)
+		}(credential)
 	}
-	h.call("POST", "/tv/v1/request", second, request, 200)
-	if posts.Load() != 1 {
-		t.Fatal("duplicate device request wrote twice")
+	close(start)
+	requests.Wait()
+	close(results)
+	pending := false
+	for result := range results {
+		if result["state"] != "pending" && result["state"] != "unknown" {
+			t.Fatalf("concurrent result %v", result)
+		}
+		pending = pending || result["state"] == "pending"
+	}
+	if !pending || posts.Load() != 1 {
+		t.Fatalf("concurrent requests wrote %d times", posts.Load())
+	}
+	collision := map[string]any{"kind": "movie", "id": 43, "season": 0, "operation": "synthetic-operation-01", "confirmed": true}
+	h.call("POST", "/tv/v1/request", second, collision, 409)
+	sameTitle := map[string]any{"kind": "movie", "id": 42, "season": 0, "operation": "synthetic-operation-new", "confirmed": true}
+	out := h.call("POST", "/tv/v1/request", second, sameTitle, 200)
+	if out["state"] != "pending" || posts.Load() != 1 {
+		t.Fatal("new operation duplicated successful title request")
 	}
 	ambiguous := map[string]any{"kind": "movie", "id": 43, "season": 0, "operation": "synthetic-operation-02", "confirmed": true}
 	out = h.call("POST", "/tv/v1/request", token, ambiguous, 200)
@@ -240,5 +275,67 @@ func TestDuskAdminBrowserCSRF(t *testing.T) {
 		if res.StatusCode != tc.want {
 			t.Fatalf("csrf %q got %d want %d", tc.csrf, res.StatusCode, tc.want)
 		}
+	}
+}
+
+func TestDuskAdminSelectsHistoryProfile(t *testing.T) {
+	var historyCalls atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v2" {
+			fmt.Fprint(w, `{"results":[]}`)
+			return
+		}
+		if r.URL.Query().Get("apikey") != "synthetic-history-secret" {
+			t.Error("wrong playback credential")
+		}
+		switch r.URL.Query().Get("cmd") {
+		case "get_users":
+			fmt.Fprint(w, `{"response":{"result":"success","data":[{"user_id":"17","friendly_name":"Synthetic viewer","email":"private@example.org"}]}}`)
+		case "get_history":
+			historyCalls.Add(1)
+			if r.URL.Query().Get("user_id") != "17" {
+				t.Error("wrong selected history profile")
+			}
+			fmt.Fprint(w, `{"response":{"result":"success","data":{"data":[]}}}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+	s := authServer(t)
+	var err error
+	s.plugins, err = openPlugins(s.store.Dir(), s.log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.plugins.Close()
+	h := &duskHTTPTest{t: t, s: s, http: httptest.NewServer(s.routes())}
+	defer h.http.Close()
+	h.call("PUT", "/plugins/dusk", s.token, map[string]any{"enabled": true, "settings": map[string]any{"discovery": true}}, 200)
+	h.call("PUT", "/plugins/media", s.token, map[string]any{"enabled": true, "settings": map[string]any{"tautulli_url": upstream.URL, "tautulli_key": "synthetic-history-secret", "overseerr_url": upstream.URL, "overseerr_key": "synthetic-metadata-secret"}}, 200)
+	first := h.profile("First")
+	other := h.profile("Other")
+	token, _ := h.pair(first, []string{"discover"})
+	different, _ := h.pair(other, []string{"discover"})
+	h.call("GET", "/dusk/enrichment", token, nil, 401)
+	h.call("PUT", "/dusk/enrichment/"+first, token, map[string]any{"user_id": 17}, 401)
+	h.call("PUT", "/dusk/enrichment/"+first, s.token, map[string]any{"user_id": 99}, 422)
+	h.call("PUT", "/dusk/enrichment/"+first, s.token, map[string]any{"user_id": 17}, 200)
+	h.call("GET", "/tv/v1/discover", different, nil, 200)
+	if historyCalls.Load() != 0 {
+		t.Fatal("history selection crossed household profiles")
+	}
+	h.call("GET", "/tv/v1/discover", token, nil, 200)
+	if historyCalls.Load() != 1 {
+		t.Fatal("selected playback history not consumed")
+	}
+	admin := h.call("GET", "/dusk/admin", s.token, nil, 200)
+	if admin["enrichment"].(map[string]any)[first] != float64(17) {
+		t.Fatal("history selection not saved")
+	}
+	h.call("PUT", "/dusk/enrichment/"+first, s.token, map[string]any{"user_id": 0}, 200)
+	h.call("GET", "/tv/v1/discover", token, nil, 200)
+	if historyCalls.Load() != 1 {
+		t.Fatal("cleared selection still queried history")
 	}
 }
