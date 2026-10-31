@@ -279,7 +279,7 @@ func (s *Store) Apply(ctx context.Context, profile string, report mediadata.Disc
 	}
 	seeds := []feedback{}
 	for _, f := range v.Feedback {
-		if positive(f.Verdict) {
+		if positive(f.Verdict) && !v.Hidden[key(f.Kind, f.ID)] {
 			seeds = append(seeds, f)
 		}
 	}
@@ -289,11 +289,32 @@ func (s *Store) Apply(ctx context.Context, profile string, report mediadata.Disc
 		}
 		return key(seeds[i].Kind, seeds[i].ID) < key(seeds[j].Kind, seeds[j].ID)
 	})
+
+	history := map[string]bool{}
+	sources := map[string]string{}
+	for _, f := range seeds {
+		sources[key(f.Kind, f.ID)] = "taste"
+	}
+	for _, t := range report.Recent {
+		if !valid(t.Kind, t.ID) {
+			continue
+		}
+		k := key(t.Kind, t.ID)
+		history[k] = true
+		if len(seeds) >= 3 || sources[k] != "" || v.Hidden[k] {
+			continue
+		}
+		if f, ok := v.Feedback[k]; ok && !positive(f.Verdict) {
+			continue
+		}
+		seeds = append(seeds, feedback{Kind: t.Kind, ID: t.ID, Title: t.Title, Year: t.Year})
+		sources[k] = "plex"
+	}
 	candidates := append([]mediadata.Title{}, report.Titles...)
 	affinity := map[string]int{}
 	seedFeatures := map[string]bool{}
 	for _, t := range allTitles(report) {
-		if positive(v.Feedback[key(t.Kind, t.ID)].Verdict) {
+		if sources[key(t.Kind, t.ID)] != "" {
 			for x := range features(t) {
 				seedFeatures[x] = true
 			}
@@ -303,7 +324,7 @@ func (s *Store) Apply(ctx context.Context, profile string, report mediadata.Disc
 		if i >= 3 {
 			break
 		}
-		report.Seeds = append(report.Seeds, mediadata.Seed{Key: key(f.Kind, f.ID), Title: f.Title, Kind: f.Kind, Source: "taste"})
+		report.Seeds = append(report.Seeds, mediadata.Seed{Key: key(f.Kind, f.ID), Title: f.Title, Kind: f.Kind, Source: sources[key(f.Kind, f.ID)]})
 		if similar == nil {
 			continue
 		}
@@ -329,7 +350,7 @@ func (s *Store) Apply(ctx context.Context, profile string, report mediadata.Disc
 	score := map[string]int{}
 	for _, t := range candidates {
 		k := key(t.Kind, t.ID)
-		if !valid(t.Kind, t.ID) || seen[k] || v.Hidden[k] {
+		if !valid(t.Kind, t.ID) || seen[k] || v.Hidden[k] || history[k] {
 			continue
 		}
 		seen[k] = true
@@ -343,7 +364,7 @@ func (s *Store) Apply(ctx context.Context, profile string, report mediadata.Disc
 		}
 		score[k] += affinity[k]
 		if affinity[k] > 0 {
-			t.Because = append(t.Because, "Similar to titles you liked")
+			t.Because = append(t.Because, "Similar to your viewing and taste")
 		}
 		out = append(out, t)
 	}

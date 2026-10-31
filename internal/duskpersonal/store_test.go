@@ -226,3 +226,56 @@ func TestEnrichSearchProgressPersistenceAndMatching(t *testing.T) {
 		t.Fatal("profile leak")
 	}
 }
+
+func TestRecentHistorySeedsAndDislikeOverride(t *testing.T) {
+	s, _ := New(t.TempDir())
+	history := []mediadata.Title{title(1, "Recent"), title(2, "Disliked"), title(3, "Hidden"), title(4, "Other recent")}
+	if err := s.Verdict("p", "movie", 2, "disliked", "Disliked", "2020"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetHidden("p", "movie", 3, true); err != nil {
+		t.Fatal(err)
+	}
+	r := mediadata.Discovery{Recent: history, Titles: []mediadata.Title{title(1, "Recent"), title(10, "New")}}
+	calls := []int{}
+	out, err := s.Apply(context.Background(), "p", r, func(_ context.Context, _ string, id int) (mediadata.Discovery, error) {
+		calls = append(calls, id)
+		return mediadata.Discovery{Titles: []mediadata.Title{title(20+id, "Recommended")}}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 2 || calls[0] != 1 || calls[1] != 4 {
+		t.Fatal(calls)
+	}
+	if len(out.Seeds) != 2 || out.Seeds[0].Source != "plex" {
+		t.Fatal(out.Seeds)
+	}
+	for _, x := range out.Titles {
+		if x.ID == 1 {
+			t.Fatal("history recommended again")
+		}
+	}
+	if len(out.Recent) != 3 {
+		t.Fatal("recent history lost", out.Recent)
+	}
+	s.mu.Lock()
+	v := s.snapshot("p")
+	s.mu.Unlock()
+	if len(v.Feedback) != 1 {
+		t.Fatal("history persisted as fake feedback", v)
+	}
+}
+func TestExplicitTastePrecedesHistoryWithThreeSeedBound(t *testing.T) {
+	s, _ := New(t.TempDir())
+	_ = s.Verdict("p", "movie", 99, "loved", "Favorite", "2020")
+	r := mediadata.Discovery{Recent: []mediadata.Title{title(1, "One"), title(2, "Two"), title(3, "Three")}}
+	calls := []int{}
+	_, err := s.Apply(context.Background(), "p", r, func(_ context.Context, _ string, id int) (mediadata.Discovery, error) {
+		calls = append(calls, id)
+		return mediadata.Discovery{}, nil
+	})
+	if err != nil || len(calls) != 3 || calls[0] != 99 || calls[1] != 1 || calls[2] != 2 {
+		t.Fatal(calls, err)
+	}
+}
