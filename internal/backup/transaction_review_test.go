@@ -44,3 +44,33 @@ func TestRollbackRemovesRootsCreatedByValidator(t *testing.T) {
 		t.Fatal("repeat recovery", e)
 	}
 }
+
+func TestRollbackReplacesValidatorRecreatedOriginalDirectory(t *testing.T) {
+	root, stage := t.TempDir(), t.TempDir()
+	if e := os.MkdirAll(filepath.Join(root, "plugins"), 0700); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.WriteFile(filepath.Join(root, "plugins", "original.json"), []byte("original"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	validationFailure := errors.New("synthetic failed reopen")
+	e := Install(root, stage, func() error {
+		if e := os.MkdirAll(filepath.Join(root, "plugins", "new-plugin"), 0700); e != nil {
+			t.Fatal(e)
+		}
+		if e := os.WriteFile(filepath.Join(root, "plugins", "new-plugin", "new.json"), []byte("foreign"), 0600); e != nil {
+			t.Fatal(e)
+		}
+		return validationFailure
+	})
+	if !errors.Is(e, validationFailure) {
+		t.Fatal(e)
+	}
+	got, e := os.ReadFile(filepath.Join(root, "plugins", "original.json"))
+	if e != nil || string(got) != "original" {
+		t.Fatal("original plugin directory not recovered", e)
+	}
+	if _, e = os.Stat(filepath.Join(root, "plugins", "new-plugin")); !os.IsNotExist(e) {
+		t.Fatal("validator directory survived", e)
+	}
+}

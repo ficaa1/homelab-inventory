@@ -112,11 +112,11 @@ func LoadJSON(path string) (*Model, error) {
 		return nil, e
 	}
 	defer f.Close()
-	b, e := io.ReadAll(io.LimitReader(f, (64<<20)+1))
+	b, e := io.ReadAll(io.LimitReader(f, (2<<30)+1))
 	if e != nil {
 		return nil, e
 	}
-	if len(b) > 64<<20 {
+	if len(b) > 2<<30 {
 		return nil, fmt.Errorf("artifact too large")
 	}
 	var m Model
