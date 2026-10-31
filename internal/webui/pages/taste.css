@@ -1,88 +1,79 @@
-/* ------------------------------------------------------------------ taste page */
-.taste-page .tp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); margin: calc(-1 * var(--s2)) 0 var(--s4); }
-.taste-page .tp-status { margin: 0; }
-.taste-page .tp-profile { display: inline-flex; align-items: center; gap: var(--s2); margin-left: auto; }
-.taste-page .tp-profile .sel { height: 36px; }
-.taste-page .pv-notice { margin-bottom: var(--s4); }
-.taste-page .seg .btn { min-height: 40px; }
-/* Five views do not fit a phone: the tab row scrolls instead of squeezing. */
-.taste-page .pv-head .seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-.taste-page .pv-head .seg .btn { flex: none; min-width: 0; }
-
-.taste-page .tp-poster { width: 76px; aspect-ratio: 2 / 3; border-radius: var(--r-sm); overflow: hidden; background: var(--surface-2); border: 1px solid var(--line); display: grid; place-items: center; flex: none; }
-.taste-page .tp-poster.sm { width: 40px; }
-.taste-page .tp-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.taste-page .tp-none { color: var(--text-3); font-weight: 600; font-size: var(--fs-lg); }
-
-.taste-page .tp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: var(--s3); }
-.taste-page .tp-card { display: grid; grid-template-columns: 76px 1fr; gap: 10px 14px; padding: var(--s3); align-content: start; transition: opacity .2s; }
-.taste-page .tp-card.judged { opacity: .55; }
-.taste-page .tp-body { min-width: 0; }
-.taste-page .tp-card h3 { margin: 2px 0 4px; font-size: var(--fs-md); font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
-.taste-page .tp-reason { margin-top: 8px; font-size: var(--fs-sm); color: var(--text-2); line-height: 1.4; }
-.taste-page .tp-verdicts { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(56px, 1fr)); gap: 6px; }
-.taste-page .tp-verdicts .btn { min-height: 44px; padding: 4px 6px; }
-.taste-page .tp-verdicts .btn[aria-pressed="true"],
-.taste-page .tp-choose .btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
-.taste-page .tp-next { display: flex; justify-content: center; margin: var(--s5) 0; }
-.taste-page .tp-next .btn { min-height: 44px; padding: 8px 28px; }
-
-.taste-page .tp-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: var(--s4) var(--s3); }
-.taste-page .tp-tile { position: relative; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.taste-page .tp-tile > .tp-poster, .taste-page .tp-hit .tp-poster { width: 100%; }
-.taste-page .tp-hit { width: 100%; display: flex; flex-direction: column; gap: 6px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.taste-page .tp-hit .tp-poster { outline: 3px solid transparent; outline-offset: -3px; transition: outline-color .15s; }
-.taste-page .tp-hit[aria-pressed="true"] .tp-poster { outline-color: var(--accent); }
-.taste-page .tp-hit[aria-pressed="true"] img { opacity: .55; }
-.taste-page .tp-hit:focus-visible .tp-poster { outline-color: var(--text-2); }
-.taste-page .tp-badge { position: absolute; top: 6px; left: 6px; padding: 2px 8px; border-radius: var(--r-pill); background: var(--accent); color: var(--accent-ink); font-size: var(--fs-xs); font-weight: 600; pointer-events: none; }
+/* Heading rules from the private shell. */
+.taste-page .arc-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: var(--s4); }
+.taste-page .arc-head h2 { margin: 0; }
+.taste-page .arc-head .subtitle { margin: 0; }
+.taste-page .library-heading { margin-bottom: var(--s4); }
+.taste-page .taste-status { margin: var(--s2) 0 var(--s3); }
+.taste-page .taste-views { margin: var(--s2) var(--s2) 0 0; }
+.taste-page .taste-kinds { margin-top: var(--s2); }
+.taste-page .taste-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: var(--s3); }
+.taste-page .taste-card { display: grid; grid-template-columns: 76px 1fr; gap: 10px 12px; padding: 12px; align-content: start; transition: opacity .2s; }
+.taste-page .taste-card.judged { opacity: .6; }
+.taste-page .taste-card h3 { margin: 0 0 2px; font-size: var(--fs-md); font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.taste-page .taste-reason { margin-top: 6px; font-size: var(--fs-sm); color: var(--text-2); line-height: 1.35; }
+.taste-page .tposter { width: 76px; aspect-ratio: 2 / 3; border-radius: var(--r-sm); overflow: hidden; background: var(--surface-2); display: grid; place-items: center; }
+.taste-page .tposter.sm { width: 40px; flex: none; }
+.taste-page .tposter img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.taste-page .tposter-none { color: var(--text-3); font-weight: 600; font-size: var(--fs-lg); }
+.taste-page .taste-verdicts { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: 6px; }
+.taste-page .taste-verdicts .btn { min-height: 44px; padding: 4px 6px; }
+.taste-page .taste-verdicts .btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.taste-page .taste-next { display: flex; justify-content: center; margin: var(--s5) 0; }
+.taste-page .taste-next .btn { min-height: 44px; padding: 8px 28px; }
+.taste-page .taste-tools { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; margin: var(--s3) 0; }
+.taste-page #taste .seg .btn, .taste-page #taste .taste-row details > .btn { min-height: 44px; }
+.taste-page .taste-tools input, .taste-page .taste-search input { flex: 1 1 160px; min-height: 40px; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid var(--line-2); background: var(--surface); color: var(--text); font: inherit; }
+.taste-page .taste-search { display: flex; gap: var(--s2); margin: var(--s3) 0; }
+.taste-page .taste-add summary { cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 6px; min-height: 44px; }
+.taste-page .taste-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+.taste-page .taste-add .taste-list { border: 0; background: none; }
+.taste-page .taste-row { border-top: 1px solid var(--line); }
+.taste-page .taste-row:first-child { border-top: 0; }
+.taste-page .taste-row.open { display: flex; gap: 10px; padding: 10px 0; }
+.taste-page .taste-row summary { list-style: none; display: flex; align-items: center; gap: var(--s3); padding: 10px 12px; cursor: pointer; min-height: 44px; }
+.taste-page .taste-row summary::-webkit-details-marker { display: none; }
+.taste-page .taste-row-main { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.taste-page .taste-row details > .taste-verdicts, .taste-page .taste-row details > .btn { margin: 0 12px 12px; }
+.taste-page .taste-row.open .taste-verdicts { margin-top: 8px; }
+.taste-page .taste-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: var(--s3) 10px; }
+.taste-page .taste-tile { position: relative; min-width: 0; }
+.taste-page .taste-hit { width: 100%; display: flex; flex-direction: column; gap: 6px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.taste-page .taste-hit .tposter { width: 100%; outline: 3px solid transparent; outline-offset: -3px; transition: outline-color .15s, opacity .15s; }
+.taste-page .taste-hit[aria-pressed="true"] .tposter { outline-color: var(--accent); }
+.taste-page .taste-hit[aria-pressed="true"] img { opacity: .55; }
+.taste-page .taste-hit:focus-visible .tposter { outline-color: var(--text-2); }
+.taste-page .taste-badge { position: absolute; top: 6px; left: 6px; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: var(--fs-xs); font-weight: 600; pointer-events: none; }
 /* The choice sits on the poster just tapped, so it is wherever the thumb is.
    Taps between the buttons fall through to the poster, which closes it. */
-.taste-page .tp-choose { position: absolute; top: 0; left: 0; width: 100%; aspect-ratio: 2 / 3; display: grid; grid-template-columns: 1fr 1fr; align-content: end; gap: 4px; padding: 5px; border-radius: var(--r-sm); background: linear-gradient(transparent 25%, rgba(0,0,0,.82)); pointer-events: none; }
-.taste-page .tp-choose .btn { pointer-events: auto; min-height: 44px; min-width: 0; padding: 4px 2px; font-size: var(--fs-xs); background: var(--surface); }
-.taste-page .tp-tile-title { font-size: var(--fs-sm); line-height: 1.3; overflow-wrap: anywhere; }
-.taste-page .tp-tile-title .sub { display: block; font-size: var(--fs-xs); }
-
-.taste-page .tp-add { padding: 0 var(--s4); margin-bottom: var(--s4); }
-.taste-page .tp-add summary { cursor: pointer; font-weight: 600; font-size: var(--fs-sm); display: flex; align-items: center; gap: 6px; min-height: 48px; }
-.taste-page .tp-add[open] { padding-bottom: var(--s4); }
-.taste-page .tp-search { display: flex; gap: var(--s2); margin: 0 0 var(--s3); }
-.taste-page .tp-search input { flex: 1 1 160px; min-width: 0; height: 40px; padding: 0 12px; border-radius: var(--r); border: 1px solid var(--line-2); background: var(--surface-2); color: var(--text); font: inherit; font-size: var(--fs-md); }
-.taste-page .tp-search input:focus { outline: none; border-color: var(--accent); }
-.taste-page .tp-tools { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; margin-bottom: var(--s3); }
-.taste-page .tp-tools .seg { flex-wrap: wrap; }
-.taste-page .tp-tools .field { flex: 1 1 200px; }
-.taste-page .tp-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
-.taste-page .tp-add .tp-list { border: 0; background: none; }
-.taste-page .tp-row { border-top: 1px solid var(--line); }
-.taste-page .tp-row:first-child { border-top: 0; }
-.taste-page .tp-row.open { display: flex; gap: 12px; padding: 10px 0; }
-.taste-page .tp-row summary { list-style: none; display: flex; align-items: center; gap: var(--s3); padding: 10px 14px; cursor: pointer; min-height: 48px; }
-.taste-page .tp-row summary:hover { background: var(--hover); }
-.taste-page .tp-row summary::-webkit-details-marker { display: none; }
-.taste-page .tp-row-main { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: var(--fs-sm); }
-.taste-page .tp-row-main b { font-weight: 600; }
-.taste-page .tp-row details > .tp-verdicts, .taste-page .tp-row details > .tp-clear { margin: 4px 14px 12px; }
-.taste-page .tp-row.open .tp-verdicts { margin-top: 8px; }
-.taste-page .tp-more { margin-top: var(--s3); }
-
-.taste-page .tp-panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s3); align-items: start; }
-.taste-page .tp-panel h3 { margin: 0 0 var(--s3); font-size: var(--fs-md); font-weight: 600; }
-.taste-page .tp-panel .sub { margin: var(--s3) 0 0; line-height: 1.4; }
-.taste-page .tp-panel .actions { display: flex; gap: var(--s2); flex-wrap: wrap; margin-top: var(--s4); }
-.taste-page .tp-dl { display: grid; grid-template-columns: auto 1fr; gap: 6px var(--s4); margin: 0; font-size: var(--fs-sm); }
-.taste-page .tp-dl dt { color: var(--text-3); }
-.taste-page .tp-dl dd { margin: 0; font-variant-numeric: tabular-nums; }
-.taste-page .tp-sync { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
-.taste-page .tp-sync th, .taste-page .tp-sync td { text-align: left; padding: 6px 8px 6px 0; border-top: 1px solid var(--line); font-weight: 400; }
-.taste-page .tp-sync thead th { color: var(--text-3); font-size: var(--fs-xs); border-top: 0; }
-.taste-page .tp-sync tbody th { color: var(--text-2); }
-.taste-page .tp-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-.taste-page .tp-file:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
-.taste-page label.btn { cursor: pointer; }
-
+.taste-page .taste-choose { position: absolute; top: 0; left: 0; width: 100%; aspect-ratio: 2 / 3; display: grid; grid-template-columns: 1fr 1fr; align-content: end; gap: 4px; padding: 5px; border-radius: var(--r-sm); background: linear-gradient(transparent 25%, rgba(0,0,0,.8)); pointer-events: none; }
+.taste-page .taste-choose .btn { pointer-events: auto; min-height: 44px; min-width: 0; padding: 4px 2px; font-size: var(--fs-xs); background: var(--surface); }
+.taste-page .taste-choose .btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.taste-page .taste-tile-title { font-size: var(--fs-sm); line-height: 1.25; overflow-wrap: anywhere; }
+.taste-page .taste-tile-title .sub { display: block; }
 @media (max-width: 640px) {
-  .taste-page .tp-grid, .taste-page .tp-panels { grid-template-columns: 1fr; }
-  .taste-page .tp-wall { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3) var(--s2); }
-  .taste-page .tp-profile { margin-left: 0; }
+  .taste-page .taste-grid { grid-template-columns: 1fr; }
 }
+
+/* Public Taste views */
+.taste-page .taste-profile { display:inline-flex; align-items:center; gap:var(--s2); margin-left:auto; }
+.taste-page .taste-profile .sel { height:36px; }
+.taste-page .pv-notice { margin-bottom:var(--s4); }
+.taste-page .taste-panels { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:var(--s3); align-items:start; }
+.taste-page .taste-panel h3 { margin:0 0 var(--s3); font-size:var(--fs-md); font-weight:600; }
+.taste-page .taste-panel .sub { margin:var(--s3) 0 0; line-height:1.4; }
+.taste-page .taste-panel .actions { display:flex; gap:var(--s2); flex-wrap:wrap; margin-top:var(--s4); }
+.taste-page .taste-dl { display:grid; grid-template-columns:auto 1fr; gap:6px var(--s4); margin:0; font-size:var(--fs-sm); }
+.taste-page .taste-dl dt { color:var(--text-3); }
+.taste-page .taste-dl dd { margin:0; font-variant-numeric:tabular-nums; }
+.taste-page .taste-sync { width:100%; border-collapse:collapse; font-size:var(--fs-sm); }
+.taste-page .taste-sync th, .taste-page .taste-sync td { text-align:left; padding:6px 8px 6px 0; border-top:1px solid var(--line); font-weight:400; }
+.taste-page .taste-sync thead th { color:var(--text-3); font-size:var(--fs-xs); border-top:0; }
+.taste-page .taste-sync tbody th { color:var(--text-2); }
+.taste-page .taste-file { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+.taste-page .taste-file:focus-visible + label { outline:2px solid var(--accent); outline-offset:2px; }
+.taste-page label.btn { cursor:pointer; }
+@media (max-width:640px) { .taste-page .taste-panels { grid-template-columns:1fr; } .taste-page .taste-profile { margin-left:0; } }
+
+.taste-page .taste-watchlist > .taste-tile > .tposter { width:100%; }
+.taste-page .taste-extra-views { max-width:100%; overflow-x:auto; scrollbar-width:none; }
+.taste-page .taste-extra-views .btn { flex:none; }
