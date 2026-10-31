@@ -746,12 +746,13 @@
     if (seedLoading) return;
     seedLoading = true;
     var gen = st.gen;
+    if (!seeding) morph(st.body, archiveLibrarySwitch() + '<div class="empty">Loading…</div>');
     HI.get(ID, "seeding").then(function (v) {
       seeding = v; seeding.items = seeding.items || [];
       if (gen === st.gen) render();
     }).catch(function (err) {
       if (fail(err) || gen !== st.gen || st.view !== "seeding") return;
-      morph(st.body, '<div class="empty" data-key="err"><div class="big">Seeding mover unavailable</div>' + esc(err.message) + "</div>");
+      morph(st.body, archiveLibrarySwitch() + '<div class="empty">' + esc(err.message) + "</div>");
     }).then(function () { seedLoading = false; });
   }
 
