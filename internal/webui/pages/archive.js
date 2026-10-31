@@ -620,7 +620,7 @@
     if (!it) return;
     var editing = it.tags.archive && !untag, req = ++request;
     var before = (it.seasons || []).filter(function (s) { return s.selected; }).map(function (s) { return s.season; });
-    sheet('<div class="arc-eyebrow">' + (untag ? 'ARCHIVE TAG' : editing ? 'SEASONS' : 'ARCHIVE') + '</div><h3>' + esc(it.title) + '</h3><div class="arc-drawer-size">' + esc(size(it.sizeBytes)) + (it.year ? ' · ' + it.year : '') + '</div>' +
+    sheet('<div class="arc-eyebrow">' + (untag ? 'ARCHIVE TAG' : editing ? 'SEASONS' : 'ARCHIVE') + '</div><h3>' + esc(it.title) + '</h3><div class="arc-drawer-size">' + esc(size(it.sizeBytes)) + (it.year ? ' · ' + esc(it.year) : '') + '</div>' +
       (untag ? '' : '<label class="library-keep"><input id="library-fourk" type="checkbox"' + (it.tags.fourK ? ' checked' : '') + '> 4K HDR</label>' +
         (it.kind === 'sonarr' ? '<fieldset class="library-season-picker"><legend>Seasons</legend>' + (it.seasons || []).filter(function(s) { return s.season > 0; }).map(function(s) { return '<div class="library-picker-row"><label><input type="checkbox" name="library-season" value="' + s.season + '"' + (s.selected || String(s.season) === only || !it.tags.archive && !only ? ' checked' : '') + '> ' + (s.season ? 'Season ' + s.season : 'Specials') + '<span>' + esc(size(s.sizeBytes)) + '</span></label>' + libraryProgressSlot(it, s.season) + '</div>'; }).join('') + '</fieldset>' : '')) +
       '<div id="library-action-msg" role="status"></div><div class="actions"><button class="btn" id="library-cancel" type="button">Cancel</button><button class="btn primary" id="library-apply" type="button">' + (untag ? 'Remove tag' : editing ? 'Save' : 'Archive') + '</button></div>');
