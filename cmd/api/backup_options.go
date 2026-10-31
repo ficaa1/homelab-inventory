@@ -18,6 +18,9 @@ func (s *server) backupMigrationOptions(p *backup.Plan, r *http.Request) ([]stri
 	if p.Manifest.Product != "homelab-dash" {
 		return issues, nil
 	}
+	if e := prepareMigrationNotificationBaseline(p.Directory, p); e != nil {
+		return nil, e
+	}
 	if r.Header.Get("X-Backup-Legacy-Agent") == "true" {
 		token := p.Manifest.Config["INGEST_TOKEN"]
 		if token == "" || token == s.apiToken() || token == s.operatorToken || validateTokens("", token, "") != nil {

@@ -29,28 +29,32 @@ type stateFile struct {
 	Plugins map[string]json.RawMessage `json:"plugins"`
 }
 type entry struct {
-	seeds          Config
-	mediaRefresh   *mediaRefreshCache
-	op             sync.Mutex // serializes calls on a plugin instance
-	mu             sync.Mutex // protects cached status independently of live calls
-	test           chan struct{}
-	plugin         Plugin
-	manifest       Manifest
-	host           *host
-	stored         storedPlugin
-	config         Config
-	ready          bool
-	state, message string
-	checked        *time.Time
-	failures       int
-	alerts         []Alert
+	alertPollSeen, alertPollOK bool
+	seeds                      Config
+	mediaRefresh               *mediaRefreshCache
+	op                         sync.Mutex // serializes calls on a plugin instance
+	mu                         sync.Mutex // protects cached status independently of live calls
+	test                       chan struct{}
+	plugin                     Plugin
+	manifest                   Manifest
+	host                       *host
+	stored                     storedPlugin
+	config                     Config
+	ready                      bool
+	state, message             string
+	checked                    *time.Time
+	failures                   int
+	alerts                     []Alert
 }
 type Registry struct {
-	entries map[string]*entry // immutable after Open
-	mu      sync.Mutex        // protects file, including unknown entries
-	file    stateFile
-	path    string
-	wake    chan struct{}
+	notificationCycle sync.RWMutex
+	initialPoll       chan struct{}
+	initialPollOnce   sync.Once
+	entries           map[string]*entry // immutable after Open
+	mu                sync.Mutex        // protects file, including unknown entries
+	file              stateFile
+	path              string
+	wake              chan struct{}
 }
 type ItemStatus struct {
 	ID             string     `json:"id"`
@@ -78,7 +82,7 @@ type Update struct {
 // Open loads state without discarding integrations absent from this build.
 // Built-ins start disabled; only persisted enablement activates them.
 func Open(data string, builtins []Builtin, logger *log.Logger) (r *Registry, err error) {
-	r = &Registry{entries: map[string]*entry{}, path: filepath.Join(data, "state-plugins.json"), file: stateFile{Plugins: map[string]json.RawMessage{}}, wake: make(chan struct{}, 1)}
+	r = &Registry{initialPoll: make(chan struct{}), entries: map[string]*entry{}, path: filepath.Join(data, "state-plugins.json"), file: stateFile{Plugins: map[string]json.RawMessage{}}, wake: make(chan struct{}, 1)}
 	if err = os.MkdirAll(data, 0700); err != nil {
 		return nil, errors.New("creating plugin data directory")
 	}
@@ -253,6 +257,8 @@ func (e *entry) restore() {
 	}
 }
 func (r *Registry) Update(id string, u Update) (ItemStatus, error) {
+	r.notificationCycle.Lock()
+	defer r.notificationCycle.Unlock()
 	e := r.entries[id]
 	if e == nil {
 		return ItemStatus{}, ErrNotFound
@@ -294,6 +300,8 @@ func (r *Registry) Update(id string, u Update) (ItemStatus, error) {
 	e.message = ""
 	e.failures = 0
 	e.checked = nil
+	e.alertPollSeen = false
+	e.alertPollOK = false
 	if next.Enabled {
 		e.state = "ok"
 	} else {

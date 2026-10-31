@@ -13,6 +13,13 @@ const PollInterval = 5 * time.Minute
 // Poll refreshes each enabled alert source. Failed polls preserve last good
 // evidence until the third failure replaces it with an unreachable condition.
 func (r *Registry) Poll(ctx context.Context) {
+	r.notificationCycle.Lock()
+	defer r.notificationCycle.Unlock()
+	defer r.initialPollOnce.Do(func() {
+		if r.initialPoll != nil {
+			close(r.initialPoll)
+		}
+	})
 	for _, id := range r.ids() {
 		if ctx.Err() != nil {
 			return
@@ -37,6 +44,8 @@ func (r *Registry) Poll(ctx context.Context) {
 			err = validateAlerts(alerts)
 		}
 		e.mu.Lock()
+		e.alertPollSeen = true
+		e.alertPollOK = err == nil
 		at := e.host.Now().UTC()
 		e.checked = &at
 		if err != nil {

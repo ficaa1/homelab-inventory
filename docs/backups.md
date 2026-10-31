@@ -12,6 +12,8 @@ Destination administrator, agent and operator credentials remain authoritative. 
 
 Restore stops and joins background workers, installs the staged files, then constructs fresh stores, authentication, plugins and lazy TV managers before starting work again. It does not replay requests, actions, uploads or notification history. Legacy pending/unknown request receipts remain a duplicate barrier. External services retain their own state.
 
+The notifier waits for the initial plugin poll after reopening. A failed poll preserves previously reported plugin conditions until successful evidence proves resolution; repeated failures add an unreachable condition. For a private dashboard migration, only newly introduced media/network plugin identities receive a silent first successful baseline; ordinary inventory and security transitions continue normally. The original notification ledger remains in private migration records.
+
 ## External prerequisites
 
 This archive covers the configured API data directory. It does not traverse external paths: service databases, media libraries, upload content, worker state, agent installations, signed release trees, signer keys, compose files, TLS/reverse proxy configuration and host permissions need separate backups and destination mounts. Recognized source connection settings travel encrypted. Deployment/signing files named `.env`, `.env.*`, `*.key`, `*.pem`, `id_rsa`, `id_ed25519`, or common compose filenames are excluded even if placed under the data directory. Symlinks and non-regular files are refused rather than followed.
