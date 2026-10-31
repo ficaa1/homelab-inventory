@@ -100,10 +100,6 @@ func (s *server) handleActionExecute(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, status, e)
 }
 func (s *server) handleActionLog(w http.ResponseWriter, r *http.Request) {
-	if s.actions == nil {
-		writeError(w, http.StatusServiceUnavailable, "restart execution unavailable")
-		return
-	}
 	n := actions.LogLimit
 	if q := r.URL.Query().Get("limit"); q != "" {
 		v, err := strconv.Atoi(q)
@@ -113,7 +109,17 @@ func (s *server) handleActionLog(w http.ResponseWriter, r *http.Request) {
 		}
 		n = v
 	}
-	writeJSON(w, http.StatusOK, s.actions.Log(n))
+	m := s.actions
+	if m == nil {
+		// History stays readable with execution off (a restored or migrated
+		// store keeps its audit); a nil runner never executes anything.
+		var err error
+		if m, err = actions.Open(s.store.Dir(), nil); err != nil {
+			writeError(w, http.StatusServiceUnavailable, "action log unavailable")
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, m.Log(n))
 }
 func (s *server) handleActionStacks(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Has("host") && r.URL.Query().Get("host") != s.actionPolicy.Host {
