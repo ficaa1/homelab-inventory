@@ -34,9 +34,10 @@ type imported struct {
 	Verdict string
 }
 type personal struct {
-	Hidden   map[string]bool
-	Feedback map[string]feedback
-	Imports  []imported
+	Hidden       map[string]bool
+	Feedback     map[string]feedback
+	Imports      []imported
+	ImportCursor int
 }
 type Store struct {
 	mu   sync.Mutex
@@ -223,6 +224,7 @@ func (s *Store) Import(profile, input string) (map[string]int, error) {
 	defer s.mu.Unlock()
 	v := s.snapshot(profile)
 	v.Imports = items
+	v.ImportCursor = 0
 	if e = s.save(profile, v); e != nil {
 		return nil, e
 	}
@@ -376,7 +378,12 @@ func (s *Store) Taste(profile, kind string, report mediadata.Discovery, familiar
 	seen := map[string]bool{}
 	source := report.Titles
 	if familiar {
-		source = allTitles(report)
+		source = append([]mediadata.Title{}, report.Recent...)
+		for _, t := range report.Titles {
+			if t.State == "available" || t.Availability == "available" {
+				source = append(source, t)
+			}
+		}
 	}
 	for _, t := range source {
 		k := key(t.Kind, t.ID)
@@ -396,4 +403,68 @@ func (s *Store) Taste(profile, kind string, report mediadata.Discovery, familiar
 		return map[string]any{"titles": titles, "judged": len(v.Feedback)}
 	}
 	return map[string]any{"picks": titles, "judged": len(v.Feedback)}
+}
+
+// Enrich resolves at most three imported names through the shared Media search.
+// Its persistent cursor advances even on failed lookups, avoiding repeated remote
+// work for unavailable titles. Reimporting a CSV explicitly starts a new pass.
+func (s *Store) Enrich(ctx context.Context, profile string, search func(context.Context, string) ([]mediadata.Title, error)) error {
+	if !validProfile(profile) || search == nil {
+		return ErrInvalid
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	v := s.snapshot(profile)
+	pending := []imported{}
+	for v.ImportCursor < len(v.Imports) && len(pending) < 3 {
+		item := v.Imports[v.ImportCursor]
+		v.ImportCursor++
+		resolved := false
+		for _, f := range v.Feedback {
+			if f.Kind == "movie" && strings.EqualFold(f.Title, item.Name) && (item.Year == "" || item.Year == f.Year) {
+				resolved = true
+				break
+			}
+		}
+		if !resolved {
+			pending = append(pending, item)
+		}
+	}
+	err := s.save(profile, v)
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	var first error
+	for _, item := range pending {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		titles, err := search(ctx, item.Name)
+		if err != nil {
+			if first == nil {
+				first = err
+			}
+			continue
+		}
+		if len(titles) > 100 {
+			titles = titles[:100]
+		}
+		matches := []mediadata.Title{}
+		for _, t := range titles {
+			if valid(t.Kind, t.ID) && t.Kind == "movie" && strings.EqualFold(t.Title, item.Name) && (item.Year == "" || item.Year == t.Year) {
+				matches = append(matches, t)
+			}
+		}
+		s.mu.Lock()
+		current := resolve(s.snapshot(profile), mediadata.Discovery{Titles: matches})
+		err = s.save(profile, current)
+		s.mu.Unlock()
+		if err != nil {
+			return err
+		}
+	}
+	return first
 }

@@ -160,3 +160,69 @@ func TestWriteFailureRollsBack(t *testing.T) {
 		t.Fatal("failed write changed memory")
 	}
 }
+
+func TestFamiliarUsesHistoryAndAvailableLibrary(t *testing.T) {
+	s, _ := New(t.TempDir())
+	available := title(2, "Library")
+	available.State = "available"
+	r := mediadata.Discovery{Titles: []mediadata.Title{title(1, "Unknown"), available}, Recent: []mediadata.Title{title(3, "Watched")}, Watchlist: []mediadata.Title{title(4, "Want to see")}}
+	got := s.Taste("p", "movie", r, true).(map[string]any)["titles"].([]mediadata.Title)
+	if len(got) != 2 || got[0].ID != 3 || got[1].ID != 2 {
+		t.Fatal(got)
+	}
+}
+func TestEnrichSearchProgressPersistenceAndMatching(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := New(dir)
+	_, err := s.Import("p", "Name,Year,Rating\nMissing,2020,4\nOffline,2020,4\nOutside trends,2020,5\nLater,2020,4\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := []string{}
+	search := func(_ context.Context, q string) ([]mediadata.Title, error) {
+		calls = append(calls, q)
+		switch q {
+		case "Missing":
+			return []mediadata.Title{title(10, "Different")}, nil
+		case "Offline":
+			return nil, errors.New("offline")
+		case "Outside trends":
+			wrong := title(9, q)
+			wrong.Year = "1999"
+			return []mediadata.Title{wrong, title(20, q)}, nil
+		default:
+			return []mediadata.Title{title(30, q)}, nil
+		}
+	}
+	if err = s.Enrich(context.Background(), "p", search); err == nil {
+		t.Fatal("expected partial upstream failure")
+	}
+	if len(calls) != 3 {
+		t.Fatal(calls)
+	}
+	s, err = New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Enrich(context.Background(), "p", search); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 4 || calls[3] != "Later" {
+		t.Fatal(calls)
+	}
+	if err = s.Enrich(context.Background(), "p", search); err != nil || len(calls) != 4 {
+		t.Fatal(calls, err)
+	}
+	s.mu.Lock()
+	v := s.snapshot("p")
+	s.mu.Unlock()
+	if v.Feedback["movie:20"].Verdict != "loved" || v.Feedback["movie:30"].Verdict != "liked" || len(v.Feedback) != 2 {
+		t.Fatal(v)
+	}
+	s.mu.Lock()
+	other := s.snapshot("other")
+	s.mu.Unlock()
+	if len(other.Feedback) != 0 {
+		t.Fatal("profile leak")
+	}
+}
