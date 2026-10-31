@@ -172,3 +172,33 @@ func TestLocalValidationIsInertAndRejectsForeignProfile(t *testing.T) {
 		t.Fatal("foreign model accepted")
 	}
 }
+
+func TestPageAPIBindsProfilesAndPosterNames(t *testing.T) {
+	p := New(host{dir: t.TempDir(), client: &http.Client{}}).(*Integration)
+	p.SetRecommendationSource(source{})
+	if e := p.Configure(plugin.Config{"bindings": `{"first":{"owner":11}}`, "poster_url": "https://images.example.org"}); e != nil {
+		t.Fatal(e)
+	}
+	defer p.Close()
+	ctx := context.Background()
+	call := func(method, path, profile, body string) (plugin.APIResponse, error) {
+		return p.API(ctx, plugin.APIRequest{Method: method, Path: path, Query: url.Values{"profile": {profile}}, Body: []byte(body)})
+	}
+	for _, profile := range []string{"", "../first", "second"} {
+		if _, e := call("GET", "known", profile, ""); e == nil {
+			t.Fatalf("profile %q accepted", profile)
+		}
+	}
+	if _, e := call("POST", "verdict", "", `{"profile":"first","kind":"movie","id":4,"verdict":"ignore","title":"Fixture","year":"2024"}`); e != nil {
+		t.Fatal(e)
+	}
+	out, e := call("GET", "known", "first", "")
+	if e != nil || !strings.Contains(string(out.Body), `"verdict":"ignore"`) {
+		t.Fatal(string(out.Body), e)
+	}
+	for _, ref := range []string{"poster/x.svg", "poster/a..b.jpg", "poster/https:example.org.jpg"} {
+		if _, e := call("GET", ref, "first", ""); e != plugin.ErrNotFound {
+			t.Fatalf("%s: %v", ref, e)
+		}
+	}
+}
