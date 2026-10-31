@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ficaa1/homelab-inventory/internal/fsx"
 	"github.com/ficaa1/homelab-inventory/internal/mediadata"
 )
 
@@ -87,22 +88,7 @@ func (s *Store) save(p string, v personal) error {
 	if e != nil {
 		return e
 	}
-	f, e := os.CreateTemp(filepath.Dir(s.path), ".personal-*")
-	if e != nil {
-		return e
-	}
-	defer os.Remove(f.Name())
-	if _, e = f.Write(b); e == nil {
-		e = f.Sync()
-	}
-	ce := f.Close()
-	if e != nil {
-		return e
-	}
-	if ce != nil {
-		return ce
-	}
-	if e = os.Rename(f.Name(), s.path); e != nil {
+	if e = fsx.WriteAtomic(s.path, b, 0600); e != nil {
 		return e
 	}
 	s.data = all

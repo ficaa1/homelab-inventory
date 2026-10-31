@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ficaa1/homelab-inventory/internal/fsx"
 )
 
 var ErrInvalid = errors.New("invalid device credential or pairing input")
@@ -137,23 +139,7 @@ func (s *Store) commit(d state) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(filepath.Dir(s.path), ".devices-*")
-	if err != nil {
-		return err
-	}
-	name := f.Name()
-	defer os.Remove(name)
-	if _, err = f.Write(b); err == nil {
-		err = f.Sync()
-	}
-	closeErr := f.Close()
-	if err != nil {
-		return err
-	}
-	if closeErr != nil {
-		return closeErr
-	}
-	if err = os.Rename(name, s.path); err != nil {
+	if err = fsx.WriteAtomic(s.path, b, 0600); err != nil {
 		return err
 	}
 	s.data = d
