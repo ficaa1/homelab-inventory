@@ -5062,6 +5062,7 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
   function navEntries() {
     var out = [], seen = {};
     pluginTabs().forEach(function (p) {
+      if (p.id === "cloudflare") return;
       var g = groupOf(p.id);
       if (g) { if (!seen[g]) { seen[g] = true; out.push({ id: "archive", group: g, title: "Media", icon: "film" }); } return; }
       out.push({ id: p.id, group: "", title: str(p.tab.title), icon: p.tab.icon });
