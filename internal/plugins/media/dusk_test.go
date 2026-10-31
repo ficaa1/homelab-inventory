@@ -71,12 +71,17 @@ func TestDuskStructuredReads(t *testing.T) {
 }
 func TestDuskExplicitRequestPolicy(t *testing.T) {
 	posts := 0
+	missingPermissions := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v1/user":
 			fmt.Fprint(w, `{"results":[{"id":12,"displayName":"Household"}]}`)
 		case "/api/v1/user/12":
-			fmt.Fprint(w, `{"id":12,"permissions":8}`)
+			if missingPermissions {
+				fmt.Fprint(w, `{"id":12}`)
+			} else {
+				fmt.Fprint(w, `{"id":12,"permissions":8}`)
+			}
 		case "/api/v1/settings/radarr":
 			fmt.Fprint(w, `[{"id":4,"name":"Movies"}]`)
 		case "/api/v1/settings/sonarr":
@@ -121,6 +126,14 @@ func TestDuskExplicitRequestPolicy(t *testing.T) {
 	}
 	if posts != 1 {
 		t.Fatal("invalid approval policy mutated upstream")
+	}
+	missingPermissions = true
+	p.Approval = "manual"
+	if _, err := m.TVRequest(context.Background(), p, r); err == nil {
+		t.Fatal("missing permissions accepted")
+	}
+	if posts != 1 {
+		t.Fatal("unverified requester mutated upstream")
 	}
 }
 func TestDuskUnavailableFeedKeepsNullCounts(t *testing.T) {

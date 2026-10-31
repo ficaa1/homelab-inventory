@@ -125,15 +125,19 @@ func (m *Media) TVRequest(ctx context.Context, p mediadata.RequestPolicy, r medi
 		return result, errors.New("request policy choices are no longer available")
 	}
 	s, _ := m.tvService("overseerr")
-	var user struct{ ID, Permissions int }
+	var user struct {
+		ID          int
+		Permissions *int
+	}
 	if err := m.get(ctx, s, "/api/v1/user/"+strconv.Itoa(p.RequesterID), nil, &user, false); err != nil {
 		return result, err
 	}
-	if user.ID != p.RequesterID {
+	if user.ID != p.RequesterID || user.Permissions == nil || *user.Permissions < 0 {
 		return result, errors.New("requester cannot be verified")
 	}
 	// Overseerr permissions: admin=2, auto approve=32, movie=64, tv=128.
-	auto := user.Permissions&2 != 0 || user.Permissions&32 != 0 || r.Kind == "movie" && user.Permissions&64 != 0 || r.Kind == "tv" && user.Permissions&128 != 0
+	permissions := *user.Permissions
+	auto := permissions&2 != 0 || permissions&32 != 0 || r.Kind == "movie" && permissions&64 != 0 || r.Kind == "tv" && permissions&128 != 0
 	if auto != (p.Approval == "automatic") {
 		return result, errors.New("requester approval permissions do not match policy")
 	}
