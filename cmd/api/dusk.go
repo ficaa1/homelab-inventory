@@ -217,9 +217,9 @@ func (s *server) duskAdminWrite(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 422, "Configure Media first")
 			return
 		}
-		opts, e := s.plugins.MediaOptions(r.Context())
-		if e != nil || !validPolicy(v, opts) {
-			writeError(w, 422, "Select configured requester, servers, quality profiles and root folders")
+		e := s.plugins.MediaValidatePolicy(r.Context(), v)
+		if e != nil {
+			writeError(w, 422, "Select configured destinations and a requester whose approval permissions match the policy")
 			return
 		}
 		d.mu.Lock()
@@ -249,50 +249,6 @@ func hasProfile(d *duskState, id string) bool {
 		}
 	}
 	return false
-}
-func validPolicy(p mediadata.RequestPolicy, o mediadata.Options) bool {
-	found := false
-	for _, u := range o.Requesters {
-		if u.ID == p.RequesterID {
-			found = true
-		}
-	}
-	if !found {
-		return false
-	}
-	any := false
-	for _, k := range []string{"movie", "tv"} {
-		sel := p.Movie
-		if k == "tv" {
-			sel = p.TV
-		}
-		if sel.ProfileID == 0 && sel.Root == "" {
-			continue
-		}
-		ok := false
-		for _, server := range o.Servers {
-			if server.ID != sel.ServerID || server.Kind != k {
-				continue
-			}
-			prof, root := false, false
-			for _, v := range server.Profiles {
-				if v.ID == sel.ProfileID {
-					prof = true
-				}
-			}
-			for _, v := range server.Roots {
-				if v == sel.Root {
-					root = true
-				}
-			}
-			ok = prof && root
-		}
-		if !ok {
-			return false
-		}
-		any = true
-	}
-	return any
 }
 func (s *server) duskPair(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")

@@ -120,3 +120,18 @@ type DuskConfiguration struct {
 	ServerName                 string
 	Discovery, Taste, Requests bool
 }
+
+// MediaValidatePolicy verifies live requester permissions without exposing keys.
+func (r *Registry) MediaValidatePolicy(ctx context.Context, p mediadata.RequestPolicy) error {
+	e := r.entries["media"]
+	if e == nil {
+		return ErrNotFound
+	}
+	e.op.Lock()
+	defer e.op.Unlock()
+	m, ok := e.plugin.(mediadata.PolicySource)
+	if !ok || !e.stored.Enabled || !e.ready {
+		return ErrNotFound
+	}
+	return m.TVValidatePolicy(ctx, p)
+}

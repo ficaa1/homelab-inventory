@@ -31,10 +31,10 @@ func (m *Media) TVCapabilities() mediadata.Capabilities {
 	_, s := m.tvService("sonarr")
 	_, r := m.tvService("radarr")
 	_, t := m.tvService("tautulli")
-	return mediadata.Capabilities{Media: s || r || t, Upcoming: s || r, Browse: s || r, Discover: o, Search: o, Requests: o}
+	return mediadata.Capabilities{Media: s || r || t, Upcoming: s, Browse: s || r, Discover: o, Search: o, Requests: o}
 }
 func validTVTitle(kind string, id int) bool {
-	return (kind == "movie" || kind == "tv") && id > 0 && id <= 1000000000
+	return (kind == "movie" || kind == "tv") && id > 0 && id < 1000000000
 }
 
 type duskMetadata struct {
