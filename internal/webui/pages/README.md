@@ -29,6 +29,7 @@ while `HI.visible()` is false). `window.HI` is the kit:
 | `image(id, path, signal)` | a picture as a blob URL |
 | `openDrawer(html, label)`, `closeDrawer()` | the side sheet |
 | `go(hash)`, `link(id, view, params)` | navigation |
+| `upload(id, target, file)` | send a file to one of the plugin's upload targets through the upload sheet |
 
 The views in the tab come from the plugin's manifest, so keep its `Tab.Views`
 and the page's sections in step. The dashboard's CSP forbids inline handlers
