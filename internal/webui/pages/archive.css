@@ -195,7 +195,7 @@
 .arc-page .library-bar.busy i { animation: none; width: 100%; opacity: .35; }
 }
 .arc-page .library-progress .library-bar i { transition: width 0.6s ease; }
-.arc-page .archive-toast {position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:1000;padding:12px 18px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--text);max-width:calc(100vw - 32px);box-shadow:0 4px 20px #0003}
+.archive-toast {position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:1000;padding:12px 18px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--text);max-width:calc(100vw - 32px);box-shadow:0 4px 20px #0003}
 .arc-page .arc-strip { position: sticky; top: var(--arc-sticky-top, var(--top-h)); z-index: 6; margin: calc(-1 * var(--s2)) 0 var(--s4); padding: var(--s2) 0 0; background: var(--bg); }
 .arc-page .arc-strip[hidden] { display: none; }
 .arc-page .arc-strip-card { background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-lg); padding: 0 14px 4px; box-shadow: var(--shadow); }
@@ -287,7 +287,7 @@
 }
 @media (max-width: 640px) {
 .arc-page #archive button, .arc-page #archive-library button, .arc-page #archive summary,
-#drawer:has(.arc-sheet #archive-apply, .arc-sheet #library-apply) button, #drawer:has(.arc-sheet) #drawer-close,
+#drawer:has(.arc-sheet #archive-apply, .arc-sheet #library-apply) button, #drawer-close,
 #drawer .arc-sheet .arc-reason > summary, .arc-page .library-keep, .arc-page .library-season-picker label {
     min-height: 44px; min-width: 44px; box-sizing: border-box;
   }
@@ -307,7 +307,6 @@
 .arc-page .seed-facts { display:flex; flex-wrap:wrap; gap:4px 14px; margin-top:4px; font-size:var(--fs-xs); color:var(--text-3); font-variant-numeric:tabular-nums; }
 .arc-page .library-season-picker:has([name="tdarr-season"]) label { min-height:44px; }
 .arc-page .library-season-picker input { width:20px; height:20px; flex-shrink:0; accent-color:var(--accent); }
-.arc-page .tdarr-selection .library-keep { margin:0; min-height:44px; }
 .arc-page #archive-seeding button { min-height:44px; min-width:44px; }
 .arc-page #archive-seeding .library-nav { flex-wrap:wrap; }
 .arc-page .seed-row { display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:16px; background:var(--surface); color:var(--text); border:1px solid var(--line); border-radius:12px; margin:8px 0; }

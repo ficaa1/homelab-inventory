@@ -642,6 +642,9 @@
         if (r.searchesQueued) {
           libNotice = untag ? "Archive tag removed" : editing ? "Seasons saved" : "Archiving " + it.title;
           if (live()) HI.closeDrawer();
+          var toast = document.createElement("div");
+          toast.className = "archive-toast"; toast.setAttribute("role", "status"); toast.textContent = libNotice;
+          document.body.appendChild(toast); setTimeout(function () { toast.remove(); }, 4000);
           pollNow();
           return;
         }
