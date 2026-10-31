@@ -19,6 +19,8 @@
 .tdp .tdp-bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; min-width: 1px; }
 
 .tdp .tdp-tools { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: var(--s4); flex-wrap: wrap; }
+.tdp .tdp-tools .seg { padding: 3px; gap: 0; }
+.tdp .tdp-tools .seg .btn { padding: 6px 14px; font-size: var(--fs-sm); font-weight: 500; }
 .tdp .tdp-find { display: flex; gap: 8px; align-items: center; }
 .tdp .tdp-search { width: 230px; min-width: 0; min-height: 44px; color: var(--text); background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); padding: 9px 12px; font: inherit; }
 .tdp .tdp-search:focus { outline: none; border-color: var(--accent); }

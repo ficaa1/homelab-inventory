@@ -1164,7 +1164,9 @@
         '<button class="btn" type="button" data-archive-action="run"' + (!v.archiveEnabled || (info.runNow || {}).pending ? " disabled" : "") + ">Check now</button>";
     } else if (st.view === "library") {
       html = pause;
-    } else if (st.view === "seeding" && seeding) {
+    } else if (st.view === "seeding" && !seeding) {
+      html = pause;
+    } else if (st.view === "seeding") {
       var s = seedPlans();
       html = pause + '<button class="btn" type="button" data-seed-all' + (s.canLink ? "" : " disabled") + ">Link all (" + s.links.length + ")</button>" +
         '<button class="btn" type="button" data-seed-move-all' + (s.canMove ? "" : " disabled") + ">Move all (" + s.moves.length + ")</button>" +
