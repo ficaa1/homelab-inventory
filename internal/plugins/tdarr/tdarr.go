@@ -8,15 +8,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ficaa1/homelab-inventory/internal/fsx"
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
 	"github.com/ficaa1/homelab-inventory/internal/plugins/tdarr/engine"
 	"io"
 	"net/http"
 	"net/url"
 	"path"
-	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -52,7 +49,7 @@ func (*Integration) Manifest() plugin.Manifest {
 		fields = append(fields, plugin.Field{Key: k.key, Label: k.label, Type: plugin.Text, Help: "Absolute media root; no host filesystem is read by the dashboard."})
 	}
 	fields = append(fields, plugin.Field{Key: "protected_titles", Label: "Protected title identities (JSON array)", Type: plugin.Text, Help: "Explicit kind/id, tmdb_id, imdb_id, title and/or path exclusions. Empty means none."})
-	return plugin.Manifest{ID: "tdarr", Name: "Tdarr", Version: "1", Description: "Review compression candidates and explicitly execute guarded batches through an existing sidecar.", Settings: fields, Actions: actions(), Tab: &plugin.Tab{Title: "Tdarr", Icon: "film", Views: []plugin.ViewRef{{Name: "status", Title: "Status"}, {Name: "candidates", Title: "Candidates"}, {Name: "library", Title: "Library"}}}}
+	return plugin.Manifest{ID: "tdarr", Name: "Tdarr", Version: "1", Description: "Review compression candidates and explicitly execute guarded batches through an existing sidecar.", Settings: fields, Actions: actions(), Tab: &plugin.Tab{Title: "Tdarr", Icon: "film", Group: "media", Views: []plugin.ViewRef{{Name: "library", Title: "Tdarr"}}}}
 }
 func (p *Integration) str(k string) string {
 	s, _ := p.c[k].(string)
@@ -137,7 +134,10 @@ func (p *Integration) read(ctx context.Context, service, method, endpoint string
 	}
 	resp, e := client.Do(r)
 	if e != nil {
-		return errors.New("service unavailable; write outcome may be unknown; inspect sidecar before retrying")
+		if service == "sidecar" {
+			return errors.New("sidecar unavailable; write outcome may be unknown; inspect sidecar before retrying")
+		}
+		return fmt.Errorf("%s unavailable", service)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -431,43 +431,15 @@ func (p *Integration) Action(ctx context.Context, id string, c plugin.Config) (p
 		if !ok {
 			return plugin.View{}, engine.ErrConflict
 		}
-		plan, e := p.batch.Recheck(ctx, "operator", engine.ExecuteRequest{Plan: preview.Plan, Token: token, Hash: hash, Confirm: true})
+		_, outcome, e := p.submit(ctx, "operator", engine.ExecuteRequest{Plan: preview.Plan, Token: token, Hash: hash, Confirm: true})
 		if e != nil {
 			return plugin.View{}, e
 		}
-		var validated struct {
-			Paths []string `json:"paths"`
-		}
-		if e = p.read(ctx, "sidecar", "POST", "/validate", map[string]any{"paths": plan.Paths}, &validated); e != nil {
-			return plugin.View{}, e
-		}
-		sort.Strings(validated.Paths)
-		sort.Strings(plan.Paths)
-		if len(validated.Paths) != len(plan.Paths) {
-			return plugin.View{}, engine.ErrConflict
-		}
-		for i, file := range validated.Paths {
-			if file != plan.Paths[i] || p.blocked(engine.LibraryTitle{Path: file}) {
-				return plugin.View{}, engine.ErrBlocked
-			}
-		}
-		receipt := []byte(p.host.Now().UTC().Format(time.RFC3339) + "\n" + hash + "\n")
-		if e = fsx.CreateAtomic(filepath.Join(p.host.CacheDir(), "submission-"+hash+".receipt"), receipt, 0600); e != nil {
-			return plugin.View{}, errors.New("batch already submitted or receipt unavailable; inspect sidecar before another review")
-		}
-		var out struct {
-			OK     *bool  `json:"ok"`
-			Status string `json:"status"`
-			Error  string `json:"error"`
-		}
-		if e = p.read(ctx, "sidecar", "POST", "/shrink", map[string]any{"paths": plan.Paths, "withPc": plan.WithPC}, &out); e != nil {
-			return plugin.View{}, e
-		}
-		message := "Sidecar returned; inspect Tdarr status for queue progress."
-		tone := "info"
-		if out.OK != nil && !*out.OK || out.Error != "" {
-			message = "Sidecar reported failure; inspect it before attempting another batch."
-			tone = "warn"
+		message, tone := "Sidecar accepted the batch; inspect Tdarr status for queue progress.", "info"
+		if outcome == "failed" {
+			message, tone = "Sidecar reported failure; inspect it before attempting another batch.", "warn"
+		} else if outcome == "unknown" {
+			message, tone = "Outcome unknown; inspect the sidecar and Tdarr before another batch.", "warn"
 		}
 		return plugin.View{Title: "Tdarr batch", UpdatedAt: p.host.Now(), Blocks: []plugin.Block{{Type: "notice", Tone: tone, Text: message}}}, nil
 	}

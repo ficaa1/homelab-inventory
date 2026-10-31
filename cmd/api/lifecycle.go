@@ -133,7 +133,7 @@ func (l *applicationLifecycle) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		rc := http.NewResponseController(w)
 		_ = rc.SetReadDeadline(time.Now().Add(10 * time.Second))
 		writeWindow := 30 * time.Second
-		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/plugins/tdarr/actions/") {
+		if r.Method == http.MethodPost && (strings.HasPrefix(r.URL.Path, "/plugins/tdarr/actions/") || strings.HasPrefix(r.URL.Path, "/plugins/tdarr/api/")) {
 			writeWindow = 370 * time.Second
 		}
 		_ = rc.SetWriteDeadline(time.Now().Add(writeWindow))

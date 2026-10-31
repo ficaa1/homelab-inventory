@@ -43,6 +43,9 @@ type Tab struct {
 	Title string    `json:"title"`
 	Icon  string    `json:"icon"`
 	Views []ViewRef `json:"views"`
+	// Group puts tabs that share it behind one sidebar entry (for example
+	// "media"), each tab a section of that page.
+	Group string `json:"group,omitempty"`
 }
 type Manifest struct {
 	Actions     []ActionSpec `json:"actions,omitempty"`

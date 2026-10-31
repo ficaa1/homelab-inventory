@@ -74,6 +74,9 @@ func validateManifest(m Manifest) error {
 		if len(m.Tab.Views) == 0 {
 			return errors.New("plugin tab requires views")
 		}
+		if m.Tab.Group != "" && !viewPattern.MatchString(m.Tab.Group) {
+			return errors.New("invalid tab group")
+		}
 		names := map[string]bool{}
 		for _, v := range m.Tab.Views {
 			if !viewPattern.MatchString(v.Name) || names[v.Name] {

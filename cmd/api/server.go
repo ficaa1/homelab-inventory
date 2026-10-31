@@ -95,6 +95,16 @@ type server struct {
 	defaults         settings.Defaults
 }
 
+func (s *server) handleManifest(w http.ResponseWriter, r *http.Request) {
+	name := s.effective().DashboardName
+	if name == "" {
+		name = "homelab-inventory"
+	}
+	w.Header().Set("Content-Type", "application/manifest+json")
+	w.Header().Set("Cache-Control", "no-cache, private")
+	_ = json.NewEncoder(w).Encode(map[string]any{"name": name, "short_name": name, "description": "What is running, what is wrong, and what changed.", "start_url": "/#/home", "scope": "/", "display": "standalone", "background_color": "#121314", "theme_color": "#121314", "icons": []map[string]string{{"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}}})
+}
+
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
 	s.backupRoutes(mux)
@@ -147,6 +157,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /storage/runs", s.auth(s.handleRunsStorage))
 	mux.HandleFunc("POST /storage/runs/prune", s.auth(s.handlePruneRuns))
 	mux.HandleFunc("DELETE /storage/runs/{host}", s.auth(s.handleForgetHost))
+	mux.HandleFunc("GET /manifest.webmanifest", s.handleManifest)
 	mux.Handle("GET /", webui.Handler())
 	return s.observePluginRequests(s.setupGate(mux))
 }
@@ -191,7 +202,8 @@ func (s *server) agentAuth(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (s *server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, map[string]any{"operator_enabled": s.operatorToken != "", "agent_offers_enabled": s.operatorToken != "", "actions_enabled": s.actions != nil && s.operatorToken != "", "actions_host": s.actionPolicy.Host, "plugins": s.pluginCapabilities()})
+	eff := s.effective()
+	writeJSON(w, 200, map[string]any{"operator_enabled": s.operatorToken != "", "agent_offers_enabled": s.operatorToken != "", "actions_enabled": s.actions != nil && s.operatorToken != "", "actions_host": s.actionPolicy.Host, "dashboard_name": eff.DashboardName, "plugins": s.pluginCapabilities()})
 }
 
 func (s *server) handleHealthz(w http.ResponseWriter, r *http.Request) {

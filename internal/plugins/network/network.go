@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
@@ -17,14 +18,30 @@ const defaultExclude = `lo|veth.*|docker.*|br-.*|virbr.*|cali.*|flannel.*|cni.*|
 const containerQuery = `topk(10, sum by (name) (rate(container_network_receive_bytes_total{name!=""}[5m]) + rate(container_network_transmit_bytes_total{name!=""}[5m])))`
 const downQuery = `max_over_time(probe_success[10m]) == 0`
 
+// Names interpolated into server-owned PromQL. Neither can close a string or
+// a selector.
+var (
+	metricName    = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]{0,63}$`)
+	containerName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$`)
+)
+
 type Network struct {
 	inventory                    func() ([]plugin.NetworkHost, error)
+	dnsRecords                   func(context.Context) ([]plugin.DNSRecord, error)
 	speed                        *speed.Speedtester
 	extra                        plugin.Config
 	host                         plugin.Host
 	base, token, exclude, window string
 	cache                        map[string]cached
 	cacheBytes                   int
+	cacheMu                      sync.Mutex // the page's metrics report queries in parallel
+	// Optional exporter names for the page's WAN, quality and VPN panels.
+	vpnContainer, diagPrefix, wanDevice string
+	answers                             map[string]answer
+}
+
+func (n *Network) SetDNSRecordsSource(source func(context.Context) ([]plugin.DNSRecord, error)) {
+	n.dnsRecords = source
 }
 
 var _ plugin.AlertSource = (*Network)(nil)
@@ -45,6 +62,9 @@ func (*Network) Manifest() plugin.Manifest {
 		{Key: "prometheus_url", Label: "Prometheus URL", Type: plugin.URL},
 		{Key: "prometheus_token", Label: "Bearer token", Type: plugin.Secret},
 		{Key: "exclude_interfaces", Label: "Exclude interfaces", Type: plugin.Text, Default: defaultExclude, Help: "Regular expression matched against the whole device name."},
+		{Key: "vpn_container", Label: "VPN container", Type: plugin.Text, Help: "cAdvisor container name whose traffic is the VPN tunnel. Empty hides VPN traffic."},
+		{Key: "diag_prefix", Label: "Diagnostics metric prefix", Type: plugin.Text, Help: "Prefix of a network-diagnostics exporter: <prefix>_ping_rtt_seconds, _ping_loss_percent, _dns_resolve_seconds and _collection_success. Empty hides ping and DNS quality."},
+		{Key: "wan_device", Label: "Router metric name", Type: plugin.Text, Help: "Router segment of the exporter's WAN gauges: <prefix>_<router>_wan_rate_down_bytes_per_second, _wan_bandwidth_down_bits_per_second, _wan_state and <prefix>_<router>_pon_rx_power_dbm. Empty hides the WAN card."},
 		{Key: "window", Label: "History window", Type: plugin.Select, Default: "6h", Options: []plugin.Option{{Value: "1h", Label: "1 hour"}, {Value: "6h", Label: "6 hours"}, {Value: "24h", Label: "24 hours"}}},
 	}}
 }
@@ -78,6 +98,23 @@ func (n *Network) Configure(c plugin.Config) error {
 	if window != "1h" && window != "6h" && window != "24h" {
 		return &plugin.FieldError{Key: "window", Message: "Choose 1h, 6h or 24h"}
 	}
+	names := map[string]string{}
+	for _, key := range []string{"vpn_container", "diag_prefix", "wan_device"} {
+		value, _ := c[key].(string)
+		pattern := metricName
+		if key == "vpn_container" {
+			pattern = containerName
+		}
+		if value != "" && !pattern.MatchString(value) {
+			return &plugin.FieldError{Key: key, Message: "Use a plain name without quotes, spaces or braces"}
+		}
+		names[key] = value
+	}
+	if names["wan_device"] != "" && names["diag_prefix"] == "" {
+		return &plugin.FieldError{Key: "wan_device", Message: "Set the diagnostics metric prefix as well"}
+	}
+	n.vpnContainer, n.diagPrefix, n.wanDevice = names["vpn_container"], names["diag_prefix"], names["wan_device"]
+	n.answers = nil
 	base = strings.TrimRight(base, "/")
 	if n.base != base || n.token != token || n.exclude != exclude || n.window != window {
 		n.cache = map[string]cached{}
@@ -93,6 +130,7 @@ func (n *Network) Close() error {
 	}
 	n.base, n.token = "", ""
 	n.extra = nil
+	n.answers = nil
 	n.cache = nil
 	n.cacheBytes = 0
 	return nil

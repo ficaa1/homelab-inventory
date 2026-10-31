@@ -58,6 +58,8 @@ type Stored struct {
 	// NotifyEnabled turns delivery off without discarding the URL, so muting
 	// for an afternoon does not mean re-entering a credential afterwards.
 	NotifyEnabled *bool     `json:"notify_enabled,omitempty"`
+	DashboardName *string   `json:"dashboard_name,omitempty"`
+	IconsFetch    *bool     `json:"icons_fetch,omitempty"`
 	UpdatedAt     time.Time `json:"updated_at,omitempty"`
 }
 
@@ -71,6 +73,8 @@ type Defaults struct {
 	DigestInterval   time.Duration
 	AppriseURL       string
 	DigestAppriseURL string
+	DashboardName    string
+	IconsFetch       bool
 }
 
 // Effective is the resolved configuration: what the notifier actually uses.
@@ -82,6 +86,8 @@ type Effective struct {
 	AppriseURL       string
 	DigestAppriseURL string
 	NotifyEnabled    bool
+	DashboardName    string
+	IconsFetch       bool
 }
 
 // Resolve layers Stored over Defaults.
@@ -93,6 +99,8 @@ func Resolve(s Stored, d Defaults) Effective {
 		AppriseURL:       d.AppriseURL,
 		DigestAppriseURL: d.DigestAppriseURL,
 		NotifyEnabled:    true,
+		DashboardName:    d.DashboardName,
+		IconsFetch:       d.IconsFetch,
 		RunRetention:     ResolveRetention(s.RunRetention, d.RunRetention),
 	}
 	if s.NotifyLevel != nil {
@@ -121,6 +129,15 @@ func Resolve(s Stored, d Defaults) Effective {
 	if s.NotifyEnabled != nil {
 		e.NotifyEnabled = *s.NotifyEnabled
 	}
+	if s.DashboardName != nil && strings.TrimSpace(*s.DashboardName) != "" {
+		e.DashboardName = *s.DashboardName
+	}
+	if e.DashboardName == "" {
+		e.DashboardName = "homelab-inventory"
+	}
+	if s.IconsFetch != nil {
+		e.IconsFetch = *s.IconsFetch
+	}
 	return e
 }
 
@@ -138,6 +155,8 @@ type Update struct {
 	AppriseURL       *string    `json:"apprise_url,omitempty"`
 	DigestAppriseURL *string    `json:"digest_apprise_url,omitempty"`
 	NotifyEnabled    *bool      `json:"notify_enabled,omitempty"`
+	DashboardName    *string    `json:"dashboard_name,omitempty"`
+	IconsFetch       *bool      `json:"icons_fetch,omitempty"`
 }
 
 // Apply validates an update and merges it into the stored settings.
@@ -230,6 +249,17 @@ func Apply(s Stored, u Update, now time.Time, defaults ...Defaults) (Stored, err
 	if u.NotifyEnabled != nil {
 		v := *u.NotifyEnabled
 		out.NotifyEnabled = &v
+	}
+	if u.DashboardName != nil {
+		v := strings.TrimSpace(*u.DashboardName)
+		if len([]rune(v)) > 80 {
+			return s, fmt.Errorf("dashboard_name must be at most 80 characters")
+		}
+		out.DashboardName = &v
+	}
+	if u.IconsFetch != nil {
+		v := *u.IconsFetch
+		out.IconsFetch = &v
 	}
 
 	out.UpdatedAt = now

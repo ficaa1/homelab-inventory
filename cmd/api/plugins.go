@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
 	"github.com/ficaa1/homelab-inventory/internal/plugins/archive"
@@ -29,11 +30,14 @@ func openPlugins(data string, logger *log.Logger) (*plugin.Registry, error) {
 	r, err := plugin.Open(data, builtInPlugins(), logger)
 	if err == nil {
 		r.BindTasteSource()
+		r.BindNetworkDNS()
 	}
 	return r, err
 }
 func (s *server) pluginRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /uploads/targets", s.auth(s.handleUploadTargets))
+	mux.HandleFunc("GET /uploads/files", s.auth(s.handleUploadFiles))
+	mux.HandleFunc("GET /uploads/files/{name}", s.auth(s.handleUploadFile))
 	mux.HandleFunc("POST /plugins/{id}/upload/{target}", s.auth(s.handlePluginUpload))
 	mux.HandleFunc("POST /plugins/{id}/actions/{action}", s.handlePluginAction)
 	mux.HandleFunc("GET /plugins", s.auth(s.handlePlugins))
@@ -41,6 +45,43 @@ func (s *server) pluginRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /plugins/{id}/test", s.auth(s.handlePluginTest))
 	mux.HandleFunc("GET /plugins/{id}/views/{name}", s.auth(s.handlePluginView))
 	mux.HandleFunc("GET /plugins/{id}/images/{ref}", s.auth(s.handlePluginImage))
+	for _, m := range []string{"GET", "POST", "PUT", "DELETE"} {
+		mux.HandleFunc(m+" /plugins/{id}/api/{path...}", s.auth(s.handlePluginAPI))
+	}
+}
+
+// handlePluginAPI serves a built-in plugin's own dashboard page. Mutations must
+// be JSON, which a cross-site form cannot send; sessions also pass auth's CSRF check.
+func (s *server) handlePluginAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if s.plugins == nil {
+		s.pluginError(w, plugin.ErrNotFound)
+		return
+	}
+	var body []byte
+	if r.Method != http.MethodGet {
+		if ct := r.Header.Get("Content-Type"); r.ContentLength != 0 && !strings.HasPrefix(ct, "application/json") {
+			writeError(w, 415, "expected application/json")
+			return
+		}
+		var err error
+		if body, err = io.ReadAll(http.MaxBytesReader(w, r.Body, plugin.MaxAPIRequestBytes)); err != nil {
+			writeError(w, 413, "request body too large")
+			return
+		}
+	}
+	out, err := s.plugins.API(r.Context(), r.PathValue("id"), plugin.APIRequest{Method: r.Method, Path: r.PathValue("path"), Query: r.URL.Query(), Body: body, Actor: requestActor(r)})
+	if err != nil {
+		s.pluginError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", out.ContentType)
+	if out.ContentType != "application/json" {
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	}
+	w.WriteHeader(out.Status)
+	w.Write(out.Body)
 }
 func (s *server) pluginCapabilities() []plugin.Capability {
 	if s.plugins == nil {
@@ -105,6 +146,7 @@ func (s *server) handlePluginUpdate(w http.ResponseWriter, r *http.Request) {
 		s.pluginError(w, err)
 		return
 	}
+	s.plugins.BindNetworkDNS()
 	writeJSON(w, 200, out)
 }
 func (s *server) handlePluginTest(w http.ResponseWriter, r *http.Request) {
