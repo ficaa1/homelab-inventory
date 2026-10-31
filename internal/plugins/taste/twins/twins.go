@@ -4,6 +4,7 @@ package twins
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"sort"
@@ -106,7 +107,12 @@ func (m *Model) Similarity(i, j int) float64 {
 
 // LoadJSON deliberately never decodes legacy gob artifacts during restore.
 func LoadJSON(path string) (*Model, error) {
-	b, e := os.ReadFile(path)
+	f, e := os.Open(path)
+	if e != nil {
+		return nil, e
+	}
+	defer f.Close()
+	b, e := io.ReadAll(io.LimitReader(f, (64<<20)+1))
 	if e != nil {
 		return nil, e
 	}

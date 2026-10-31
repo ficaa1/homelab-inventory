@@ -27,15 +27,16 @@ Users must obtain permission under the source dataset/model license (including
 GroupLens/MovieLens restrictions where applicable). Place an approved sparse JSON
 artifact in the plugin cache and configure its filename in `twins_artifact`.
 The JSON has `Source`, `Films` (`TMDB`, `Title`, `Count`, `Mean`) and matching `Rows`
-arrays of `{ "To": 0, "W": 0.5 }` edges. Array indices refer to `Films`. Conversion
-from an existing trusted legacy gob must happen offline under the user's control;
-restore never decodes gob. The unchanged sparse weights preserve EASE scoring,
+arrays of `{ "To": 0, "W": 0.5 }` edges. Array indices refer to `Films`. The private source exporter converts its own trusted legacy gob into this portable
+JSON automatically while preserving the exact opaque original. Public restore
+never decodes gob. Older archives without a portable artifact need a new source
+export or a conversion performed offline under the user's control. The unchanged sparse weights preserve EASE scoring,
 interleaving, taste lanes and familiar ordering when supplied.
 
 Migration requires an explicit household ID and legacy numeric owner. Full
 Letterboxd state, verdict timestamps, hidden entries, model and caches are copied
-byte for byte into that profile. Legacy gob is preserved opaque, awaiting the
-licensed JSON conversion. Request receipts are retained separately in Dusk and
+byte for byte into that profile. The trusted source exporter supplies portable twins weights automatically; the
+legacy gob is preserved opaque. Request receipts are retained separately in Dusk and
 consulted as a global duplicate barrier, including unknown outcomes. Import never
 creates devices or transfers request authority; pair devices and configure an
 explicit destination request policy separately.

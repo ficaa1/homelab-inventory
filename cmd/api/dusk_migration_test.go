@@ -112,3 +112,25 @@ func TestDuskTasteFeedbackUsesPairedHousehold(t *testing.T) {
 		}
 	}
 }
+
+func TestPortableTwinsAutomaticallyActivatedWithoutGobDecode(t *testing.T) {
+	dir := t.TempDir()
+	portable := []byte(`{"Source":"synthetic licensed artifact","Films":[{"TMDB":1,"Title":"Fixture","Count":5,"Mean":4}],"Rows":[[{"To":0,"W":0.5}]]}`)
+	for name, b := range map[string][]byte{"tastetwins.portable.json": portable, "tastetwins.gob": {0xff, 0, 1}} {
+		if e := os.WriteFile(filepath.Join(dir, name), b, 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	issues, e := migrateBackupDusk(dir, map[string]string{}, "household", 7)
+	if e != nil {
+		t.Fatal(e)
+	}
+	raw, e := os.ReadFile(filepath.Join(dir, "plugins", "taste", "twins.json"))
+	if e != nil || !bytes.Equal(raw, portable) {
+		t.Fatal("portable weights lost", e)
+	}
+	settings, e := os.ReadFile(filepath.Join(dir, "state-plugins.json"))
+	if e != nil || !bytes.Contains(settings, []byte(`"twins_artifact":"twins.json"`)) {
+		t.Fatal(string(settings), issues, e)
+	}
+}

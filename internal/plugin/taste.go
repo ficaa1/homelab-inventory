@@ -118,3 +118,21 @@ func (r *Registry) TasteSimilar(ctx context.Context, profile, kind string, id in
 	}
 	return p.Similar(ctx, profile, kind, id)
 }
+
+// ValidateTasteState is a local restore health check; no workers or probes run.
+func (r *Registry) ValidateTasteState() error {
+	e := r.entries["taste"]
+	if e == nil {
+		return nil
+	}
+	e.op.Lock()
+	defer e.op.Unlock()
+	if !e.stored.Enabled {
+		return nil
+	}
+	p, ok := e.plugin.(interface{ ValidateLocal() error })
+	if !ok {
+		return ErrNotFound
+	}
+	return p.ValidateLocal()
+}

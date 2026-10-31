@@ -144,3 +144,31 @@ func TestExplicitVerdictOverridesImportedRating(t *testing.T) {
 		t.Fatal(string(b), e)
 	}
 }
+
+func TestLocalValidationIsInertAndRejectsForeignProfile(t *testing.T) {
+	h := host{dir: t.TempDir(), client: &http.Client{}}
+	p := New(h).(*Integration)
+	p.SetRecommendationSource(source{})
+	if e := p.Configure(plugin.Config{"bindings": `{"one":{"owner":1}}`}); e != nil {
+		t.Fatal(e)
+	}
+	if e := p.ValidateLocal(); e != nil {
+		t.Fatal(e)
+	}
+	if p.cancel != nil {
+		t.Fatal("validation started workers")
+	}
+	if _, e := os.Stat(filepath.Join(h.dir, "profiles")); !os.IsNotExist(e) {
+		t.Fatal("validation created state")
+	}
+	dir := filepath.Join(h.dir, "profiles", "one")
+	if e := os.MkdirAll(dir, 0700); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.WriteFile(filepath.Join(dir, "taste-model.json"), []byte(`{"owner":2,"picks":[]}`), 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e := p.ValidateLocal(); e == nil {
+		t.Fatal("foreign model accepted")
+	}
+}

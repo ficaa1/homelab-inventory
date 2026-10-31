@@ -10,6 +10,7 @@ import (
 
 	"github.com/ficaa1/homelab-inventory/internal/fsx"
 	"github.com/ficaa1/homelab-inventory/internal/plugins/taste"
+	"github.com/ficaa1/homelab-inventory/internal/plugins/taste/twins"
 )
 
 // migrateBackupDusk converts only staged private data, never contacting services.
@@ -123,6 +124,22 @@ func migrateBackupDusk(dir string, config map[string]string, profile string, own
 		settings["letterboxd_url"] = "https://letterboxd.com"
 		issues = append(issues, "Enabling Taste will resume public Letterboxd synchronization and Media metadata reads for the explicitly mapped owner.")
 	}
+	portable := filepath.Join(dir, "tastetwins.portable.json")
+	if _, err := os.Stat(portable); err == nil {
+		if _, err = twins.LoadJSON(portable); err != nil {
+			return nil, errors.New("invalid portable taste artifact")
+		}
+		raw, err := os.ReadFile(portable)
+		if err != nil {
+			return nil, err
+		}
+		dest := filepath.Join(dir, "plugins", "taste", "twins.json")
+		if err = fsx.WriteAtomic(dest, raw, 0600); err != nil {
+			return nil, err
+		}
+		settings["twins_artifact"] = "twins.json"
+		issues = append(issues, "User-owned twins weights converted by the trusted source exporter will resume ranking, lanes and familiar predictions.")
+	}
 	state.Plugins["taste"], e = json.Marshal(map[string]any{"enabled": true, "settings": settings})
 	if e != nil {
 		return nil, e
@@ -135,7 +152,7 @@ func migrateBackupDusk(dir string, config map[string]string, profile string, own
 		return nil, e
 	}
 	issues = append(issues, "Full Taste history, feedback and recommendation model mapped to the explicit household profile. Pair devices and configure request policy separately.")
-	if _, ok := files["tastetwins.gob"]; ok {
+	if _, ok := files["tastetwins.gob"]; ok && settings["twins_artifact"] == nil {
 		issues = append(issues, "Restricted twins artifact preserved opaque. Supply a licensed sparse JSON conversion to resume twins lanes and familiar predictions.")
 	}
 	return issues, nil
