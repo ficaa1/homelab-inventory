@@ -28,13 +28,19 @@ Media discovery and dashboard views are read-only. Explicit Dusk requests can su
 
 ## Uploads
 
-Adds an upload button to every page. Set up any of these destinations:
+Adds a round upload button to every page. It opens a compact corner sheet with
+Upload and Uploaded tabs; dropping files anywhere opens Upload. Destination
+buttons appear only when they accept every pending file, and send files one at
+a time. Uploaded lists the folder's files, supports pull to refresh, and opens
+text, Markdown, HTML or image previews with a download button.
+
+Set up any of these destinations:
 
 | Destination | What to enter | Takes |
 | --- | --- | --- |
-| Folder | A folder path (`/uploads` in Docker) | Any file |
-| Paperless-ngx | URL and an API token | `.pdf .png .jpg .jpeg .tif .tiff .webp .gif .txt` |
-| Calibre-Web | URL, username and password | `.epub .pdf .mobi .azw3 .cbz .fb2` |
+| Uploads | A folder path (`/uploads` in Docker) | Any file |
+| Paperless | URL and an API token | `.pdf .png .jpg .jpeg .tif .tiff .webp .gif .txt` |
+| Calibre | URL, username and password | `.epub .pdf .mobi .azw3 .cbz .fb2` |
 
 Files are limited to 100 MiB unless you change the limit. The folder never
 overwrites: a second `a.pdf` is saved as `a (1).pdf`.
@@ -207,3 +213,14 @@ Legacy migration preserves the source effective upload owner.
 Media keeps queue first-observed timestamps in its private plugin cache so a
 backup or runtime reopen does not reset the one-hour stuck-download threshold.
 Only a complete successful provider poll removes recovered observations.
+
+Overview shows Media playback and Arr queues and the Archive policy summary when
+those integrations are configured. Network can add a host-load tile: set
+`load_instance` to the exact node_exporter instance label, `load_job` to its job
+(default `node_exporter`), and `load_label` to the display name (default `Host load`).
+An empty instance disables host-load collection. Only fixed PromQL is used;
+these settings select label values, never expressions. CPU/load/memory readings
+and optional `plex_gpu_*` textfile metrics must be no older than 90 seconds, with
+at most five seconds of future clock skew. Missing GPU metrics remain unavailable.
+The host-load client caches for fifteen seconds and bounds parallel reads to three
+seconds. Generic installations retain the fleet Overview tiles.

@@ -15,6 +15,41 @@ type Report struct {
 	ZFS         any       `json:"zfs"`
 	Backups     any       `json:"backups"`
 	UnitsFailed any       `json:"units_failed"`
+	Streams     any       `json:"streams,omitempty"`
+	Archive     any       `json:"archive,omitempty"`
+	Arr         any       `json:"arr,omitempty"`
+	PlexLoad    any       `json:"plex_load,omitempty"`
+}
+
+type Streams struct {
+	Status        string    `json:"status"`
+	Count         int       `json:"count"`
+	Direct        int       `json:"direct"`
+	Transcode     int       `json:"transcode"`
+	BandwidthKbps int       `json:"bandwidth_kbps"`
+	Sessions      []Session `json:"sessions"`
+}
+type Session struct {
+	User        string   `json:"user"`
+	Title       string   `json:"title"`
+	State       string   `json:"state"`
+	ProgressPct *float64 `json:"progress_pct"`
+	Decision    string   `json:"decision"`
+	Quality     string   `json:"quality"`
+}
+type Archive struct {
+	Status           string   `json:"status"`
+	Phase            *string  `json:"phase"`
+	Title            *string  `json:"title"`
+	ProgressPct      *float64 `json:"progress_pct"`
+	SavedBytesTotal  *int64   `json:"saved_bytes_total"`
+	PendingApprovals int      `json:"pending_approvals"`
+}
+type ArrQueue struct {
+	Status    string `json:"status"`
+	Total     int    `json:"total"`
+	Problems  int    `json:"problems"`
+	Attention int    `json:"attention"`
 }
 type Fleet struct {
 	HostsTotal     int      `json:"hosts_total"`

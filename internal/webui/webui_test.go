@@ -37,7 +37,7 @@ func TestSelfContained(t *testing.T) {
 	rec := httptest.NewRecorder()
 	Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
 	policy := rec.Header().Get("Content-Security-Policy")
-	for _, directive := range []string{"connect-src 'self'", "img-src 'self' data:", "frame-ancestors 'none'", "default-src 'none'"} {
+	for _, directive := range []string{"connect-src 'self'", "img-src 'self' data:", "frame-src 'self'", "frame-ancestors 'none'", "default-src 'none'"} {
 		if !strings.Contains(policy, directive) {
 			t.Errorf("CSP missing %s", directive)
 		}
@@ -51,6 +51,19 @@ func TestSelfContained(t *testing.T) {
 		if !strings.Contains(policy, "'sha256-"+base64.StdEncoding.EncodeToString(sum[:])+"'") {
 			t.Errorf("CSP does not authorize %s", tag)
 		}
+	}
+
+	markedSum := sha256.Sum256(markedJS)
+	integrity := "sha256-" + base64.StdEncoding.EncodeToString(markedSum[:])
+	if !strings.Contains(policy, "'"+integrity+"'") || !strings.Contains(page, `s.integrity = "`+integrity+`"`) {
+		t.Error("vendored renderer is not bound to its CSP hash and integrity")
+	}
+	nonce := regexp.MustCompile(`<meta name="preview-style-nonce" content="([^"]+)">`).FindStringSubmatch(rec.Body.String())
+	if len(nonce) != 2 || !strings.Contains(policy, "'nonce-"+nonce[1]+"'") {
+		t.Error("preview styles lack a matching nonce")
+	}
+	if strings.Contains(policy, "script-src 'self'") || strings.Contains(policy, "script-src 'unsafe-inline'") {
+		t.Error("scripts must remain hash-bound")
 	}
 
 	for _, bad := range []string{
@@ -104,7 +117,7 @@ func TestFetchesTheEndpointsItNeeds(t *testing.T) {
 	for _, path := range []string{`api("/overview")`, `api("/alerts")`, `api("/hosts")`, `api("/ports")`,
 		`"/history"`, `api("/settings")`, `"/notify/test"`,
 		`api("/actions/stacks?host="`, `"/packages"`, `"/changes?limit=10"`, `api("/actions/log?limit=20")`, `"/actions/preview"`, `"/actions/execute"`,
-		`api("/agent/status")`, `operatorWrite('/agent/offers'`, `"/storage/runs/prune"`, `"/firewall-plan"`} {
+		`api("/agent/status")`, `('/agent/offers'`, `"/storage/runs/prune"`, `"/firewall-plan"`} {
 		if !strings.Contains(page, path) {
 			t.Errorf("the dashboard no longer calls %s", path)
 		}
@@ -320,11 +333,19 @@ func TestMotionHonoursReducedMotion(t *testing.T) {
 
 // Removed asset paths must continue to return 404.
 func TestRemovedAssetsAreNotServed(t *testing.T) {
-	for _, path := range []string{"/vendor/", "/vendor/marked.min.js", "/vendor/marked-18.1.0.umd.js", "/upload/preview/file"} {
+	for _, path := range []string{"/vendor/", "/vendor/marked.min.js", "/upload/preview/file"} {
 		w := httptest.NewRecorder()
 		Handler().ServeHTTP(w, httptest.NewRequest("GET", path, nil))
 		if w.Code != http.StatusNotFound {
 			t.Errorf("GET %s: %d", path, w.Code)
 		}
+	}
+}
+
+func TestMarkedVendorIsServed(t *testing.T) {
+	rec := httptest.NewRecorder()
+	Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/vendor/marked-18.1.0.umd.js", nil))
+	if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/javascript") || rec.Body.Len() == 0 {
+		t.Fatalf("marked vendor: status=%d type=%q bytes=%d", rec.Code, rec.Header().Get("Content-Type"), rec.Body.Len())
 	}
 }

@@ -174,10 +174,10 @@ func (u *Uploads) UploadTargets() []plugin.UploadTarget {
 		out = append(out, plugin.UploadTarget{ID: "folder", Label: "Uploads", Help: "Save a file without replacing existing files.", MaxBytes: u.folderMax})
 	}
 	if u.paperless != "" {
-		out = append(out, plugin.UploadTarget{ID: "paperless", Label: "Paperless-ngx", Accept: []string{".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".gif", ".txt"}, MaxBytes: u.remoteMax})
+		out = append(out, plugin.UploadTarget{ID: "paperless", Label: "Paperless", Accept: []string{".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".gif", ".txt"}, MaxBytes: u.remoteMax})
 	}
 	if u.calibre != "" {
-		out = append(out, plugin.UploadTarget{ID: "calibre", Label: "Calibre-Web", Accept: []string{".epub", ".pdf", ".mobi", ".azw3", ".cbz", ".fb2"}, MaxBytes: u.remoteMax})
+		out = append(out, plugin.UploadTarget{ID: "calibre", Label: "Calibre", Accept: []string{".epub", ".pdf", ".mobi", ".azw3", ".cbz", ".fb2"}, MaxBytes: u.remoteMax})
 	}
 	return out
 }

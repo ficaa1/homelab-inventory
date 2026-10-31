@@ -32,6 +32,8 @@ type entry struct {
 	alertPollSeen, alertPollOK bool
 	seeds                      Config
 	mediaRefresh               *mediaRefreshCache
+	overviewBody               []byte
+	overviewExpires            time.Time
 	op                         sync.Mutex // serializes calls on a plugin instance
 	mu                         sync.Mutex // protects cached status independently of live calls
 	test                       chan struct{}
@@ -211,6 +213,7 @@ func (r *Registry) Capabilities() []Capability {
 	}
 	return out
 }
+
 func (r *Registry) persist(id string, next storedPlugin) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -297,6 +300,7 @@ func (r *Registry) Update(id string, u Update) (ItemStatus, error) {
 	e.stored = next
 	e.config = cfg
 	e.mediaRefresh = nil
+	e.overviewBody = nil
 	e.ready = next.Enabled
 	e.message = ""
 	e.failures = 0

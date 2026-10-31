@@ -44,6 +44,9 @@ even when the browser also carries a session cookie.
 | `GET /plugins` | Built-in plugin status, schemas and masked settings | API token |
 | `PUT /plugins/{id}` | Enable, disable or merge plugin settings | API token |
 | `GET /uploads/targets` | Configured destinations across enabled upload plugins | API token |
+| `GET /uploads/files` | Folder files with name, size and modified time | API token or session |
+| `GET /uploads/files/{name}` | Download one folder file | API token or session |
+| `GET /uploads/preview/{name}` | Bounded text or raster image preview | API token or session |
 | `POST /plugins/{id}/upload/{target}` | Stream a raw file to a configured destination | API token |
 | `POST /plugins/{id}/test` | Test temporary merged settings without saving | API token |
 | `GET /plugins/{id}/views/{name}` | Validated declarative plugin view | API token |
@@ -291,6 +294,14 @@ or a user's access: complete sign-in to check those.
 order. Each entry has `plugin`, `plugin_name`, `id`, `label`, optional `help` and
 `accept` (lower-case extensions with a dot), and `max_bytes`. An empty `accept`
 allows any extension. Only enabled, configured destinations are listed.
+
+`GET /uploads/files` lists up to 500 regular files in the folder destination,
+newest first, as `{name,size,modified}` entries. Downloads and previews accept
+only a plain filename: dotfiles, symlinks and subdirectories are refused.
+`GET /uploads/preview/{name}` allows Markdown, HTML, text/log/CSV/JSON/YAML/conf
+(up to 2 MiB), and JPEG/PNG/GIF/WebP/AVIF (up to 25 MiB). Other kinds return
+415 and oversized previews return 413; downloads remain available. Preview
+responses are no-store, nosniff and sandboxed.
 
 `POST /plugins/{id}/upload/{target}` takes the file as the raw body, with a required
 `Content-Length` and `X-Upload-Name: <percent-encoded UTF-8 filename>` (browser

@@ -27,8 +27,10 @@ type InventoryStore interface {
 	ReadState(string, any) error
 }
 type Builder struct {
-	Store InventoryStore
-	Cache *StorageCache
+	// Contributions reads optional plugin sections alongside inventory history.
+	Contributions func(context.Context) map[string]any
+	Store         InventoryStore
+	Cache         *StorageCache
 	// Runs memoizes per-run storage reads across requests. Nil parses every run.
 	Runs *RunMemo
 	// Evaluate, when set, produces the alert report the Alerts tab uses.
@@ -39,7 +41,21 @@ func unavailable(err string) Unavailable { return Unavailable{"unavailable", err
 func (b Builder) Build(ctx context.Context, now time.Time) Report {
 	now = now.UTC()
 	out := Report{GeneratedAt: now}
+	var contributions <-chan map[string]any
+	if b.Contributions != nil {
+		ch := make(chan map[string]any, 1)
+		contributions = ch
+		go func() { ch <- b.Contributions(ctx) }()
+	}
 	b.local(ctx, &out, now)
+	if contributions != nil {
+		select {
+		case sections := <-contributions:
+			out.Streams, out.Arr = sections["streams"], sections["arr"]
+			out.Archive, out.PlexLoad = sections["archive"], sections["plex_load"]
+		case <-ctx.Done():
+		}
+	}
 	return out
 }
 func (b Builder) local(ctx context.Context, out *Report, now time.Time) {

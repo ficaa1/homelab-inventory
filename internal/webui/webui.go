@@ -14,9 +14,11 @@
 package webui
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"embed"
 	"encoding/base64"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -33,7 +35,12 @@ var buildTime = time.Now()
 // attributes drive numeric meters/layout; scripts and style elements stay hashed.
 // blob: images are plugin pictures the page fetched itself with the bearer
 // token, since an <img> cannot send it.
-var contentPolicy = "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'none'; frame-ancestors 'none'; connect-src 'self'; img-src 'self' data: blob:; manifest-src 'self'; worker-src 'self'; script-src " + inlineHash("script") + "; style-src " + inlineHash("style") + "; style-src-attr 'unsafe-inline'"
+var contentPolicy string
+
+func assetIntegrity(body []byte) string {
+	hash := sha256.Sum256(body)
+	return "sha256-" + base64.StdEncoding.EncodeToString(hash[:])
+}
 
 func inlineHash(tag string) string {
 	_, rest, ok := strings.Cut(string(indexHTML), "<"+tag+">")
@@ -72,6 +79,12 @@ func Handler() http.Handler {
 			// away — that is a browser rule, not a choice.
 			serve(w, r, "sw.js", "text/javascript; charset=utf-8", serviceWorker)
 			return
+		case markedPath:
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			http.ServeContent(w, r, markedPath, buildTime, strings.NewReader(string(markedJS)))
+			return
 		case "/icon.svg":
 			serve(w, r, "icon.svg", "image/svg+xml", appIcon)
 			return
@@ -82,10 +95,13 @@ func Handler() http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		// The token lives in sessionStorage, so keep the page itself out of
-		// shared caches.
-		w.Header().Set("Cache-Control", "no-cache, private")
-		http.ServeContent(w, r, "index.html", buildTime, strings.NewReader(string(indexHTML)))
+		// srcdoc inherits this policy. A fresh style nonce allows preview styles
+		// while the dashboard's own script and stylesheet remain hash-bound.
+		nonce := rand.Text()
+		w.Header().Set("Content-Security-Policy", strings.Replace(contentPolicy, "__PREVIEW_STYLE_NONCE__", nonce, 1))
+		w.Header().Set("Cache-Control", "private, no-store")
+		page := strings.Replace(string(indexHTML), "__PREVIEW_STYLE_NONCE__", nonce, 1)
+		io.WriteString(w, page)
 	})
 }
 
@@ -97,6 +113,13 @@ var serviceWorker []byte
 
 //go:embed icon.svg
 var appIcon []byte
+
+// marked is loaded only when a Markdown preview is opened. Its MIT notice is
+// kept beside the vendored renderer; it is outside the service worker cache.
+const markedPath = "/vendor/marked-18.1.0.umd.js"
+
+//go:embed vendor/marked-18.1.0.umd.js
+var markedJS []byte
 
 // serve writes one embedded asset with a long cache lifetime.
 //
@@ -141,10 +164,11 @@ func pageAssets(ext string) string {
 }
 
 func init() {
+	indexHTML = []byte(strings.Replace(string(indexHTML), "__MARKED_INTEGRITY__", assetIntegrity(markedJS), 1))
 	indexHTML = []byte(strings.Replace(string(indexHTML), "</style>", pageAssets(".css")+"\n</style>", 1))
 	indexHTML = []byte(strings.Replace(string(indexHTML), "<script>", "<script>"+pageAssets(".js")+"\n", 1))
 	indexHTML = []byte(strings.Replace(string(indexHTML), "</style>", "\n"+string(backupCSS)+"</style>", 1))
 	indexHTML = []byte(strings.Replace(string(indexHTML), "<!-- backup-ui -->", "", 1))
 	indexHTML = []byte(strings.Replace(string(indexHTML), "</script>", "\n"+string(backupUI)+"</script>", 1))
-	contentPolicy = "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'none'; frame-ancestors 'none'; connect-src 'self'; img-src 'self' data: blob:; manifest-src 'self'; worker-src 'self'; script-src " + inlineHash("script") + "; style-src " + inlineHash("style") + "; style-src-attr 'unsafe-inline'"
+	contentPolicy = "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'none'; frame-ancestors 'none'; connect-src 'self'; img-src 'self' data: blob:; manifest-src 'self'; worker-src 'self'; frame-src 'self'; script-src " + inlineHash("script") + " '" + assetIntegrity(markedJS) + "'; style-src " + inlineHash("style") + " 'nonce-__PREVIEW_STYLE_NONCE__'" + "; style-src-attr 'unsafe-inline'"
 }

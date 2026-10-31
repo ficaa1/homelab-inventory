@@ -66,11 +66,18 @@ Use the provided Host for dependencies:
 Optional interfaces are detected with type assertions:
 
 ```go
+Overview(context.Context) map[string]any
 Alerts(context.Context) ([]plugin.Alert, error)
 Image(context.Context, string) (contentType string, body []byte, err error)
 UploadTargets() []plugin.UploadTarget
 Upload(context.Context, string, string, int64, io.Reader) (plugin.UploadResult, error)
 ```
+
+Overview contributes optional Home sections (`streams`, `arr`, `plex_load`,
+`archive`). Registry collects ready, enabled plugins concurrently within three
+seconds, omits busy or failed sources, redacts credentials, and caches contributions
+for fifteen seconds. Settings changes invalidate that cache. Overview sources must
+honor cancellation and return unavailable sections when an upstream fails.
 
 Alert has Rule, Subject, Severity (`critical`, `warning`, `info`), Summary and
 Detail. Rule is local and stable. The core adds the plugin ID prefix, sets Host
