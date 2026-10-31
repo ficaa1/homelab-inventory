@@ -1326,6 +1326,10 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 .switch[aria-busy="true"] { opacity: 0.6; cursor: progress; }
 .plug-body { margin-top: 12px; padding: 16px; background: var(--surface-2); border-radius: var(--r); }
 .plug-form { margin-top: 0; gap: 16px; }
+.dusk-admin .pf > span { display: block; margin-bottom: 6px; }
+.dusk-admin h3, .dusk-admin h4, .dusk-admin p { margin: 0; }
+.dusk-admin input[type="file"] { max-width: 100%; }
+.dusk-admin li { overflow-wrap: anywhere; margin-bottom: 12px; }
 .plug-note { display: flex; gap: 10px; align-items: flex-start; font-size: var(--fs-sm); color: var(--text); padding: 10px 12px; border-radius: var(--r-sm); background: var(--warn-soft); }
 .plug-note .ic { color: var(--warn); margin-top: 1px; }
 .plug-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 20px 24px; }
@@ -5723,11 +5727,122 @@ body.has-up-bubble main.wrap { padding-bottom: 88px; }
       if (!ui.el || !ui.el.row.isConnected) buildPlugRow(p, ui);
       if (listEl.children[i] !== ui.el.row) listEl.insertBefore(ui.el.row, listEl.children[i] || null);
       updatePlugRow(p, ui);
+      if (p.id === "dusk") mountDuskAdmin(p, ui);
       var b = ui.el.body;
       if (ui.open && !ui.busy && !plugDirty(p, ui) && !b.contains(document.activeElement)) renderPlugForm(p, ui);
     });
     Array.prototype.slice.call(listEl.children).forEach(function (c) { if (!keep[c.getAttribute("data-plug")]) c.remove(); });
     if (plugins.scroll) { plugins.scroll = false; sec.scrollIntoView({ block: "start" }); }
+  }
+
+  // Dusk setup is independent of plugin tabs and settings-form refreshes.
+  function mountDuskAdmin(p, ui) {
+    if (!ui.dusk) {
+      var content = h("div", { class: "plug-body form plug-form dusk-admin" });
+      var details = h("details", {}, [h("summary", { text: "Household profiles and TV pairing" }), content]);
+      ui.dusk = { node: details, content: content, loaded: false, busy: false };
+      details.addEventListener("toggle", function () { if (details.open && !ui.dusk.loaded) loadDuskAdmin(ui.dusk); });
+      ui.el.row.appendChild(details);
+    }
+    ui.dusk.node.classList.toggle("hidden", !p.enabled);
+    if (!p.enabled) { ui.dusk.loaded = false; ui.dusk.node.open = false; ui.dusk.content.replaceChildren(); }
+  }
+
+  function loadDuskAdmin(state) {
+    state.content.textContent = "Loading Dusk setup…";
+    return api("/dusk/admin").then(function (data) {
+      state.loaded = true; state.data = data; renderDuskAdmin(state);
+    }, function (err) {
+      if (err.unauthorized) { showGate(true); return; }
+      state.loaded = false;
+      state.content.replaceChildren(h("p", { role: "alert", text: "Could not load Dusk setup: " + err.message }),
+        h("button", { class: "btn", type: "button", onclick: function () { loadDuskAdmin(state); }, text: "Retry" }));
+    });
+  }
+
+  function duskOptions(items, selected, valueKey) {
+    return [h("option", { value: "", text: "Not configured" })].concat((items || []).map(function (item) {
+      var value = String(item[valueKey || "id"]), option = h("option", { value: value, text: item.name || item.label || value });
+      option.selected = String(selected == null ? "" : selected) === value;
+      return option;
+    }));
+  }
+
+  function renderDuskAdmin(state) {
+    var data = state.data || {}, profiles = data.profiles || [], options = data.options || {}, box = state.content;
+    var status = h("p", { role: "status", "aria-live": "polite" });
+    function field(label, control) { return h("label", { class: "pf" }, [h("span", { text: label }), control]); }
+    function input(value) { var el = h("input", { type: "text" }); el.value = value || ""; return el; }
+    function select(items, value, key) { return h("select", {}, duskOptions(items, value, key)); }
+    function action(label, handler) { return h("button", { type: "button", class: "btn", text: label, onclick: handler }); }
+    function mutate(path, method, body, done) {
+      if (state.busy) return;
+      state.busy = true; status.textContent = "Saving…";
+      box.querySelectorAll("button").forEach(function (el) { el.disabled = true; });
+      write(path, method, body).then(function (result) {
+        state.busy = false;
+        if (done) { done(result); box.querySelectorAll("button").forEach(function (el) { el.disabled = false; }); }
+        else loadDuskAdmin(state);
+      }, function (err) {
+        state.busy = false;
+        box.querySelectorAll("button").forEach(function (el) { el.disabled = false; });
+        if (err.unauthorized) showGate(true);
+        status.textContent = "Could not save: " + err.message;
+      });
+    }
+    var name = input(""); name.maxLength = 100;
+    var create = h("div", { class: "plug-group" }, [field("New household profile name", name), action("Create profile", function () {
+      if (!name.value.trim()) { status.textContent = "Enter a profile name."; name.focus(); return; }
+      mutate("/dusk/profiles", "POST", { name: name.value.trim() });
+    })]);
+    var sections = profiles.map(function (profile) {
+      var policy = (data.policies || {})[profile.id] || {}, label = input(policy.label);
+      var approval = select([{id:"manual",name:"Manual approval"},{id:"automatic",name:"Automatic approval"}], policy.approval || "manual");
+      var requester = select(options.requesters, policy.requester_id);
+      function mediaPolicy(kind) {
+        var saved = policy[kind] || {}, servers = (options.servers || []).filter(function (s) { return s.kind === kind; });
+        var server = select(servers, saved.server_id), quality = select([], ""), root = select([], "");
+        function update(initial) {
+          var chosen = servers.filter(function (s) { return String(s.id) === server.value; })[0] || {};
+          quality.replaceChildren.apply(quality, duskOptions(chosen.profiles, initial ? saved.profile_id : ""));
+          root.replaceChildren.apply(root, duskOptions((chosen.roots || []).map(function (path) { return {path:path,name:path}; }), initial ? saved.root : "", "path"));
+        }
+        server.addEventListener("change", function () { update(false); }); update(true);
+        return { node: h("fieldset", { class: "plug-group" }, [h("legend", { text: kind === "movie" ? "Movie request policy" : "TV request policy" }), field("Server", server), field("Quality profile", quality), field("Root folder", root)]),
+          value: function () { return {server_id:Number(server.value),profile_id:Number(quality.value),root:root.value}; } };
+      }
+      var movie = mediaPolicy("movie"), tv = mediaPolicy("tv");
+      var scopes = ["media", "upcoming", "discover", "search", "requests", "preferences", "refresh", "taste"].map(function (scope) {
+        var check = h("input", { type: "checkbox", value: scope }); check.checked = ["media", "upcoming", "discover", "search"].indexOf(scope) >= 0;
+        return { scope: scope, check: check, node: h("label", { class: "chk" }, [check, " " + scope]) };
+      });
+      var code = h("p", { role: "status", "aria-live": "polite" });
+      var csv = h("input", { type: "file", accept: ".csv,text/csv", "aria-label": "Letterboxd CSV for " + profile.name });
+      var prefix = "/dusk/policies/" + encodeURIComponent(profile.id);
+      return h("section", { class: "plug-group" }, [h("h3", { text: profile.name }),
+        field("Policy label", label), field("Approval", approval), field("Requester", requester), movie.node, tv.node,
+        action("Save policy", function () { mutate(prefix, "PUT", {label:label.value,approval:approval.value,requester_id:Number(requester.value),movie:movie.value(),tv:tv.value()}); }),
+        h("h4", { text: "Pair a TV" }), h("p", { class: "help", text: "Read-only access is selected by default. Enable write permissions only for a trusted device. Enter this server’s URL and the generated code on your TV." }),
+        h("fieldset", { class: "plug-group" }, [h("legend", { text: "Device permissions" })].concat(scopes.map(function (s) { return s.node; }))),
+        action("Create pairing code", function () { mutate("/dusk/codes", "POST", { profile_id: profile.id, scopes: scopes.filter(function (s) { return s.check.checked; }).map(function (s) { return s.scope; }) }, function (result) { status.textContent = "Pairing code created."; code.textContent = "Code: " + result.code + " · Expires: " + result.expires_at; }); }), code,
+        h("h4", { text: "Letterboxd import" }), field("Choose an exported CSV file", csv),
+        action("Import CSV", function () {
+          var file = csv.files && csv.files[0];
+          if (!file) { status.textContent = "Choose a Letterboxd CSV file."; return; }
+          if (file.size > 64 * 1024) { status.textContent = "CSV files must be at most 64 KiB and 500 rows."; return; }
+          file.text().then(function (text) { mutate("/dusk/import/" + encodeURIComponent(profile.id), "POST", {csv:text}); }, function () { status.textContent = "Could not read the CSV file."; });
+        }),
+        action("Delete profile", function () { if (window.confirm("Delete profile “" + profile.name + "” and revoke its devices?")) mutate("/dusk/profiles/" + encodeURIComponent(profile.id), "DELETE", {}); })]);
+    });
+    var devices = (data.devices || []).map(function (device) {
+      var profile = profiles.filter(function (p) { return p.id === device.profile_id; })[0];
+      return h("li", {}, [h("span", { text: (device.name || "TV") + " · " + (profile ? profile.name : device.profile_id) + " · " + (device.scopes || []).join(", ") + " · " + (device.revoked_at ? "Revoked" : "Paired " + device.created_at) }),
+        device.revoked_at ? null : action("Revoke " + (device.name || "TV"), function () { if (window.confirm("Revoke this device’s access immediately?")) mutate("/dusk/devices/" + encodeURIComponent(device.id), "DELETE", {}); })]);
+    });
+    box.replaceChildren(h("p", { text: "Dusk uses the connections configured in Media. Household profiles keep pairing permissions, requests and taste separate." }), status, create,
+      h("div", { class: "plug-groups", style: "margin-top:24px" }, sections.length ? sections : [h("p", { text: "Create a household profile to pair your first TV." })]),
+      h("h3", { text: "Devices" }), h("ul", {}, devices.length ? devices : [h("li", { text: "No devices paired." })]),
+      h("div", { class: "help", text: (options.diagnostics || []).join(" · ") }));
   }
 
   function buildPlugRow(p, ui) {

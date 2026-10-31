@@ -14,7 +14,7 @@ func TestRequestsUseRetainedRoutes(t *testing.T) {
 	calls := regexp.MustCompile(`\b(api|write|operatorWrite|actionPost|fetch)\(|\bxhr\.open\("POST", `)
 	literals := regexp.MustCompile(`"([^"\n]*)"|'([^'\n]*)'`)
 	encode := regexp.MustCompile(`encodeURIComponent\([^)]*\)`)
-	routes := regexp.MustCompile(`^/(healthz|capabilities|overview|alerts|hosts|ports|services|services/accept|services/\{value\}|icons/\{value\}|agent/status|plugins|plugins/\{value\}|plugins/\{value\}/test|plugins/\{value\}/(views|images|upload)/\{value\}|uploads/targets|auth/(status|logout)|settings/auth|settings/auth/test|agent/offers|images|silences|silences/\{value\}|settings|settings/reset|notify/test|setup/(status|claim|enroll)|storage/runs|storage/runs/prune|storage/runs/\{value\}|actions/(stacks|log|preview|execute)|hosts/\{value\}(/(history|drift|trend|deps|compose|compose/diff|compose/file|firewall-plan|packages|packages/changes))?)$`)
+	routes := regexp.MustCompile(`^/(dusk/admin|healthz|capabilities|overview|alerts|hosts|ports|services|services/accept|services/\{value\}|icons/\{value\}|agent/status|plugins|plugins/\{value\}|plugins/\{value\}/test|plugins/\{value\}/(views|images|upload)/\{value\}|uploads/targets|auth/(status|logout)|settings/auth|settings/auth/test|agent/offers|images|silences|silences/\{value\}|settings|settings/reset|notify/test|setup/(status|claim|enroll)|storage/runs|storage/runs/prune|storage/runs/\{value\}|actions/(stacks|log|preview|execute)|hosts/\{value\}(/(history|drift|trend|deps|compose|compose/diff|compose/file|firewall-plan|packages|packages/changes))?)$`)
 	checked, helpers := 0, 0
 	for _, loc := range calls.FindAllStringIndex(script, -1) {
 		// Definitions do not make requests.
@@ -89,7 +89,7 @@ func TestRequestsUseRetainedRoutes(t *testing.T) {
 		}
 		checked++
 	}
-	if checked < 40 || helpers != 4 {
+	if checked < 40 || helpers != 5 {
 		t.Errorf("request scan missed calls: checked=%d helper calls=%d", checked, helpers)
 	}
 	t.Logf("checked %d request paths and %d shared-helper calls", checked, helpers)
