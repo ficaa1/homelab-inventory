@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
@@ -243,5 +244,21 @@ func TestLegacyPaperlessLoginBeforeStreaming(t *testing.T) {
 	result, e := registry.Upload(context.Background(), "uploads", "paperless", "example.pdf", 3, strings.NewReader("pdf"), "fixture-admin")
 	if e != nil || result.Name != "example.pdf" || len(calls) != 2 {
 		t.Fatalf("legacy login/upload: %+v %v", result, e)
+	}
+}
+
+func TestFolderExplicitOwnershipIsAppliedBeforePublish(t *testing.T) {
+	folder := t.TempDir()
+	registry, _, _ := configured(t, plugin.Config{"folder_path": folder, "folder_uid": float64(os.Getuid()), "folder_gid": float64(os.Getgid())})
+	if _, e := registry.Upload(context.Background(), "uploads", "folder", "owner.txt", 4, strings.NewReader("file"), "fixture"); e != nil {
+		t.Fatal(e)
+	}
+	info, e := os.Stat(filepath.Join(folder, "owner.txt"))
+	if e != nil || info.Mode().Perm() != 0644 {
+		t.Fatalf("published metadata invalid %v", e)
+	}
+	stat := info.Sys().(*syscall.Stat_t)
+	if int(stat.Uid) != os.Getuid() || int(stat.Gid) != os.Getgid() {
+		t.Fatal("configured ownership not applied")
 	}
 }

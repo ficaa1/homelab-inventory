@@ -198,3 +198,12 @@ endpoints. It runs only after an operator action, cancels on plugin shutdown,
 retains cooldown/backoff across restarts, and keeps bounded payload, concurrency
 and time limits. It can consume several gigabytes of traffic. No background
 measurement or measurement during restore is started.
+
+Folder uploads can explicitly set published file UID/GID. The API must have
+permission to apply that ownership before publication; Test checks it using a
+temporary destination file. Fresh installs preserve the API process identity.
+Legacy migration preserves the source effective upload owner.
+
+Media keeps queue first-observed timestamps in its private plugin cache so a
+backup or runtime reopen does not reset the one-hour stuck-download threshold.
+Only a complete successful provider poll removes recovered observations.

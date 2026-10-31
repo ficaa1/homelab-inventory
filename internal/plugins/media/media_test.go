@@ -288,13 +288,14 @@ func TestViewsChecksCacheAndImages(t *testing.T) {
 }
 
 type testHost struct {
+	dir    string
 	client *http.Client
 	now    time.Time
 	logs   bytes.Buffer
 }
 
 func (h *testHost) HTTP() *http.Client              { return h.client }
-func (*testHost) CacheDir() string                  { return "" }
+func (h *testHost) CacheDir() string                { return h.dir }
 func (h *testHost) Logf(format string, args ...any) { fmt.Fprintf(&h.logs, format, args...) }
 func (h *testHost) Now() time.Time                  { return h.now }
 
@@ -320,7 +321,7 @@ func TestDegradationPaginationAndAlertTransitions(t *testing.T) {
 	if err != nil || checks.OK || len(checks.Checks) != 4 || checks.Checks[1].OK || !checks.Checks[2].OK {
 		t.Fatal("degraded checks did not remain independent")
 	}
-	h := &testHost{client: server.Client(), now: f.now}
+	h := &testHost{client: server.Client(), now: f.now, dir: t.TempDir()}
 	m := New(h).(*Media)
 	if err = m.Configure(plugin.Config{"sonarr_url": server.URL + "/sonarr", "sonarr_key": "fixture-key"}); err != nil {
 		t.Fatal(err)
@@ -343,6 +344,15 @@ func TestDegradationPaginationAndAlertTransitions(t *testing.T) {
 	if err != nil || len(later) != 3 || later[2].Rule != "queue.stuck" || later[2].Subject != "Example series" || later[2].Severity != "warning" {
 		t.Fatal("stuck rule threshold/title dedup failed")
 	}
+	reopened := New(h).(*Media)
+	if err = reopened.Configure(plugin.Config{"sonarr_url": server.URL + "/sonarr", "sonarr_key": "fixture-key"}); err != nil {
+		t.Fatal(err)
+	}
+	preserved, err := reopened.Alerts(context.Background())
+	if err != nil || len(preserved) != 3 || preserved[2].Rule != "queue.stuck" {
+		t.Fatal("runtime reopen reset stuck observation")
+	}
+	m = reopened
 	f.recovered.Store(true)
 	h.now = h.now.Add(21 * time.Second)
 	recovered, err := m.Alerts(context.Background())

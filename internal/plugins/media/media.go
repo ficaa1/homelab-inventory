@@ -90,6 +90,9 @@ func (m *Media) Configure(c plugin.Config) error {
 	if !same {
 		m.reset()
 	}
+	if err := m.loadStuck(configured); err != nil {
+		return err
+	}
 	m.services, m.days = configured, days
 	return nil
 }
