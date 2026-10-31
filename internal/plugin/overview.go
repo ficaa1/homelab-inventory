@@ -37,7 +37,12 @@ func (r *Registry) Overview(ctx context.Context) map[string]any {
 		go func(id string, e *entry, src OverviewSource) {
 			defer e.op.Unlock()
 			res := result{id: id}
-			defer func() { results <- res }()
+			defer func() {
+				// A built-in source is trusted code, but a broken optional source
+				// must not take down the API's core Overview response.
+				_ = recover()
+				results <- res
+			}()
 			if ctx.Err() != nil {
 				return
 			}
