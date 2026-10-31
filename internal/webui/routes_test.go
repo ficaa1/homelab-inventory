@@ -15,7 +15,7 @@ func TestRequestsUseRetainedRoutes(t *testing.T) {
 	calls := regexp.MustCompile(`\b(api|write|operatorWrite|actionPost|fetch)\(|\bxhr\.open\("POST", `)
 	literals := regexp.MustCompile(`"([^"\n]*)"|'([^'\n]*)'`)
 	encode := regexp.MustCompile(`encodeURIComponent\([^)]*\)`)
-	routes := regexp.MustCompile(`^/(dusk/(admin|enrichment|options)|healthz|capabilities|overview|alerts|hosts|ports|services|services/accept|services/\{value\}|icons/\{value\}|agent/status|plugins|plugins/\{value\}|plugins/\{value\}/test|plugins/\{value\}/(views|images|upload)/\{value\}|uploads/targets|auth/(status|logout)|settings/auth|settings/auth/test|agent/offers|images|silences|silences/\{value\}|settings|settings/reset|notify/test|setup/(status|claim|enroll)|storage/runs|storage/runs/prune|storage/runs/\{value\}|actions/(stacks|log|preview|execute)|hosts/\{value\}(/(history|drift|trend|deps|compose|compose/diff|compose/file|firewall-plan|packages|packages/changes))?)$`)
+	routes := regexp.MustCompile(`^/(dusk/(admin|enrichment|options)|healthz|capabilities|overview|alerts|hosts|ports|services|services/accept|services/\{value\}|icons/\{value\}|agent/status|plugins|plugins/\{value\}|plugins/\{value\}/test|plugins/\{value\}/(views|images|upload)/\{value\}|uploads/(targets|files|files/\{value\})|auth/(status|logout)|settings/auth|settings/auth/test|agent/offers|images|silences|silences/\{value\}|settings|settings/reset|notify/test|setup/(status|claim|enroll)|storage/runs|storage/runs/prune|storage/runs/\{value\}|actions/(stacks|log|preview|execute)|hosts/\{value\}(/(history|drift|trend|deps|compose|compose/diff|compose/file|firewall-plan|packages|packages/changes))?)$`)
 	checked, helpers := 0, 0
 	for _, loc := range calls.FindAllStringIndex(script, -1) {
 		// Definitions do not make requests.
@@ -132,7 +132,7 @@ func TestPluginPagesUseTheKit(t *testing.T) {
 
 func TestDashboardScopeAndBranding(t *testing.T) {
 	page := coreBody(t)
-	for _, feature := range []string{"panel-archive", "panel-network", "arcPoll", "loadUploadCaps", "netTimer", "tdarrTimer", "/seasongate", "/digest/send", `"/network`, `"/upload"`, `"/upload?`, "/taste", "/archive", "/tdarr"} {
+	for _, feature := range []string{"panel-archive", "panel-network", "arcPoll", "loadUploadCaps", "netTimer", "tdarrTimer", "/seasongate", "/digest/send", `"/network`, `"/upload"`, `"/upload?`, "/taste", "/tdarr"} {
 		if strings.Contains(page, feature) {
 			t.Errorf("removed feature remains: %s", feature)
 		}

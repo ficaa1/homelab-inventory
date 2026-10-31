@@ -3,6 +3,8 @@
 .hn .hn-grid.hn-one { grid-template-columns: minmax(0, 1fr); }
 .hn .hn-grid > * { min-width: 0; }
 .hn .hn-wide, .hn .hn-grid > .banner { grid-column: 1 / -1; margin-bottom: 0; }
+.hn .hn-ports { margin-top: var(--s2); }
+.hn .hn-ports > .ports-heading { margin-top: 0; }
 .hn .hn-card > h3 { align-items: center; flex-wrap: wrap; }
 .hn .hn-card > h3 > .ic { color: var(--text-3); }
 .hn .hn-card > h3 .hn-chips { margin-left: auto; }
