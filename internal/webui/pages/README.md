@@ -30,7 +30,7 @@ while `HI.visible()` is false). `window.HI` is the kit:
 | `image(id, path, signal)` | a picture as a blob URL |
 | `openDrawer(html, label)`, `closeDrawer()` | the side sheet |
 | `go(hash)`, `link(id, view, params)` | navigation |
-| `upload(id, target, file)` | send a file to one of the plugin's upload targets through the upload sheet |
+| `upload(id, target, file)` | send a file to one of the plugin's upload targets through the corner upload sheet with progress and errors |
 | `ports(root)` | mount the core Ports grid/table into a page (used by Network) |
 | `services()` | return the current core service catalog for safe page joins |
 
