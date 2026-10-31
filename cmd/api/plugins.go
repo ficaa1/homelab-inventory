@@ -38,6 +38,7 @@ func (s *server) pluginRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /uploads/targets", s.auth(s.handleUploadTargets))
 	mux.HandleFunc("GET /uploads/files", s.auth(s.handleUploadFiles))
 	mux.HandleFunc("GET /uploads/files/{name}", s.auth(s.handleUploadFile))
+	mux.HandleFunc("GET /uploads/preview/{name}", s.auth(s.handleUploadPreview))
 	mux.HandleFunc("POST /plugins/{id}/upload/{target}", s.auth(s.handlePluginUpload))
 	mux.HandleFunc("POST /plugins/{id}/actions/{action}", s.handlePluginAction)
 	mux.HandleFunc("GET /plugins", s.auth(s.handlePlugins))

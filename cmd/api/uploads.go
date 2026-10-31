@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 
@@ -48,6 +50,78 @@ func (s *server) handleUploadFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
 	io.CopyN(w, f, size)
 }
+
+const previewCSP = "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
+
+const (
+	previewTextMax  = 2 << 20
+	previewImageMax = 25 << 20
+)
+
+type previewType struct {
+	mime string
+	max  int64
+}
+
+// previewTypes is the whole preview allowlist. SVG, PDF, HEIC and media are
+// deliberately absent: they are download-only.
+var previewTypes = map[string]previewType{
+	".md":       {"text/plain; charset=utf-8", previewTextMax},
+	".markdown": {"text/plain; charset=utf-8", previewTextMax},
+	".txt":      {"text/plain; charset=utf-8", previewTextMax},
+	".log":      {"text/plain; charset=utf-8", previewTextMax},
+	".csv":      {"text/plain; charset=utf-8", previewTextMax},
+	".yaml":     {"text/plain; charset=utf-8", previewTextMax},
+	".yml":      {"text/plain; charset=utf-8", previewTextMax},
+	".conf":     {"text/plain; charset=utf-8", previewTextMax},
+	".json":     {"text/plain; charset=utf-8", previewTextMax},
+	".html":     {"text/html; charset=utf-8", previewTextMax},
+	".htm":      {"text/html; charset=utf-8", previewTextMax},
+	".jpg":      {"image/jpeg", previewImageMax},
+	".jpeg":     {"image/jpeg", previewImageMax},
+	".png":      {"image/png", previewImageMax},
+	".gif":      {"image/gif", previewImageMax},
+	".webp":     {"image/webp", previewImageMax},
+	".avif":     {"image/avif", previewImageMax},
+}
+
+// handleUploadPreview shares the folder download resolver, but only serves
+// bounded text and raster images. The response stays inert on direct navigation.
+func (s *server) handleUploadPreview(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if s.plugins == nil {
+		writeError(w, 404, "uploads unavailable")
+		return
+	}
+	name := r.PathValue("name")
+	t, ok := previewTypes[strings.ToLower(path.Ext(name))]
+	if !ok {
+		writeError(w, 415, "no preview for this type")
+		return
+	}
+	f, size, err := s.plugins.OpenFolderFile(r.Context(), name)
+	if err != nil {
+		s.pluginError(w, err)
+		return
+	}
+	defer f.Close()
+	if size > t.max {
+		writeError(w, 413, "too large to preview")
+		return
+	}
+	h := w.Header()
+	h.Set("Content-Type", t.mime)
+	h.Set("Content-Length", fmt.Sprint(size))
+	h.Set("Content-Security-Policy", previewCSP)
+	h.Set("Referrer-Policy", "no-referrer")
+	h.Set("Cross-Origin-Resource-Policy", "same-origin")
+	h.Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": name}))
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(plugin.UploadTimeout))
+	// Keep the served length pinned to the descriptor size checked above.
+	io.CopyN(w, f, size)
+}
+
 func (s *server) handlePluginUpload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	fail := func(err error) {

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="preview-style-nonce" content="__PREVIEW_STYLE_NONCE__">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#121314">
@@ -1496,94 +1497,166 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 .signin-warn { display: flex; gap: 7px; align-items: baseline; font-size: var(--fs-xs); color: var(--text-2); margin: 0; }
 .signin-warn .g { color: var(--warn); font-size: 9px; }
 
-/* Uploads: the bubble, the drop target and the sheet. */
-.up-bubble {
-  position: fixed; z-index: 42; right: max(20px, env(safe-area-inset-right, 0px)); bottom: calc(20px + var(--safe-b));
-  width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
-  background: var(--ink-fill); color: var(--ink-on); border: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-  transition: transform var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
+/* ------------------------------------------------------------------ upload */
+.up-fab {
+  position: fixed; z-index: 60; right: max(18px, env(safe-area-inset-right, 0px)); bottom: calc(18px + var(--safe-b));
+  width: 52px; height: 52px; border-radius: 50%; border: 0; padding: 0; cursor: pointer;
+  display: grid; place-items: center; background: var(--ink-fill); color: var(--ink-on);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  transition: transform var(--dur-2) var(--ease-out);
 }
-.up-bubble:hover { opacity: 0.88; }
-/* Room at the end of the page so the bubble never covers the last row. */
-body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
-.up-bubble:active { transform: scale(0.96); }
-.up-bubble .ic { width: 22px; height: 22px; position: relative; }
-.up-bubble.busy::before {
-  content: ""; position: absolute; inset: -1px; border-radius: 50%;
-  background: conic-gradient(var(--accent) calc(var(--p, 0) * 1%), transparent 0);
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
-          mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+.up-fab::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 50%;
+  background: var(--accent); opacity: 0; pointer-events: none;
 }
-.up-badge {
-  position: absolute; top: -3px; right: -3px; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 999px;
-  font-size: 11px; font-weight: 600; line-height: 19px; text-align: center; font-variant-numeric: tabular-nums;
-  background: var(--accent); color: var(--accent-ink); box-shadow: 0 0 0 2px var(--bg);
+.up-fab:active { transform: scale(0.96); transition-duration: var(--dur-1); }
+.up-fab.drag { z-index: 96; background: var(--accent); color: var(--accent-ink); }
+.up-fab.pop { animation: up-pop var(--dur-3) var(--ease-spring); }
+.up-fab.pop .ic, .up-row.pop .fi .ic { stroke-dasharray: 24; animation: up-draw .34s var(--ease-out) .08s both; }
+.up-fab.shake, .up-row.shake { animation: up-shake .38s var(--ease-out); }
+.up-fab .ic { width: 22px; height: 22px; stroke-width: 2.1; }
+.up-fab .up-ring { position: absolute; inset: -5px; width: 62px; height: 62px; transform: rotate(-90deg); pointer-events: none; display: none; }
+.up-fab.busy .up-ring { display: block; }
+.up-ring circle { fill: none; stroke-width: 3; }
+.up-ring .trk { stroke: var(--track); }
+.up-ring .bar { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset .2s linear; }
+.up-fab.done { background: var(--ok); }
+.up-fab.away { opacity: 0; pointer-events: none; }
+.up-fab.fail { background: var(--crit); }
+@media (max-width: 640px) { .up-fab { bottom: calc(var(--nav-h) + var(--safe-b) + 14px); right: 14px; } }
+
+.up-drop {
+  position: fixed; inset: 0; z-index: 95; background: var(--scrim); pointer-events: none;
+  opacity: 0; visibility: hidden;
+  transition: opacity var(--dur-2) var(--ease-out), visibility 0s linear var(--dur-2);
 }
-.up-badge.bad { background: var(--crit); color: #fff; }
-.up-badge.ok { background: var(--ok); color: #fff; }
-.up-badge:empty { display: none; }
-.up-drop { position: fixed; inset: 0; z-index: 80; padding: 16px; background: var(--scrim); display: grid; pointer-events: none; }
-.up-drop-box {
-  display: grid; place-content: center; justify-items: center; gap: 8px; text-align: center;
-  border: 2px dashed var(--accent); border-radius: var(--r-lg); background: color-mix(in srgb, var(--surface) 92%, transparent);
-  color: var(--text-2); font-size: var(--fs-sm);
+.up-drop.on { opacity: 1; visibility: visible; transition: opacity var(--dur-2) var(--ease-out); }
+.up-drop-in {
+  position: absolute; inset: 14px; border: 2px dashed var(--accent); border-radius: var(--r-lg);
+  display: grid; place-content: center; justify-items: center; gap: 10px;
+  color: var(--accent); font-size: var(--fs-lg); font-weight: 600; background: var(--accent-soft);
+  transform: scale(0.97); transition: transform var(--dur-3) var(--ease-spring);
 }
-.up-drop-box .ic { width: 40px; height: 40px; color: var(--accent); stroke-width: 1.5; margin-bottom: 4px; }
-.up-drop-box b { font-size: var(--fs-xl); color: var(--text); font-weight: 600; letter-spacing: -0.015em; }
-.up-sheet h3 { margin-bottom: 14px; }
-.up-sheet h4 { font-size: var(--fs-xs); font-weight: 600; color: var(--text-3); margin: 20px 0 8px; }
-.up-pick {
-  display: grid; justify-items: center; gap: 10px; padding: 24px 16px; text-align: center;
-  border: 1px dashed var(--line-2); border-radius: var(--r-lg); background: var(--surface-2); color: var(--text-3); font-size: var(--fs-sm);
+.up-drop.on .up-drop-in { transform: none; }
+.up-drop-in .ic { width: 44px; height: 44px; stroke-width: 1.6; }
+
+.up-scrim { z-index: 72; }
+.up-sheet {
+  position: fixed; z-index: 73; right: 18px; bottom: calc(18px + var(--safe-b));
+  width: min(400px, calc(100% - 24px)); max-height: 70vh; overflow: auto;
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-lg);
+  box-shadow: 0 18px 50px rgba(0,0,0,0.45); padding: 14px;
+  transform-origin: calc(100% - 26px) calc(100% - 26px);
 }
-.up-pick > .ic { width: 28px; height: 28px; color: var(--text-3); stroke-width: 1.5; }
-.up-files { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
-.up-files li { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--line); font-size: var(--fs-sm); min-width: 0; }
-.up-files li:first-child { border-top: 0; }
-.up-files .ic { color: var(--text-3); }
-.up-files .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.up-files .sz { color: var(--text-3); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.up-targets { display: grid; gap: 8px; }
-.up-target {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; width: 100%;
-  text-align: left; padding: 12px 14px; min-height: 56px; cursor: pointer; color: var(--text);
-  background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r);
-  transition: border-color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out);
+.up-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -4px -4px 12px 0; }
+.up-tabs { position: relative; }
+.up-tabs .btn { min-height: 44px; padding: 4px 14px; font-size: var(--fs-md); position: relative; z-index: 1; }
+.up-tabs .btn[aria-pressed="true"] { background: none; }
+.up-thumb {
+  position: absolute; top: 3px; bottom: 3px; left: 0; width: 0; border-radius: var(--r-sm);
+  background: var(--surface-3); transform-origin: left center;
+  transition: transform var(--dur-2) var(--ease-out);
 }
-.up-target:hover:not(:disabled, .info) { border-color: var(--accent); background: var(--accent-soft); }
-.up-target.info { cursor: default; min-height: 0; padding: 10px 14px; border-color: var(--line); }
-.up-dests { margin: 0; padding: 0; list-style: none; }
-.up-target:disabled { cursor: default; background: none; border-style: dashed; }
-.up-target .lb { font-weight: 600; font-size: var(--fs-md); overflow-wrap: anywhere; }
-.up-target .lb small { font-weight: 500; font-size: var(--fs-xs); color: var(--text-3); margin-left: 6px; }
-.up-target .hp, .up-target .ac { grid-column: 1; font-size: var(--fs-xs); color: var(--text-3); overflow-wrap: anywhere; }
-.up-target:disabled .lb { color: var(--text-3); }
-.up-target .why { grid-column: 1; font-size: var(--fs-xs); color: var(--warn); border: 0; cursor: inherit; }
-.up-target .go { grid-column: 2; grid-row: 1 / span 3; color: var(--text-3); }
-.up-target:hover:not(:disabled) .go { color: var(--accent); }
-.up-queue { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
-.up-row { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 3px 10px; padding: 12px; border-top: 1px solid var(--line); font-size: var(--fs-sm); }
-.up-row:first-child { border-top: 0; }
-.up-row .g { font-size: 9px; align-self: center; text-align: center; color: var(--text-3); }
-.up-row.done .g { color: var(--ok); font-size: 13px; font-weight: 500; }
-.up-row.failed .g { color: var(--crit); }
-.up-row.sending .g { color: var(--info); }
-.up-row .nm { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.up-row .to { font-weight: 400; color: var(--text-3); }
-.up-row .st { grid-column: 2; font-size: var(--fs-xs); color: var(--text-2); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
-.up-row.failed .st { color: var(--crit); }
-.up-row .pv-track { grid-column: 2; margin: 4px 0 2px; height: 5px; }
-.up-row .pv-track i { transition: none; }
-.up-sheet .actions { margin-top: 16px; }
-.up-sheet .sub { margin-top: 10px; }
+.up-sheet .close {
+  width: 44px; height: 44px; border-radius: 50%; flex: none;
+  border: 0; background: none; color: var(--text-3); cursor: pointer; display: grid; place-items: center;
+}
+.up-pick { width: 100%; min-height: 96px; font-size: var(--fs-lg); gap: 10px; border-radius: var(--r-lg); }
+.up-pick .ic { width: 26px; height: 26px; }
+.up-files { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.up-files:empty { display: none; }
+.up-got { gap: 2px; max-height: min(52vh, 440px); overflow: auto; margin: 0 -6px; overscroll-behavior: contain; }
+.up-sheet .up-ref { margin-left: auto; }
+.up-ref.spin .ic, .up-pull.spin .ic { animation: spin 0.8s linear infinite; }
+#up-pane-got { position: relative; overflow-y: clip; }
+.up-pull {
+  position: absolute; top: 0; left: 50%; width: 32px; height: 32px; margin-left: -16px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--surface-3); color: var(--text-3);
+  opacity: 0; transform: translateY(-36px); pointer-events: none; z-index: 1;
+}
+.up-pull .ic { width: 18px; height: 18px; }
+.up-pull.armed { color: var(--accent); }
+.up-pull.ease, .up-got.ease { transition: transform var(--dur-2) var(--ease-out), opacity var(--dur-2) var(--ease-out); }
+.up-got:empty { display: none; }
+.up-got button.up-row {
+  width: 100%; min-height: 52px; padding: 4px 6px; border: 0; border-radius: var(--r); background: none;
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.up-got button.up-row:hover, .up-got button.up-row:focus-visible { background: var(--surface-2); }
+.up-got button.up-row { position: relative; }
+.up-got li.in { animation: rise var(--dur-2) var(--ease-out) var(--d, 0ms) backwards; }
+.up-got .up-row.fresh::after {
+  content: ""; position: absolute; inset: 0; border-radius: var(--r); pointer-events: none;
+  background: var(--accent-soft); animation: up-fresh 1.8s var(--ease-out) forwards;
+}
+@keyframes up-fresh { 0%, 35% { opacity: 1; } to { opacity: 0; } }
+.up-got .st .ic { width: 18px; height: 18px; color: var(--text-3); }
+.up-none { display: grid; justify-items: center; gap: 6px; padding: 26px 0; color: var(--text-3); }
+.up-none .ic { width: 28px; height: 28px; stroke-width: 1.6; }
+.up-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.up-row .fi {
+  width: 34px; height: 34px; border-radius: var(--r); display: grid; place-items: center;
+  background: var(--surface-3); color: var(--text-2);
+}
+.up-row .nm { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.up-row .meta { font-size: var(--fs-xs); color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.up-row .st { font-size: var(--fs-xs); color: var(--text-3); font-variant-numeric: tabular-nums; }
+.up-row.ok .fi { background: var(--ok-soft); color: var(--ok); }
+.up-row.err .fi { background: var(--crit-soft); color: var(--crit); }
+.up-row.err .meta { color: var(--crit); white-space: normal; overflow-wrap: anywhere; }
+.up-row.busy .fi { background: var(--accent-soft); color: var(--accent); }
+.up-bar { grid-column: 2 / 4; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; margin-top: -4px; }
+.up-bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; transform-origin: left center; transition: transform .2s linear; }
+.up-bar.wait i { width: 35% !important; animation: up-wait 1.1s ease-in-out infinite; }
+@keyframes up-wait { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+@media (prefers-reduced-motion: reduce) { .up-bar.wait i { animation: none; width: 100% !important; opacity: .5; } }
+.up-actions { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; margin-top: 14px; }
+.up-actions:empty { display: none; }
+.up-actions .btn { min-height: 48px; font-size: var(--fs-md); border-radius: var(--r); gap: 8px; }
 @media (max-width: 640px) {
-  .up-bubble { right: 14px; bottom: calc(var(--nav-h) + var(--safe-b) + 14px); width: 48px; height: 48px; }
-  body.has-up-bubble main.wrap { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 88px); }
-  .up-sheet .actions .btn { flex: 1 1 auto; min-height: 44px; }
+  .up-sheet {
+    left: 12px; right: 12px; width: auto; max-height: 75vh;
+    bottom: calc(var(--nav-h) + var(--safe-b) + 14px);
+  }
+  .up-tabs .btn { min-height: 44px; }
+}
+
+.pv-sheet {
+  position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column;
+  background: var(--surface); height: 100vh; height: 100dvh; padding-top: var(--safe-t);
+}
+#pv-sheet .pv-head { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; margin: 0; padding: 6px 8px 6px 14px; border-bottom: 1px solid var(--line-2); }
+.pv-name { flex: 1; min-width: 0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#pv-sheet .pv-head .close {
+  width: 44px; height: 44px; border-radius: 50%; flex: none; border: 0; background: none;
+  color: var(--text-3); cursor: pointer; display: grid; place-items: center;
+}
+.pv-body { flex: 1; min-height: 0; display: flex; overflow: auto; }
+.pv-frame { flex: 1; width: 100%; height: 100%; border: 0; background: var(--surface); }
+.pv-body pre {
+  flex: 1; margin: 0; padding: 14px 16px calc(14px + var(--safe-b)); white-space: pre-wrap; overflow-wrap: anywhere;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text);
+}
+.pv-body img { margin: auto; max-width: 100%; max-height: 100%; object-fit: contain; padding: 12px; }
+.pv-none { margin: auto; display: grid; justify-items: center; gap: 6px; padding: 26px; color: var(--text-3); text-align: center; }
+.pv-none .ic { width: 28px; height: 28px; stroke-width: 1.6; }
+.pv-none .ic.spin { animation: spin 0.8s linear infinite; }
+.pv-none.err { color: var(--crit); }
+
+@keyframes up-pop { from { transform: scale(.9); opacity: .6; } }
+@keyframes up-draw { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+@keyframes up-shake {
+  20% { transform: translateX(-5px); } 40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); } 80% { transform: translateX(2px); }
+}
+.up-row.pop .fi { animation: up-pop var(--dur-3) var(--ease-spring); }
+
+
+@media (prefers-reduced-motion: reduce) { .up-got .up-row.fresh::after { opacity: 0; } }
+@media (max-width: 640px) {
   .session-line > span { flex-basis: calc(100% - 26px); }
   .session-line .btn { margin-left: 26px; }
 }
-@media (prefers-reduced-motion: reduce) { .up-row .pv-track i { transition: none; } }
 </style>
 </head>
 <body>
@@ -1631,6 +1704,7 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
   <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
   <symbol id="i-unlock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></symbol>
   <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></symbol>
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
 </svg>
 
@@ -1830,15 +1904,51 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
 <div id="more-scrim" class="more-scrim hidden"></div>
 <div id="more-sheet" class="more-sheet hidden" role="menu" aria-label="More sections"></div>
 <div id="tip" class="tip hidden" role="status" aria-live="polite"></div>
-<!-- Uploads: shown only when some plugin offers a destination. -->
-<button id="up-bubble" class="up-bubble hidden" type="button" aria-label="Upload files"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg><span id="up-badge" class="up-badge"></span></button>
-<input id="up-input" type="file" multiple hidden>
-<div id="up-drop" class="up-drop hidden" aria-hidden="true"><div class="up-drop-box"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg><b>Drop to upload</b><span id="up-drop-sub">Choose where it goes next.</span></div></div>
 <div id="scrim" class="scrim hidden"></div>
 <aside id="drawer" class="drawer hidden" role="dialog" aria-modal="true" aria-label="Details">
   <button class="close" id="drawer-close" type="button" aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
   <div id="drawer-body"></div>
 </aside>
+<input id="up-input" type="file" multiple hidden>
+<button id="up-fab" class="up-fab hidden" type="button" aria-label="Upload" title="Upload">
+  <svg class="up-ring" viewBox="0 0 62 62" aria-hidden="true"><circle class="trk" cx="31" cy="31" r="29"/><circle class="bar" id="up-ring-bar" cx="31" cy="31" r="29"/></svg>
+  <svg class="ic" id="up-fab-ic" aria-hidden="true"><use href="#i-upload"/></svg>
+</button>
+<div id="up-drop" class="up-drop" aria-hidden="true"><div class="up-drop-in"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg>Drop</div></div>
+<div id="up-scrim" class="scrim up-scrim hidden"></div>
+<section id="up-sheet" class="up-sheet hidden" role="dialog" aria-modal="true" aria-label="Upload">
+  <div class="up-head">
+    <span class="seg up-tabs" role="tablist" aria-label="Upload">
+      <span class="up-thumb" id="up-thumb" aria-hidden="true"></span>
+      <button class="btn" type="button" role="tab" id="up-tab-send" data-uptab="send" aria-selected="true" aria-pressed="true">Upload</button>
+      <button class="btn" type="button" role="tab" id="up-tab-got" data-uptab="got" aria-selected="false" aria-pressed="false">Uploaded</button>
+    </span>
+    <button class="close up-ref hidden" id="up-ref" type="button" aria-label="Refresh" title="Refresh"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+    <button class="close" id="up-close" type="button" aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div id="up-pane-send" role="tabpanel" aria-labelledby="up-tab-send">
+    <button id="up-pick" class="btn primary up-pick" type="button"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg>Upload</button>
+    <ul id="up-files" class="up-files"></ul>
+    <div id="up-actions" class="up-actions"></div>
+  </div>
+  <div id="up-pane-got" class="hidden" role="tabpanel" aria-labelledby="up-tab-got">
+    <div id="up-pull" class="up-pull" aria-hidden="true"><svg class="ic"><use href="#i-refresh"/></svg></div>
+    <ul id="up-got" class="up-files up-got"></ul>
+  </div>
+</section>
+<section id="pv-sheet" class="pv-sheet hidden" role="dialog" aria-modal="true" aria-label="Preview">
+  <div class="pv-head">
+    <span class="pv-name" id="pv-name"></span>
+    <button class="close" id="pv-dl" type="button" aria-label="Download" title="Download"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg></button>
+    <button class="close" id="pv-close" type="button" aria-label="Close" title="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div id="pv-body" class="pv-body">
+    <template id="pv-frame-tpl"><iframe id="pv-frame" class="pv-frame" sandbox="allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" title="Preview"></iframe></template>
+    <pre id="pv-text" class="hidden"></pre>
+    <img id="pv-img" class="hidden" alt="">
+    <div id="pv-msg" class="pv-none hidden" role="status"></div>
+  </div>
+</section>
 <script>
 (function () {
   "use strict";
@@ -6809,214 +6919,345 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
 
   // ------------------------------------------------------------ uploads
   //
-  // Plugins that can take a file list their destinations at GET
-  // /uploads/targets. With at least one, a bubble sits bottom right and a
-  // file dropped anywhere opens the sheet. Files go one at a time, as raw
-  // bodies over XHR (fetch cannot report upload progress), named in
-  // X-Upload-Name. The server decides; the checks here only explain early
-  // what it would refuse.
+  // A drop opens the corner sheet. Only destinations that take all pending
+  // files appear; pressing one sends the queue one file at a time. Uploaded
+  // lists the folder destination, with previews and authenticated downloads.
 
-  var up = { targets: [], files: [], queue: [], xhr: null, drag: 0, seen: true, pane: "upload", uploaded: null, uploadedErr: "" };
+  var up = { targets: [], items: [], busy: false, depth: 0, doneTimer: 0, tab: "send", got: null, gotErr: "", getting: Object.create(null),
+             gotKey: "", stagger: false, fresh: "", fabState: "", fabFx: "", signedOut: false };
 
+  function appShown() { return !$("app").classList.contains("hidden"); }
   function loadUploadTargets() {
     return api("/uploads/targets").then(function (list) {
       up.targets = (Array.isArray(list) ? list : []).filter(function (t) {
         return t && PLUGIN_ID.test(t.plugin) && VIEW_NAME.test(t.id);
       });
-    }, function (err) {
-      if (err.unauthorized) return;
+    }).catch(function (e) {
       up.targets = [];
-    }).then(function () { renderUpBubble(); if (!up.queue.length) renderUpSheet(); });
+      if (e.unauthorized) showGate(!!token);
+    }).then(function () {
+      paintFab();
+      $("up-tab-got").parentNode.classList.toggle("hidden", !upHasFolder());
+      if (!upHasFolder() && up.tab === "got") setUpTab("send", false);
+      paintUpload();
+    });
   }
 
-  function appShown() { return !$("app").classList.contains("hidden"); }
-  function upActive() { return up.queue.filter(function (q) { return q.state === "waiting" || q.state === "sending"; }); }
-
-  function renderUpBubble() {
-    var b = $("up-bubble"), active = upActive(), show = appShown() && (up.targets.length > 0 || up.queue.length > 0);
-    b.classList.toggle("hidden", !show);
-    document.body.classList.toggle("has-up-bubble", show);
-    var badge = $("up-badge"), failed = up.queue.filter(function (q) { return q.state === "failed"; }).length;
-    var done = up.queue.filter(function (q) { return q.state === "done"; }).length;
-    badge.className = "up-badge";
-    if (active.length) badge.textContent = String(active.length);
-    else if (!up.seen && failed) { badge.textContent = "!"; badge.classList.add("bad"); }
-    else if (!up.seen && done) { badge.textContent = String(done); badge.classList.add("ok"); }
-    else badge.textContent = "";
-    var cur = up.queue.filter(function (q) { return q.state === "sending"; })[0];
-    b.classList.toggle("busy", !!cur);
-    b.style.setProperty("--p", cur && cur.file.size ? Math.round(cur.loaded / cur.file.size * 100) : 0);
-    b.setAttribute("aria-label", active.length ? "Uploads: " + active.length + " to go" :
-      !up.seen && failed ? "Uploads: " + failed + " failed" : !up.seen && done ? "Uploads: " + done + " finished" : "Upload files");
+  function upHasFolder() { return up.targets.some(function (t) { return t.id === "folder"; }); }
+  function acceptList(t) { return Array.isArray(t.accept) ? t.accept : []; }
+  function upTarget(k) { return up.targets.filter(function (t) { return t.plugin + "/" + t.id === k; })[0]; }
+  function upIcon(t) {
+    return t.id === "folder" ? "folder" : t.id === "paperless" ? "file" : t.id === "calibre" ? "book" : t.id.indexOf("letterboxd") === 0 ? "film" : "upload";
   }
 
-  function upSheetOpen() {
-    var s = $("drawer-body").firstChild;
-    return !$("drawer").classList.contains("hidden") && !$("drawer").motionOut && !!s && s.classList && s.classList.contains("up-sheet");
+  // fx: the reader chose this tab or opened the panel, so the indicator
+  // slides, the pane eases in from the tab's side and Uploaded's rows rise.
+  function setUpTab(t, fx) {
+    if (t === "got" && !upHasFolder()) t = "send";
+    var prev = up.tab;
+    up.tab = t;
+    ["send", "got"].forEach(function (k) {
+      var on = k === t, b = $("up-tab-" + k);
+      b.setAttribute("aria-selected", on); b.setAttribute("aria-pressed", on);
+      $("up-pane-" + k).classList.toggle("hidden", !on);
+    });
+    $("up-ref").classList.toggle("hidden", t !== "got");
+    placeThumb(fx);
+    if (fx && prev !== t) {
+      var dx = t === "got" ? "12px" : "-12px";
+      animateIn($("up-pane-" + t), [{ opacity: 0, transform: "translateX(" + dx + ")" }, { opacity: 1, transform: "none" }], motion.d2);
+    }
+    if (t === "got") {
+      if (fx) { up.stagger = true; if (up.got) paintGot(true); }
+      loadGot();
+    }
   }
 
-  function extOf(name) {
-    var i = name.lastIndexOf(".");
-    return i > 0 ? name.slice(i).toLowerCase() : "";
-  }
-  function acceptList(t) { return Array.isArray(t.accept) ? t.accept.filter(function (x) { return typeof x === "string"; }) : []; }
-  // Why a destination cannot take these files, or "" when it can.
-  function upReason(t, files) {
-    var acc = acceptList(t), max = +t.max_bytes || 0;
-    var wrong = acc.length ? files.filter(function (f) { return acc.indexOf(extOf(f.name)) < 0; }) : [];
-    if (wrong.length === 1) return "Does not take " + (files.length > 1 ? wrong[0].name : extOf(wrong[0].name) || "files without an extension") + ". Takes " + acc.join(" ");
-    if (wrong.length) return "Does not take " + wrong.length + " of these files. Takes " + acc.join(" ");
-    var big = max ? files.filter(function (f) { return f.size > max; }) : [];
-    if (big.length === 1) return (files.length > 1 ? big[0].name + " is" : "This file is") + " over its " + bytes(max) + " limit";
-    if (big.length) return big.length + " of these files are over its " + bytes(max) + " limit";
-    return "";
+  function placeThumb(fx) {
+    var th = $("up-thumb"), b = $("up-tab-" + up.tab), w0 = $("up-tab-send").offsetWidth;
+    if (!w0 || !b.offsetWidth) return;
+    th.style.width = w0 + "px";
+    if (!fx) th.style.transition = "none";
+    th.style.transform = "translateX(" + b.offsetLeft + "px) scaleX(" + (b.offsetWidth / w0).toFixed(4) + ")";
+    if (!fx) { void th.offsetWidth; th.style.transition = ""; }
   }
 
-  function openUpSheet(files) {
-    if (files && files.length) up.files = Array.prototype.slice.call(files);
-    up.seen = true;
-    up.pane = "upload";
-    if (!upSheetOpen()) openDrawer("", "Upload");
-    renderUpSheet(true);
-    renderUpBubble();
+  // One request at a time; the refresh button spins while it is out.
+  function loadGot() {
+    if (!upHasFolder()) return Promise.resolve();
+    if (up.gotLoading) return up.gotLoading;
+    $("up-ref").classList.add("spin");
+    up.gotLoading = api("/uploads/files").then(function (list) {
+      up.got = list || []; up.gotErr = "";
+    }).catch(function (e) {
+      up.gotErr = e.unauthorized ? "Signed out" : e.message;
+      if (e.unauthorized) showGate(!!token);
+    }).then(function () {
+      up.gotLoading = null;
+      $("up-ref").classList.remove("spin");
+      paintGot();
+    });
+    return up.gotLoading;
   }
 
-  function folderTarget() { return up.targets.filter(function (t) { return t.id === "folder"; })[0] || null; }
-  function loadUploaded() {
-    up.uploadedErr = "";
-    return api("/uploads/files").then(function (list) { up.uploaded = Array.isArray(list) ? list : []; }, function (err) {
-      if (err.unauthorized) { showGate(true); return; }
-      up.uploaded = []; up.uploadedErr = err.message || "Unavailable";
-    }).then(function () { renderUpSheet(); });
+  // Pull to refresh: only a downward drag that starts with the list at its
+  // top. The list follows the finger with resistance; past the threshold a
+  // release reloads it, otherwise it springs back.
+  var PULL_MAX = 84, PULL_AT = 56;
+  var pull = { y: -1, x: 0, d: 0, on: false };
+  function pullPaint(d, ease) {
+    var ind = $("up-pull"), ul = $("up-got");
+    ind.classList.toggle("ease", ease); ul.classList.toggle("ease", ease);
+    ind.style.opacity = d ? Math.min(1, d / PULL_AT) : "";
+    ind.style.transform = d ? "translateY(" + (d - 36) + "px) rotate(" + Math.round(d * 4) + "deg)" : "";
+    ul.style.transform = d ? "translateY(" + d + "px)" : "";
+    ind.classList.toggle("armed", d >= PULL_AT);
   }
-  function uploadedPane() {
-    var files = up.uploaded || [];
-    if (up.uploadedErr) return h("div", { class: "empty", text: up.uploadedErr });
-    if (!up.uploaded) return h("div", { class: "empty", text: "Loading…" });
-    return files.length ? h("ul", { class: "up-queue uploaded-list" }, files.map(function (f) {
-      var row = h("li", { class: "up-row" }, [iconNode("file", "sm"), h("span", { class: "nm", text: f.name }), h("span", { class: "st", text: sizeOf(f.size) })]);
-      row.appendChild(h("button", { class: "btn", type: "button", text: "Download", onclick: function () {
-        var headers = {"X-Requested-By":"homelab-inventory"}; if (token) headers.Authorization = "Bearer " + token;
-        fetch("/uploads/files/" + encodeURIComponent(f.name), { headers: headers }).then(function (r) { if (!r.ok) throw new Error("Download failed"); return r.blob(); }).then(function (b) { var u = URL.createObjectURL(b), a = document.createElement("a"); a.href = u; a.download = f.name; a.click(); setTimeout(function () { URL.revokeObjectURL(u); }, 1000); }).catch(function (e) { up.uploadedErr = e.message; renderUpSheet(); });
-      } }));
-      return row;
-    })) : h("div", { class: "empty", text: "No uploaded files yet." });
+  function pullReset() { pull.y = -1; pull.on = false; pull.d = 0; pullPaint(0, true); }
+  var gotPane = $("up-pane-got");
+  gotPane.addEventListener("touchstart", function (e) {
+    if (e.touches.length !== 1 || up.gotLoading || $("up-got").scrollTop > 0 || $("up-sheet").scrollTop > 0) { pull.y = -1; return; }
+    pull.y = e.touches[0].clientY; pull.x = e.touches[0].clientX; pull.on = false; pull.d = 0;
+  }, { passive: true });
+  gotPane.addEventListener("touchmove", function (e) {
+    if (pull.y < 0) return;
+    if (e.touches.length !== 1) { pullReset(); return; }
+    var dy = e.touches[0].clientY - pull.y, dx = Math.abs(e.touches[0].clientX - pull.x);
+    if (dx > Math.abs(dy)) { pullReset(); return; }
+    if (!pull.on) {
+      if (dy < 0 || dx > Math.abs(dy) || $("up-got").scrollTop > 0) { pull.y = -1; return; }
+      if (dy < 8) return;
+      pull.on = true;
+    }
+    if (e.cancelable) e.preventDefault();
+    pull.d = Math.max(0, Math.min(PULL_MAX, (dy - 8) * 0.5));
+    pullPaint(pull.d, false);
+  }, { passive: false });
+  gotPane.addEventListener("touchend", function () {
+    if (!pull.on) { pull.y = -1; return; }
+    pull.y = -1; pull.on = false;
+    if (pull.d < PULL_AT) { pullReset(); return; }
+    pullPaint(PULL_AT, true);
+    $("up-pull").classList.add("spin");
+    loadGot().then(function () { $("up-pull").classList.remove("spin"); pullReset(); });
+  });
+  gotPane.addEventListener("touchcancel", function () { if (pull.on) pullReset(); else pull.y = -1; });
+
+  // Unchanged lists are not re-rendered, so a reload never restarts motion.
+  // Rows rise once per opening (staggered, at most 200ms in all), and the
+  // file just uploaded is highlighted the first time Uploaded shows it.
+  function paintGot(force) {
+    var ul = $("up-got"), visible = up.tab === "got" && !$("up-sheet").classList.contains("hidden");
+    var stagger = visible && up.stagger && !!up.got, fresh = visible ? up.fresh : "";
+    var key = JSON.stringify([up.got, up.gotErr, up.getting]);
+    if (!force && !stagger && !fresh && key === up.gotKey) return;
+    up.gotKey = key;
+    if (stagger) up.stagger = false;
+    if (fresh && up.got && up.got.some(function (f) { return f.name === fresh; })) up.fresh = "";
+    ul.replaceChildren();
+    if (up.gotErr || !up.got || !up.got.length) {
+      if (!up.gotErr && !up.got) return;
+      var empty = document.createElement("li");
+      empty.className = "up-none" + (stagger ? " in" : "");
+      if (up.gotErr) empty.style.color = "var(--crit)";
+      empty.innerHTML = ic(up.gotErr ? "x" : "folder");
+      empty.appendChild(document.createTextNode(up.gotErr || "Empty"));
+      ul.appendChild(empty);
+      return;
+    }
+    up.got.forEach(function (f, i) {
+      var g = up.getting[f.name], st = (g === true ? "busy" : g ? "err" : "") + (f.name === fresh ? " fresh" : "");
+      var li = document.createElement("li"), row = document.createElement("button");
+      if (stagger) { li.className = "in"; li.style.setProperty("--d", Math.min(i * 30, 200) + "ms"); }
+      row.type = "button"; row.className = "up-row " + st;
+      row.dataset.file = f.name; row.title = f.name;
+      row.innerHTML = '<span class="fi">' + ic("file") + '</span><span style="min-width:0"><div class="nm"></div><div class="meta"></div></span><span class="st"></span>';
+      row.querySelector(".nm").textContent = f.name;
+      row.querySelector(".meta").textContent = g && g !== true ? g : bytes(f.size) + " · " + ago(f.modified);
+      if (g === true) row.querySelector(".st").innerHTML = ic("clock");
+      li.appendChild(row); ul.appendChild(li);
+    });
   }
 
-  function sizeOf(n) { return n === 0 ? "0 B" : bytes(n); }
-  function upSeveralPlugins() { return up.targets.some(function (t) { return t.plugin !== up.targets[0].plugin; }); }
-  function upTerms(t) {
-    var acc = acceptList(t);
-    return (acc.length ? acc.join(" ") : "Any file") + (+t.max_bytes ? " · up to " + bytes(+t.max_bytes) : "");
+  function downloadGot(name) {
+    if (up.getting[name] === true) return;
+    up.getting[name] = true;
+    paintGot();
+    var headers = {"X-Requested-By": "homelab-inventory"};
+    if (token) headers.Authorization = "Bearer " + token;
+    fetch("/uploads/files/" + encodeURIComponent(name), { headers: headers, cache: "no-store" }).then(function (r) {
+      if (r.status === 401) showGate(!!token);
+      if (!r.ok) throw new Error(r.status === 401 ? "Signed out" : r.status === 404 ? "Gone" : "HTTP " + r.status);
+      return r.blob();
+    }).then(function (b) {
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(b);
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 60000);
+      delete up.getting[name];
+      paintGot();
+    }).catch(function (e) {
+      up.getting[name] = e.message || "Failed";
+      paintGot();
+    });
   }
 
-  function renderUpSheet(opening) {
-    if (!opening && !upSheetOpen()) return;
-    var focusKey = document.activeElement && document.activeElement.getAttribute ? document.activeElement.getAttribute("data-up") : null;
-    var kids = [], active = upActive();
-    var folder = folderTarget();
-    if (!up.files.length && folder) {
-      kids.push(h("div", { class: "up-tabs", role: "tablist" }, [
-        h("button", { class: "btn", type: "button", role: "tab", "aria-selected": up.pane === "upload" ? "true" : "false", text: "Upload", onclick: function () { up.pane = "upload"; renderUpSheet(); } }),
-        h("button", { class: "btn", type: "button", role: "tab", "aria-selected": up.pane === "uploaded" ? "true" : "false", text: "Uploaded", onclick: function () { up.pane = "uploaded"; renderUpSheet(); if (!up.uploaded) loadUploaded(); } })]));
-      if (up.pane === "uploaded") {
-        kids.push(h("h3", { text: "Uploaded" })); kids.push(uploadedPane());
-        kids.push(h("div", { class: "actions" }, [h("button", { class: "btn", type: "button", text: "Refresh", onclick: loadUploaded })]));
-        var uploadedSheet = h("div", { class: "up-sheet" }, kids); $("drawer-body").replaceChildren(uploadedSheet); return;
+  function upExt(name) { var m = /\.[^.]+$/.exec(name || ""); return m ? m[0].toLowerCase() : ""; }
+
+  // Only destinations that accept every pending file are offered.
+  function upChoices(file) {
+    return up.targets.filter(function (t) {
+      var acc = acceptList(t);
+      return (!acc.length || acc.indexOf(upExt(file.name)) >= 0) && (!+t.max_bytes || file.size <= +t.max_bytes);
+    }).sort(function (a, b) {
+      function rank(t) { return t.id === "folder" ? 2 : t.id === "paperless" ? 1 : 0; }
+      return rank(a) - rank(b);
+    }).map(function (t) { return t.plugin + "/" + t.id; });
+  }
+
+  function upPending() { return up.items.filter(function (it) { return it.state === "" || it.state === "err"; }); }
+
+  function upCommon() {
+    var pend = upPending(), common = null;
+    pend.forEach(function (it) {
+      var c = upChoices(it.file);
+      common = common ? common.filter(function (k) { return c.indexOf(k) >= 0; }) : c;
+    });
+    return common || [];
+  }
+
+  function openUpload(files) {
+    if (!up.targets.length || !appShown() || !files || !files.length) return;
+    if (!up.busy) {
+      clearTimeout(up.doneTimer);
+      up.items = [];
+    }
+    Array.prototype.forEach.call(files, function (f) {
+      var it = { file: f, state: "", pct: 0, msg: "" };
+      var max = Math.max.apply(null, up.targets.map(function (t) { return +t.max_bytes || 2147483648; }));
+      if (f.size > max) { it.state = "bad"; it.msg = "Over " + bytes(max); }
+      else if (!f.size) { it.state = "bad"; it.msg = "Empty"; }
+      else if (!upChoices(f).length) { it.state = "bad"; it.msg = "No destination"; }
+      up.items.push(it);
+    });
+    setUpTab("send", true);
+    showSheet(true);
+    paintUpload();
+    var first = $("up-actions").querySelector("button");
+    (first || $("up-close")).focus();
+  }
+
+  // The panel grows out of the bubble's corner and folds back into it; the
+  // bubble shrinks away as it opens and springs back once it has closed.
+  var SHEET_OUT = [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(0.14)" }];
+  function showSheet(on) {
+    var sheet = $("up-sheet"), fab = $("up-fab"), was = !sheet.classList.contains("hidden") && !sheet.motionOut;
+    if (on === was) return;
+    if (on) {
+      if (fab.motionIn) { fab.motionIn.cancel(); fab.motionIn = null; }
+      reveal(sheet, [{ opacity: 0, transform: "scale(0.14)" }, { opacity: 1, offset: 0.35 }, { opacity: 1, transform: "none" }], motion.d3, motion.spring);
+      reveal($("up-scrim"), FADE_IN, motion.d2);
+      placeThumb(false);
+      fab.inert = true;
+      fab.classList.add("away");
+      animateIn(fab, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(0.6)" }], motion.d1, motion.inn);
+      return;
+    }
+    conceal(sheet, SHEET_OUT, motion.d2);
+    conceal($("up-scrim"), FADE_OUT, motion.d2);
+    fab.inert = false;
+    fab.classList.remove("away");
+    fab.motionIn = animateIn(fab, [{ opacity: 0, transform: "scale(0.5)" }, { opacity: 1, transform: "none" }], motion.d3, motion.spring, motion.d2 - 60);
+    if (up.fabFx) {
+      var fx = up.fabFx;
+      up.fabFx = "";
+      setTimeout(function () { fabEffect(fx); }, moving() ? motion.d2 + motion.d3 - 60 : 0);
+    }
+  }
+
+  function fabEffect(fx) {
+    var fab = $("up-fab");
+    if (up.fabState !== (fx === "pop" ? "check" : "x")) return;
+    fab.classList.remove("pop", "shake");
+    void fab.offsetWidth;
+    fab.classList.add(fx);
+  }
+
+  function closeUpload() {
+    pullReset();
+    var restoreFocus = $("up-sheet").contains(document.activeElement);
+    showSheet(false);
+    if (!up.busy) { up.items = []; paintFab(); }
+    if (restoreFocus) $("up-fab").focus();
+  }
+
+  function paintFab() {
+    var fab = $("up-fab"), total = 0, sent = 0;
+    fab.classList.toggle("hidden", !appShown() || (!up.targets.length && !up.items.length));
+    up.items.forEach(function (it) {
+      if (it.state === "bad") return;
+      total += it.file.size;
+      sent += it.state === "ok" || it.state === "err" ? it.file.size : it.file.size * it.pct;
+    });
+    var c = 2 * Math.PI * 29, frac = total ? sent / total : 0;
+    $("up-ring-bar").setAttribute("stroke-dasharray", c.toFixed(1));
+    $("up-ring-bar").setAttribute("stroke-dashoffset", (c * (1 - frac)).toFixed(1));
+    fab.classList.toggle("busy", up.busy);
+    var failed = !up.busy && up.items.some(function (it) { return it.state === "err"; });
+    var done = !up.busy && !failed && up.items.some(function (it) { return it.state === "ok"; });
+    fab.classList.toggle("done", done);
+    fab.classList.toggle("fail", failed);
+    var state = done ? "check" : failed ? "x" : "upload";
+    if (state !== up.fabState) {
+      up.fabState = state;
+      $("up-fab-ic").innerHTML = '<use href="#i-' + state + '"/>';
+      fab.classList.remove("pop", "shake");
+      var fx = done ? "pop" : failed ? "shake" : "";
+      up.fabFx = fab.classList.contains("away") ? fx : "";
+      if (fx && !up.fabFx) fabEffect(fx);
+    }
+    fab.setAttribute("aria-label", up.busy ? "Uploading " + Math.round(frac * 100) + "%" : "Upload");
+  }
+
+  function paintUpload() {
+    $("up-pick").classList.toggle("hidden", up.items.length > 0);
+    var files = $("up-files");
+    files.replaceChildren();
+    up.items.forEach(function (it, i) {
+      var st = it.state, icon = st === "ok" ? "check" : st === "err" || st === "bad" ? "x" : st === "busy" ? "upload" : "file";
+      var meta = st === "err" || st === "bad" ? it.msg
+        : st === "ok" ? it.destination.label + " · " + bytes(it.file.size)
+        : bytes(it.file.size);
+      var fx = it.fx || ""; it.fx = "";
+      var row = document.createElement("li");
+      row.className = "up-row " + (st === "bad" ? "err" : st) + (fx ? " " + fx : "");
+      row.id = "up-row-" + i;
+      row.innerHTML = '<span class="fi">' + ic(icon) + '</span><span style="min-width:0"><div class="nm"></div><div class="meta"></div></span><span class="st"></span>';
+      row.querySelector(".nm").title = it.file.name;
+      row.querySelector(".nm").textContent = it.stored || it.file.name;
+      row.querySelector(".meta").title = it.msg || it.ref || "";
+      row.querySelector(".meta").textContent = meta;
+      if (st === "busy") {
+        row.querySelector(".st").textContent = Math.round(it.pct * 100) + "%";
+        var bar = document.createElement("div"), fill = document.createElement("i");
+        bar.className = "up-bar" + (it.pct >= 1 ? " wait" : "");
+        fill.style.transform = "scaleX(" + it.pct.toFixed(3) + ")";
+        bar.appendChild(fill); row.appendChild(bar);
       }
-    }
-    if (up.files.length) {
-      var files = up.files;
-      kids.push(h("h3", { id: "up-title", text: files.length === 1 ? "Upload a file" : "Upload " + files.length + " files" }));
-      kids.push(h("ul", { class: "up-files", "aria-label": "Files" }, files.map(function (f) {
-        return h("li", {}, [iconNode("file", "sm"), h("span", { class: "nm", title: f.name, text: f.name }), h("span", { class: "sz", text: sizeOf(f.size) })]);
-      })));
-      kids.push(h("h4", { id: "up-to", text: "Send to" }));
-      var ok = 0, several = upSeveralPlugins();
-      kids.push(h("div", { class: "up-targets", role: "group", "aria-labelledby": "up-to" }, up.targets.map(function (t, i) {
-        var why = upReason(t, files), whyID = "up-why-" + i;
-        if (!why) ok++;
-        return h("button", { class: "up-target", type: "button", disabled: !!why, "data-up": "t" + i, "aria-describedby": why ? whyID : null,
-          onclick: function () { upEnqueue(t); } }, [
-          h("span", { class: "lb" }, [str(t.label) || t.id, several && str(t.plugin_name) ? h("small", { text: str(t.plugin_name) }) : null]),
-          str(t.help) ? h("span", { class: "hp", text: str(t.help) }) : null,
-          why ? h("span", { class: "why", id: whyID, text: why }) : h("span", { class: "ac", text: upTerms(t) }),
-          why ? null : iconNode("send", "go")]);
-      })));
-      if (!up.targets.length) kids.push(h("p", { class: "sub", text: "No destination is set up any more. Configure one in Admin → Plugins." }));
-      else if (!ok) kids.push(h("p", { class: "sub", text: files.length > 1 ? "No destination takes all of these files. Upload them in smaller groups." : "No destination takes this file." }));
-      kids.push(h("div", { class: "actions" }, [h("button", { class: "btn", type: "button", "data-up": "cancel-pick", onclick: function () { up.files = []; renderUpSheet(); } }, ["Cancel"])]));
-      if (active.length) kids.push(h("p", { class: "sub", text: active.length + " earlier upload" + (active.length > 1 ? "s are" : " is") + " still going; these join the queue." }));
-    } else if (up.queue.length) {
-      kids.push(h("h3", { id: "up-title", text: active.length ? "Uploading" : "Uploads" }));
-      kids.push(h("ul", { class: "up-queue", "aria-label": "Uploads" }, up.queue.map(upRow)));
-      kids.push(h("div", { class: "actions" }, active.length ? [
-        h("button", { class: "btn", type: "button", "data-up": "stop", onclick: upCancel }, [iconNode("x", "sm"), active.length > 1 ? "Cancel the rest" : "Cancel"])
-      ] : [
-        h("button", { class: "btn primary", type: "button", "data-up": "more", onclick: function () { up.queue = []; renderUpBubble(); $("up-input").click(); } }, [iconNode("upload", "sm"), "Upload more"]),
-        h("button", { class: "btn", type: "button", "data-up": "clear", onclick: function () { up.queue = []; renderUpBubble(); renderUpSheet(); } }, ["Clear list"])
-      ]));
-    } else {
-      kids.push(h("h3", { id: "up-title", text: "Upload" }));
-      kids.push(h("div", { class: "up-pick" }, [iconNode("upload"),
-        h("span", { text: "Drop files anywhere on the page, or" }),
-        h("button", { class: "btn primary", type: "button", "data-up": "choose", onclick: function () { $("up-input").click(); } }, ["Choose files"])]));
-      kids.push(h("h4", { id: "up-dest", text: "Destinations" }));
-      var several2 = upSeveralPlugins();
-      kids.push(h("ul", { class: "up-targets up-dests", "aria-labelledby": "up-dest" }, up.targets.map(function (t) {
-        return h("li", { class: "up-target info" }, [
-          h("span", { class: "lb" }, [str(t.label) || t.id, several2 && str(t.plugin_name) ? h("small", { text: str(t.plugin_name) }) : null]),
-          str(t.help) ? h("span", { class: "hp", text: str(t.help) }) : null,
-          h("span", { class: "ac", text: upTerms(t) })]);
-      })));
-    }
-    var sheet = h("div", { class: "up-sheet" }, kids);
-    $("drawer-body").replaceChildren(sheet);
-    var again = focusKey && sheet.querySelector('[data-up="' + focusKey + '"]');
-    if (!again && focusKey) again = sheet.querySelector(".actions .btn, .up-target:not([disabled])");
-    if (again) again.focus();
+      files.appendChild(row);
+    });
+    var acts = up.busy || !upPending().length ? [] : upCommon();
+    $("up-actions").replaceChildren();
+    acts.forEach(function (k, i) {
+      var t = upTarget(k);
+      $("up-actions").appendChild(h("button", { type: "button", class: "btn" + (i === 0 ? " primary" : ""), "data-target": k }, [iconNode(upIcon(t)), t.label]));
+    });
+    paintFab();
   }
 
-  var UP_GLYPH = { waiting: "○", sending: "●", done: "✓", failed: GLYPH.critical, cancelled: "–" };
-  function upRow(q) {
-    var t = q.target, cls = "up-row " + q.state;
-    var g = h("span", { class: "g", "aria-hidden": "true", text: UP_GLYPH[q.state] });
-    var name = h("span", { class: "nm", title: q.file.name }, [q.file.name, h("span", { class: "to", text: " → " + (str(t.label) || t.id) })]);
-    var row = h("li", { class: cls }, [g, name]);
-    if (q.state === "sending") {
-      var pct = q.file.size ? Math.min(100, Math.round(q.loaded / q.file.size * 100)) : 0;
-      var track = h("div", { class: "pv-track t-info", role: "progressbar", "aria-label": "Uploading " + q.file.name, "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(pct) }, [h("i")]);
-      track.firstChild.style.width = pct + "%";
-      q.el = { track: track, st: h("span", { class: "st", text: pct + "% · " + sizeOf(q.loaded) + " of " + sizeOf(q.file.size) }) };
-      row.appendChild(track);
-      row.appendChild(q.el.st);
-    } else {
-      q.el = null;
-      row.appendChild(h("span", { class: "st", text: q.state === "waiting" ? "Waiting · " + sizeOf(q.file.size) : q.message }));
-    }
-    return row;
-  }
-
-  // Progress moves the bar and the numbers only; the sheet is not rebuilt.
-  function upProgress(q) {
-    renderUpBubble();
-    if (!q.el || !q.el.track.isConnected) return;
-    var pct = q.file.size ? Math.min(100, Math.round(q.loaded / q.file.size * 100)) : 0;
-    q.el.track.firstChild.style.width = pct + "%";
-    q.el.track.setAttribute("aria-valuenow", String(pct));
-    q.el.st.textContent = (pct >= 100 ? "Sent · waiting for " + (str(q.target.label) || q.target.id) : pct + "% · " + sizeOf(q.loaded) + " of " + sizeOf(q.file.size));
-  }
-
-  function upEnqueue(t) {
-    up.files.forEach(function (f) { up.queue.push({ file: f, target: t, state: "waiting", loaded: 0, message: "" }); });
-    up.files = [];
-    up.seen = upSheetOpen();
-    renderUpSheet();
-    renderUpBubble();
-    upNext();
-  }
-
-  // Plain words for what the server answered.
   function upError(q, status, j) {
     var t = q.target, label = str(t.label) || t.id, why = str(j && j.error);
     switch (status) {
@@ -7034,91 +7275,335 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     return "Failed (HTTP " + status + ")" + (why ? ": " + why : ".");
   }
 
-  function upNext() {
-    if (up.xhr) return;
-    var q = up.queue.filter(function (x) { return x.state === "waiting"; })[0];
-    if (!q) {
-      renderUpBubble();
-      if (upSheetOpen()) up.seen = true;
-      renderUpSheet();
-      renderUpBubble();
-      return;
-    }
-    q.state = "sending"; q.loaded = 0;
-    var xhr = up.xhr = new XMLHttpRequest();
-    xhr.open("POST", "/plugins/" + encodeURIComponent(q.target.plugin) + "/upload/" + encodeURIComponent(q.target.id));
-    xhr.setRequestHeader("X-Requested-By", "homelab-inventory");
-    xhr.setRequestHeader("X-Upload-Name", encodeURIComponent(q.file.name));
-    if (token) xhr.setRequestHeader("Authorization", "Bearer " + token);
-    xhr.upload.onprogress = function (e) { if (e.lengthComputable) { q.loaded = e.loaded; upProgress(q); } };
-    function settle(state, message) {
-      if (up.xhr !== xhr) return;
-      up.xhr = null;
-      q.state = state; q.message = message;
-      if (!upSheetOpen()) up.seen = false;
-      announce((state === "done" ? "Uploaded " : state === "failed" ? "Failed: " : "Cancelled: ") + q.file.name + (state === "failed" ? ". " + message : ""));
-      renderUpSheet();
-      if (xhr.status === 404) loadUploadTargets();
-      if (xhr.status === 401) { up.queue.forEach(function (x) { if (x.state === "waiting") { x.state = "cancelled"; x.message = "Not sent"; } }); renderUpBubble(); showGate(!!token); return; }
-      upNext();
-    }
-    xhr.onload = function () {
-      var j = null;
-      try { j = JSON.parse(xhr.responseText); } catch (e) { j = null; }
-      if (xhr.status >= 200 && xhr.status < 300) {
-        var stored = str(j && j.name), msg = str(j && j.message) || "Uploaded.";
-        settle("done", stored && stored !== q.file.name ? msg.replace(/\.?$/, ".") + " Saved as " + stored + "." : msg);
-      } else settle("failed", upError(q, xhr.status, j));
-    };
-    xhr.onerror = function () { settle("failed", upError(q, 0, null)); };
-    xhr.onabort = function () { settle("cancelled", "Cancelled"); };
-    renderUpSheet();
-    upProgress(q);
-    xhr.send(q.file);
+  function sendUpload(it, target) {
+    if (up.signedOut) return Promise.resolve();
+    return new Promise(function (resolve) {
+      var x = new XMLHttpRequest(), t = upTarget(target);
+      if (!t) { it.state = "err"; it.msg = "No destination"; resolve(); return; }
+      it.state = "busy"; it.pct = 0; it.msg = ""; it.target = target; it.destination = t;
+      paintUpload();
+      x.open("POST", "/plugins/" + encodeURIComponent(t.plugin) + "/upload/" + encodeURIComponent(t.id));
+      if (token) x.setRequestHeader("Authorization", "Bearer " + token);
+      x.setRequestHeader("X-Requested-By", "homelab-inventory");
+      x.setRequestHeader("X-Upload-Name", encodeURIComponent(it.file.name));
+      x.setRequestHeader("Content-Type", "application/octet-stream");
+      x.upload.onprogress = function (e) {
+        if (e.lengthComputable) { it.pct = e.loaded / e.total; upProgress(it); }
+      };
+      x.onload = function () {
+        var j = {};
+        try { j = JSON.parse(x.responseText); } catch (e) { /* not JSON */ }
+        if (x.status >= 200 && x.status < 300) {
+          it.state = "ok"; it.stored = j.name; it.ref = j.message; it.fx = "pop";
+          if (t.id === "folder") { up.fresh = j.name || ""; loadGot(); }
+        } else {
+          it.state = "err"; it.fx = "shake"; it.msg = upError({ target: t }, x.status, j);
+          if (x.status === 404) loadUploadTargets();
+          if (x.status === 401) {
+            up.signedOut = true;
+            upPending().forEach(function (q) { q.state = "err"; q.msg = "Signed out"; });
+            showGate(!!token);
+          }
+        }
+        announce((it.state === "ok" ? "Uploaded " : "Failed: ") + it.file.name + (it.state === "err" ? ". " + it.msg : ""));
+        resolve();
+      };
+      x.onerror = x.onabort = function () { it.state = "err"; it.fx = "shake"; it.msg = "Network error"; resolve(); };
+      x.send(it.file);
+    });
   }
 
-  function upCancel() {
-    up.queue.forEach(function (x) { if (x.state === "waiting") { x.state = "cancelled"; x.message = "Not sent"; } });
-    if (up.xhr) up.xhr.abort(); else { renderUpSheet(); renderUpBubble(); }
+  // Progress moves the existing bar rather than re-rendering the list, so
+  // the bar glides between events and nothing else on the panel restarts.
+  function upProgress(it) {
+    var row = $("up-row-" + up.items.indexOf(it)), bar = row && row.querySelector(".up-bar");
+    if (!bar) { paintUpload(); return; }
+    bar.classList.toggle("wait", it.pct >= 1);
+    bar.firstChild.style.transform = "scaleX(" + it.pct.toFixed(3) + ")";
+    row.querySelector(".st").textContent = Math.round(it.pct * 100) + "%";
+    paintFab();
   }
 
-  $("up-bubble").addEventListener("click", function () { openUpSheet(); });
+  function upSend(target) {
+    if (up.busy || !upTarget(target)) return;
+    var queue = upPending();
+    if (!queue.length || upCommon().indexOf(target) < 0) return;
+    up.busy = true; up.signedOut = false;
+    clearTimeout(up.doneTimer);
+    paintUpload();
+    queue.reduce(function (p, it) { return p.then(function () { return sendUpload(it, target); }); }, Promise.resolve())
+      .then(function () {
+        up.busy = false;
+        paintUpload();
+        if (!up.items.some(function (it) { return it.state === "err" || it.state === "bad"; })) {
+          up.doneTimer = setTimeout(function () { closeUpload(); up.items = []; paintFab(); }, 2500);
+        }
+      });
+  }
+  $("up-actions").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-target]");
+    if (b) upSend(b.dataset.target);
+  });
+
+  $("up-fab").addEventListener("click", function () {
+    showSheet(true);
+    setUpTab(up.items.length ? "send" : up.tab, true);
+    paintUpload();
+    $("up-tab-" + up.tab).focus();
+  });
+  $("up-pick").addEventListener("click", function () { $("up-input").click(); });
+  $("up-sheet").querySelector(".up-tabs").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-uptab]");
+    if (b) setUpTab(b.dataset.uptab, true);
+  });
+  $("up-sheet").querySelector(".up-tabs").addEventListener("keydown", function (e) {
+    if (["ArrowLeft", "ArrowRight", "Home", "End"].indexOf(e.key) < 0) return;
+    e.preventDefault();
+    var t = e.key === "Home" ? "send" : e.key === "End" ? "got" : up.tab === "send" ? "got" : "send";
+    setUpTab(t, true);
+    $("up-tab-" + up.tab).focus();
+  });
+  $("up-got").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-file]");
+    if (b) openPreview(b.dataset.file);
+  });
   $("up-input").addEventListener("change", function () {
-    var files = this.files;
-    if (files && files.length) openUpSheet(files);
+    openUpload(this.files);
     this.value = "";
   });
+  $("up-close").addEventListener("click", closeUpload);
+  $("up-ref").addEventListener("click", function () { loadGot(); });
+  $("up-scrim").addEventListener("click", closeUpload);
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    if ($("up-drop").classList.contains("on")) { up.depth = 0; upDrag(false); }
+    else if (!$("up-sheet").classList.contains("hidden") && !$("up-sheet").motionOut) { e.stopImmediatePropagation(); closeUpload(); }
+  }, true);
 
-  // Drop anywhere: only files, only while a destination exists and the app
-  // (not the gate or setup) is on screen.
-  function dragsFiles(e) {
-    var types = e.dataTransfer && e.dataTransfer.types;
-    return !!types && Array.prototype.indexOf.call(types, "Files") >= 0 && up.targets.length > 0 && appShown();
+  // Drag-and-drop anywhere. The depth counter keeps the overlay from
+  // flickering as the pointer crosses child elements; the bubble lifts
+  // above the overlay while a file is held over the page.
+  function upDrag(on) {
+    $("up-drop").classList.toggle("on", on);
+    $("up-fab").classList.toggle("drag", on);
   }
-  function hideDrop() { up.drag = 0; $("up-drop").classList.add("hidden"); }
+  function upHasFiles(e) {
+    return up.targets.length && appShown() && !$("up-fab").classList.contains("hidden") && e.dataTransfer &&
+      Array.prototype.indexOf.call(e.dataTransfer.types || [], "Files") >= 0;
+  }
   document.addEventListener("dragenter", function (e) {
-    if (!dragsFiles(e)) return;
+    if (!upHasFiles(e)) return;
     e.preventDefault();
-    up.drag++;
-    $("up-drop").classList.remove("hidden");
+    up.depth++;
+    upDrag(true);
   });
   document.addEventListener("dragover", function (e) {
-    if (!dragsFiles(e)) return;
+    if (!upHasFiles(e)) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
   });
   document.addEventListener("dragleave", function (e) {
-    if (!dragsFiles(e)) return;
-    if (--up.drag <= 0) hideDrop();
+    if (!upHasFiles(e)) return;
+    if (--up.depth <= 0) { up.depth = 0; upDrag(false); }
   });
   document.addEventListener("drop", function (e) {
-    if (!dragsFiles(e)) return;
+    if (!upHasFiles(e)) return;
     e.preventDefault();
-    hideDrop();
-    if (e.dataTransfer.files && e.dataTransfer.files.length) openUpSheet(e.dataTransfer.files);
+    up.depth = 0;
+    upDrag(false);
+    openUpload(e.dataTransfer.files);
   });
+
+  // Text and HTML are fetched with the token and shown in a frame with
+  // sandbox="allow-popups allow-popups-to-escape-sandbox" (an opaque origin, so it cannot read the token) and a meta CSP
+  // that blocks scripts and every load. Markdown is rendered here and then
+  // takes the same frame. Images use a blob URL. File content never enters
+  // the dashboard's own DOM.
+  var PV_KIND = {
+    ".md": "md", ".markdown": "md", ".html": "html", ".htm": "html",
+    ".txt": "text", ".log": "text", ".csv": "text", ".json": "text", ".yaml": "text", ".yml": "text", ".conf": "text",
+    ".jpg": "image", ".jpeg": "image", ".png": "image", ".gif": "image", ".webp": "image", ".avif": "image"
+  };
+  var preview = { open: false, name: "", seq: 0, url: "", from: null, marked: null, nonce: document.querySelector('meta[name="preview-style-nonce"]').content };
+
+  function pvShow(id) {
+    ["pv-text", "pv-img", "pv-msg"].forEach(function (k) { $(k).classList.toggle("hidden", k !== id); });
+  }
+  function pvMsg(text, err) {
+    var m = $("pv-msg");
+    m.className = "pv-none" + (err ? " err" : "");
+    m.textContent = text;
+    pvShow("pv-msg");
+  }
+  function pvBusy() {
+    var m = $("pv-msg");
+    m.className = "pv-none";
+    m.innerHTML = ic("clock", "spin");
+    pvShow("pv-msg");
+  }
+  function pvDark() {
+    var t = document.documentElement.getAttribute("data-theme");
+    return t ? t === "dark" : !matchMedia("(prefers-color-scheme: light)").matches;
+  }
+  function pvHead(styled) {
+    var d = pvDark(), head = '<!doctype html><meta charset="utf-8">' +
+      '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">' +
+      '<meta name="referrer" content="no-referrer">';
+    if (!styled) return head;
+    return head + '<style nonce="' + preview.nonce + '">html{color-scheme:' + (d ? "dark" : "light") + '}' +
+      'body{margin:0;padding:16px;font:16px/1.55 system-ui,sans-serif;color:' + (d ? "#e9ecf0" : "#0e1217") + ';background:' + (d ? "#12151a" : "#ffffff") + ';overflow-wrap:anywhere}' +
+      'code{font:14px/1.5 ui-monospace,monospace;padding:0 .2em;background:' + (d ? "#1d2128" : "#f1f2f5") + '}' +
+      'pre{font:14px/1.5 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere}pre code{padding:0;background:none}' +
+      'table{border-collapse:collapse;max-width:100%;display:block;overflow:auto}th,td{border:1px solid ' + (d ? "#2a2f38" : "#d7dbe2") + ';padding:4px 8px;text-align:left}' +
+      'blockquote{margin:0;padding-left:12px;border-left:3px solid ' + (d ? "#3a414d" : "#c9ced8") + '}img{max-width:100%}</style>';
+  }
+  // A new iframe per preview, removed on release: setting or clearing srcdoc on
+  // one live frame adds session-history entries that the back gesture then
+  // lands on, while inserting and removing a frame adds none.
+  function pvClearFrame() {
+    var f = $("pv-frame");
+    if (f) f.remove();
+  }
+  function pvFrame(head, body, live) {
+    if (!live()) return;
+    pvClearFrame();
+    var f = $("pv-frame-tpl").content.firstElementChild.cloneNode(false);
+    f.srcdoc = head + body;
+    $("pv-body").appendChild(f);
+    pvShow("");
+  }
+  // The frame's document URL is about:srcdoc but relative links resolve
+  // against the dashboard's, so "#x" would navigate the frame to a blank copy
+  // of the dashboard. Fragments are pointed at the frame's own document;
+  // http(s) and mailto links open a new, unsandboxed tab with no opener or
+  // referrer (the frame may open popups and nothing else: no scripts, no
+  // same origin); any other link keeps its text and shows its address on
+  // hover. Parsed inert: DOMParser runs no scripts and loads nothing.
+  function pvLinkFix(doc) {
+    doc.querySelectorAll("style").forEach(function (s) { s.setAttribute("nonce", preview.nonce); });
+    doc.querySelectorAll("meta[http-equiv]").forEach(function (m) {
+      if (/refresh/i.test(m.getAttribute("http-equiv"))) m.remove();
+    });
+    doc.querySelectorAll("a[href], area[href]").forEach(function (a) {
+      var h = a.getAttribute("href").trim();
+      a.removeAttribute("target");
+      if (h.charAt(0) === "#") { a.setAttribute("href", "about:srcdoc" + h); return; }
+      if (/^(https?:\/\/|mailto:)/i.test(h)) {
+        a.setAttribute("target", "_blank");
+        a.setAttribute("rel", "noopener noreferrer");
+        return;
+      }
+      a.removeAttribute("href");
+      a.setAttribute("title", h);
+    });
+    return doc;
+  }
+  function pvLinks(html) {
+    return "<!doctype html>" + pvLinkFix(new DOMParser().parseFromString(html, "text/html")).documentElement.outerHTML;
+  }
+  function pvDraw(kind, text, live) {
+    if (kind === "text") { $("pv-text").textContent = text; pvShow("pv-text"); return; }
+    if (kind === "html") return pvFrame(pvHead(false), pvLinks(text), live);
+    return pvMarked().then(function (marked) {
+      var doc = pvLinkFix(new DOMParser().parseFromString(marked.parse(text), "text/html"));
+      pvFrame(pvHead(true), doc.body.innerHTML, live);
+    });
+  }
+  function pvMarked() {
+    if (window.marked) return Promise.resolve(window.marked);
+    if (!preview.marked) {
+      preview.marked = new Promise(function (ok, bad) {
+        var s = document.createElement("script");
+        s.src = "/vendor/marked-18.1.0.umd.js";
+        s.integrity = "__MARKED_INTEGRITY__";
+        s.onload = function () { ok(window.marked); };
+        s.onerror = function () { preview.marked = null; s.remove(); bad(new Error("Markdown renderer failed to load")); };
+        document.head.appendChild(s);
+      });
+    }
+    return preview.marked;
+  }
+  function pvFetch(name) {
+    var headers = {"X-Requested-By": "homelab-inventory"};
+    if (token) headers.Authorization = "Bearer " + token;
+    return fetch("/uploads/preview/" + encodeURIComponent(name), { headers: headers, cache: "no-store" }).then(function (r) {
+      if (r.status === 401) showGate(!!token);
+      if (r.ok) return r;
+      throw new Error(r.status === 401 ? "Signed out" : r.status === 404 ? "Gone" : r.status === 413 ? "Too large to preview" : r.status === 415 ? "No preview" : "HTTP " + r.status);
+    });
+  }
+  function pvRelease() {
+    if (preview.url) URL.revokeObjectURL(preview.url);
+    preview.url = "";
+    $("pv-img").removeAttribute("src");
+    pvClearFrame();
+    $("pv-text").textContent = "";
+  }
+
+  function openPreview(name, fromHistory) {
+    if (!preview.open) {
+      preview.from = document.activeElement;
+      if (!fromHistory) history.pushState({ pv: true, name: name }, "");
+    }
+    if (!fromHistory && preview.open) history.replaceState({ pv: true, name: name }, "");
+    preview.open = true; preview.name = name;
+    var seq = ++preview.seq;
+    var live = function () { return preview.open && seq === preview.seq; };
+    pvRelease();
+    $("pv-name").textContent = name;
+    $("pv-sheet").classList.remove("hidden");
+    $("pv-close").focus();
+    var kind = PV_KIND[upExt(name)];
+    if (!kind) { pvMsg("No preview", false); return; }
+    pvBusy();
+    var work = kind === "image"
+      ? pvFetch(name).then(function (r) { return r.blob(); }).then(function (b) {
+        if (!live()) return;
+        preview.url = URL.createObjectURL(b);
+        $("pv-img").alt = name;
+        $("pv-img").src = preview.url;
+        pvShow("pv-img");
+      })
+      : pvFetch(name).then(function (r) { return r.text(); }).then(function (t) {
+        if (live()) return pvDraw(kind, t, live);
+      });
+    work.catch(function (e) { if (live()) pvMsg(e.message, true); });
+  }
+
+  // Closing from the page pops its preview entry. Browser navigation closes
+  // or restores the preview recorded in the destination history entry.
+  function closePreview(fromHistory) {
+    if (!preview.open) return;
+    preview.open = false; preview.seq++;
+    pvRelease();
+    $("pv-sheet").classList.add("hidden");
+    var back = preview.from;
+    preview.from = null;
+    if (back && back.focus) back.focus();
+    if (!fromHistory) history.back();
+  }
+  $("pv-close").addEventListener("click", function () { closePreview(false); });
+  $("pv-dl").addEventListener("click", function () { downloadGot(preview.name); });
+  window.addEventListener("popstate", function () {
+    var state = history.state;
+    if (state && state.pv && typeof state.name === "string") openPreview(state.name, true);
+    else closePreview(true);
+  });
+  window.addEventListener("hashchange", function () {
+    if (!(history.state && history.state.pv)) closePreview(true);
+  });
+  // Window capture runs before the upload sheet's document-level Escape handler,
+  // so one Escape closes the preview and leaves the sheet behind it open.
+  window.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape" || !preview.open) return;
+    e.preventDefault();
+    e.stopPropagation();
+    closePreview(false);
+  }, true);
+
+  window.addEventListener("resize", function () { placeThumb(false); });
   window.addEventListener("beforeunload", function (e) {
-    if (up.xhr) { e.preventDefault(); e.returnValue = ""; }
+    if (up.busy) { e.preventDefault(); e.returnValue = ""; }
   });
 
   // ------------------------------------------------------------ loading
@@ -7195,8 +7680,9 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     clearTimeout(refreshTimer);
     $("app").classList.add("hidden");
     $("gate").classList.remove("hidden");
-    hideDrop();
-    renderUpBubble();
+    up.depth = 0; upDrag(false);
+    closeUpload(); closePreview(true);
+    paintFab();
     renderGate(failed, note);
     loadAuthStatus().then(function (s) {
       if ($("gate").classList.contains("hidden")) return;
@@ -8091,7 +8577,7 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     upload: function (id, target, file) {
       var t = up.targets.filter(function (x) { return x.plugin === id && x.id === target; })[0];
       if (!t || !file) return false;
-      up.files = [file]; openUpSheet(); upEnqueue(t);
+      openUpload([file]); upSend(t.plugin + "/" + t.id);
       return true;
     },
     // Same view, new parameters (a selected title, a filter) without a reload.

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
+	"github.com/ficaa1/homelab-inventory/internal/plugins/uploads"
 )
 
 type routeUploader struct{ routePlugin }
@@ -147,5 +148,79 @@ func TestUploadsValidationAndAudit(t *testing.T) {
 	defer response.Body.Close()
 	if response.StatusCode != 200 {
 		t.Fatal("upload inherited the short server deadline")
+	}
+}
+
+func TestUploadPreviewRefusals(t *testing.T) {
+	s := testServer(t, strings.Repeat("a", 32))
+	var err error
+	s.plugins, err = plugin.Open(s.store.Dir(), []plugin.Builtin{{ID: "uploads", New: uploads.New}}, s.log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.plugins.Close)
+	folder := t.TempDir()
+	on := true
+	if _, err := s.plugins.Update("uploads", plugin.Update{Enabled: &on, Settings: plugin.Config{"folder_path": folder}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"note.TXT", "page.html", "book.md", "photo.png", "document.pdf", "vector.svg", ".hidden.txt"} {
+		if err := os.WriteFile(filepath.Join(folder, name), []byte("fixture"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, size := range map[string]int64{"large.txt": previewTextMax + 1, "large.png": previewImageMax + 1} {
+		f, err := os.Create(filepath.Join(folder, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = f.Truncate(size)
+		f.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(folder, "sub.txt"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(folder, "sub.txt", "note.txt"), []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("note.TXT", filepath.Join(folder, "link.txt")); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.txt")
+	if err := os.WriteFile(outside, []byte("outside"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(folder, "escape.txt")); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name   string
+		status int
+	}{
+		{"note.TXT", 200}, {"page.html", 200}, {"book.md", 200}, {"photo.png", 200},
+		{"document.pdf", 415}, {"vector.svg", 415}, {"large.txt", 413}, {"large.png", 413},
+		{".hidden.txt", 404}, {"sub.txt", 404}, {"sub.txt/note.txt", 404}, {"../note.TXT", 404},
+		{"link.txt", 404}, {"escape.txt", 404}, {"missing.txt", 404},
+	} {
+		rec := pluginRequest(s, "GET", "/uploads/preview/"+url.PathEscape(tc.name), "", s.token)
+		if rec.Code != tc.status {
+			t.Errorf("%s: status %d, want %d", tc.name, rec.Code, tc.status)
+		}
+		if tc.status == 200 {
+			if rec.Body.String() != "fixture" || rec.Header().Get("Content-Security-Policy") != previewCSP || rec.Header().Get("X-Content-Type-Options") != "nosniff" || rec.Header().Get("Cache-Control") != "private, no-store" {
+				t.Errorf("%s: preview is not bounded and inert", tc.name)
+			}
+		}
+	}
+	for _, token := range []string{"", strings.Repeat("b", 32)} {
+		if rec := pluginRequest(s, "GET", "/uploads/preview/note.TXT", "", token); rec.Code != 401 {
+			t.Fatal("preview requires admin authority")
+		}
+	}
+	if rec := pluginRequest(s, "GET", "/uploads/files/link.txt", "", s.token); rec.Code != 404 {
+		t.Fatal("download resolver follows symlinks")
 	}
 }

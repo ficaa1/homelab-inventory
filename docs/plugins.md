@@ -28,13 +28,19 @@ Media discovery and dashboard views are read-only. Explicit Dusk requests can su
 
 ## Uploads
 
-Adds an upload button to every page. Set up any of these destinations:
+Adds a round upload button to every page. It opens a compact corner sheet with
+Upload and Uploaded tabs; dropping files anywhere opens Upload. Destination
+buttons appear only when they accept every pending file, and send files one at
+a time. Uploaded lists the folder's files, supports pull to refresh, and opens
+text, Markdown, HTML or image previews with a download button.
+
+Set up any of these destinations:
 
 | Destination | What to enter | Takes |
 | --- | --- | --- |
-| Folder | A folder path (`/uploads` in Docker) | Any file |
-| Paperless-ngx | URL and an API token | `.pdf .png .jpg .jpeg .tif .tiff .webp .gif .txt` |
-| Calibre-Web | URL, username and password | `.epub .pdf .mobi .azw3 .cbz .fb2` |
+| Uploads | A folder path (`/uploads` in Docker) | Any file |
+| Paperless | URL and an API token | `.pdf .png .jpg .jpeg .tif .tiff .webp .gif .txt` |
+| Calibre | URL, username and password | `.epub .pdf .mobi .azw3 .cbz .fb2` |
 
 Files are limited to 100 MiB unless you change the limit. The folder never
 overwrites: a second `a.pdf` is saved as `a (1).pdf`.
