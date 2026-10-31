@@ -76,7 +76,13 @@ func (r *Registry) Alerts() []alert.Alert {
 				out = append(out, alert.Alert{Host: id, Rule: "plugin.unreachable", Source: "plugin", Level: alert.LevelWarning, Subject: id, Message: "plugin alert source is unreachable", Detail: e.message})
 			} else {
 				for _, a := range e.alerts {
-					out = append(out, alert.Alert{Host: id, Rule: id + "." + a.Rule, Source: "plugin", Level: alert.Level(a.Severity), Subject: e.host.safe(a.Subject), Message: e.host.safe(a.Summary), Detail: e.host.safe(a.Detail)})
+					host := id
+					// Canary identity predates the plugin boundary; preserve notification,
+					// silence and age keys when importing existing trip history.
+					if id == "security" && a.Rule == "canary.tripped" {
+						host = "api"
+					}
+					out = append(out, alert.Alert{Host: host, Rule: id + "." + a.Rule, Source: "plugin", Level: alert.Level(a.Severity), Subject: e.host.safe(a.Subject), Message: e.host.safe(a.Summary), Detail: e.host.safe(a.Detail)})
 				}
 			}
 		}
