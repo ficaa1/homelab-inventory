@@ -9,11 +9,8 @@ import (
 	"github.com/ficaa1/homelab-inventory/internal/plugins/network/speed"
 	"io"
 	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"path/filepath"
-	"regexp"
-	"sort"
 	"strings"
 	"time"
 )
@@ -74,7 +71,7 @@ func (n *Network) extraJSON(ctx context.Context, client *http.Client, base, path
 		return e
 	}
 	defer resp.Body.Close()
-	if json.NewDecoder(resp.Body).Decode(out) != nil {
+	if json.NewDecoder(io.LimitReader(resp.Body, plugin.MaxHTTPBody)).Decode(out) != nil {
 		return errors.New("invalid network response")
 	}
 	return nil
@@ -83,100 +80,36 @@ func (n *Network) extraView(ctx context.Context, name string) (plugin.View, erro
 	v := plugin.View{Title: "Network", UpdatedAt: n.host.Now(), RefreshSeconds: 30, Blocks: []plugin.Block{}}
 	switch name {
 	case "routes":
-		base := n.extraText("routes_url")
-		if base == "" {
-			return v, errors.New("route provider is not configured")
-		}
-		var out struct {
-			HTTP *struct {
-				Routers  map[string]struct{ Rule, Service string }
-				Services map[string]struct {
-					LoadBalancer *struct{ Servers []struct{ URL string } }
-				}
-			} `json:"http"`
-		}
-		if e := n.extraJSON(ctx, n.host.HTTP(), base, "/api/v1/traefik-config", &out); e != nil {
-			return v, e
-		}
-		if out.HTTP == nil || out.HTTP.Routers == nil || out.HTTP.Services == nil {
-			return v, errors.New("route provider response is incomplete")
-		}
-		rows := []map[string]any{}
-		seen := map[string]bool{}
-		hostRule := regexp.MustCompile("^Host\\(`([a-zA-Z0-9.-]+)`\\)$")
-		for _, r := range out.HTTP.Routers {
-			m := hostRule.FindStringSubmatch(r.Rule)
-			if m == nil {
-				continue
-			}
-			service := out.HTTP.Services[r.Service]
-			if service.LoadBalancer == nil {
-				continue
-			}
-			for _, target := range service.LoadBalancer.Servers {
-				u, e := url.Parse(target.URL)
-				if e != nil || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "http" && u.Scheme != "https") {
-					continue
-				}
-				key := m[1] + target.URL
-				if seen[key] {
-					continue
-				}
-				seen[key] = true
-				rows = append(rows, map[string]any{"host": n.text(m[1]), "target": n.text(target.URL), "sso": "Unknown"})
-			}
-		}
-		sort.Slice(rows, func(i, j int) bool { return fmt.Sprint(rows[i]["host"]) < fmt.Sprint(rows[j]["host"]) })
-		v.Blocks = append(v.Blocks, plugin.Block{Type: "table", Title: "Routes", Columns: []plugin.Column{{Key: "host", Label: "Hostname"}, {Key: "target", Label: "Target"}, {Key: "sso", Label: "SSO"}}, Rows: rows})
-	case "seeding":
-		base := n.extraText("qbit_url")
-		if base == "" {
-			return v, errors.New("qBittorrent is not configured")
-		}
-		jar, _ := cookiejar.New(nil)
-		client := plugin.WithCookieJar(n.host.HTTP(), jar)
-		values := url.Values{"username": {n.extraText("qbit_user")}, "password": {n.extraText("qbit_password")}}
-		resp, e := n.fixed(ctx, client, base, "/api/v2/auth/login", "POST", strings.NewReader(values.Encode()))
+		routes, e := n.fetchRoutes(ctx)
 		if e != nil {
 			return v, e
 		}
-		b, e := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if e != nil || (resp.StatusCode != 204 && strings.TrimSpace(string(b)) != "Ok.") {
-			return v, errors.New("qBittorrent login refused")
+		rows := []map[string]any{}
+		for _, r := range routes {
+			rows = append(rows, map[string]any{"host": r.Hostname, "target": r.Target, "sso": "Unknown"})
 		}
-		var health struct {
-			Download   int64  `json:"dl_info_speed"`
-			Upload     int64  `json:"up_info_speed"`
-			Connection string `json:"connection_status"`
-			DHT        int64  `json:"dht_nodes"`
-		}
-		if e = n.extraJSON(ctx, client, base, "/api/v2/transfer/info", &health); e != nil {
+		v.Blocks = append(v.Blocks, plugin.Block{Type: "table", Title: "Routes", Columns: []plugin.Column{{Key: "host", Label: "Hostname"}, {Key: "target", Label: "Target"}, {Key: "sso", Label: "SSO"}}, Rows: rows})
+	case "seeding":
+		client, e := n.qbitLogin(ctx)
+		if e != nil {
 			return v, e
 		}
-		v.Blocks = append(v.Blocks, plugin.Block{Type: "stats", Items: []plugin.Item{{Label: "Download bytes/s", Value: fmt.Sprint(health.Download)}, {Label: "Upload bytes/s", Value: fmt.Sprint(health.Upload)}, {Label: "Connection", Value: n.text(health.Connection)}, {Label: "DHT nodes", Value: fmt.Sprint(health.DHT)}}})
-		var torrents []struct {
-			Name    string  `json:"name"`
-			Size    int64   `json:"size"`
-			Seconds int64   `json:"seeding_time"`
-			Ratio   float64 `json:"ratio"`
-			Speed   int64   `json:"upspeed"`
-			State   string  `json:"state"`
-		}
-		if e = n.extraJSON(ctx, client, base, "/api/v2/torrents/info?filter=seeding", &torrents); e != nil {
+		health, e := n.qbitTransfer(ctx, client)
+		if e != nil {
 			return v, e
 		}
-		hours, _ := n.extra["seed_hours"].(float64)
+		v.Blocks = append(v.Blocks, plugin.Block{Type: "stats", Items: []plugin.Item{{Label: "Download bytes/s", Value: fmt.Sprint(*health.Download)}, {Label: "Upload bytes/s", Value: fmt.Sprint(*health.Upload)}, {Label: "Connection", Value: n.text(*health.Connection)}, {Label: "DHT nodes", Value: fmt.Sprint(*health.DHT)}}})
+		torrents, e := n.qbitSeeding(ctx, client)
+		if e != nil {
+			return v, e
+		}
 		rows := []map[string]any{}
 		for _, t := range torrents {
-			if t.State != "uploading" && t.State != "stalledUP" && t.State != "forcedUP" && t.State != "queuedUP" {
-				continue
+			var remaining any
+			if t.RemainingSeconds != nil {
+				remaining = *t.RemainingSeconds
 			}
-			remaining := hours*3600 - float64(t.Seconds)
-			if remaining < 0 {
-				remaining = 0
-			}
-			rows = append(rows, map[string]any{"name": n.text(t.Name), "size": t.Size, "seconds": t.Seconds, "remaining": remaining, "ratio": t.Ratio, "speed": t.Speed})
+			rows = append(rows, map[string]any{"name": t.Name, "size": t.SizeBytes, "seconds": t.SeedingSeconds, "remaining": remaining, "ratio": t.Ratio, "speed": t.UploadBytesPerSecond})
 		}
 		v.Blocks = append(v.Blocks, plugin.Block{Type: "table", Title: "Sharing torrents", Columns: []plugin.Column{{Key: "name", Label: "Name"}, {Key: "size", Label: "Size", Format: "bytes"}, {Key: "seconds", Label: "Seed time", Format: "duration_s"}, {Key: "remaining", Label: "Requirement remaining", Format: "duration_s"}, {Key: "ratio", Label: "Ratio", Format: "number"}, {Key: "speed", Label: "Upload", Format: "bytes_s"}}, Rows: rows})
 	case "speedtest":
