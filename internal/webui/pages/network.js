@@ -52,8 +52,8 @@
   }
 
   // ------------------------------------------------------------ building blocks
-  // Class names and element structure follow the private dashboard's Network
-  // panel (net-*, ops-*), so its stylesheet applies unchanged.
+  // Class names and element structure are the Network panel's (net-*, ops-*),
+  // so network.css carries its rules unchanged.
 
   function h(tag, attrs, kids) { return HI.h(tag, attrs, kids); }
   function chip(text, tone, title, icon) {
@@ -372,7 +372,7 @@
     if (!list) return card("ops-wide", "upload", "Seeding", [], [s.err.torrents ? muted("Unavailable") : skel()]);
     return card("ops-wide", "upload", "Seeding", list.status === "ok" ? [chip(String(list.count))] : [], [h("div", { class: "net-seeding hn-seedbox" }, seedingBody(list))]);
   }
-  // The VPN card's Seeding button reads the list on open only, as private does;
+  // The VPN card's Seeding button reads the list on open only;
   // an answer for a closed or superseded drawer is dropped.
   var seedEpoch = 0;
   function openSeeding() {
@@ -647,7 +647,7 @@
       if (SPEED_VIEWS[view]) kids.push(speedCard());
       kids.push(s.main);
       if (view === "overview") kids.push(s.ports);
-      root.replaceChildren(h("div", { class: "hn" }, kids));
+      root.replaceChildren(h("section", { id: "panel-network" }, kids));
       if (view === "overview") HI.ports(s.ports);
       render();
       load();

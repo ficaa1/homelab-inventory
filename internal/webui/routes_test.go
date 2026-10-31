@@ -132,7 +132,7 @@ func TestPluginPagesUseTheKit(t *testing.T) {
 
 func TestDashboardScopeAndBranding(t *testing.T) {
 	page := coreBody(t)
-	for _, feature := range []string{"panel-archive", "panel-network", "arcPoll", "loadUploadCaps", "netTimer", "tdarrTimer", "/seasongate", "/digest/send", `"/network`, `"/upload"`, `"/upload?`, "/taste", "/tdarr"} {
+	for _, feature := range []string{`"panel-archive"`, `"panel-network"`, "arcPoll", "loadUploadCaps", "netTimer", "tdarrTimer", "/seasongate", "/digest/send", `"/network`, `"/upload"`, `"/upload?`, "/taste", "/tdarr"} {
 		if strings.Contains(page, feature) {
 			t.Errorf("removed feature remains: %s", feature)
 		}

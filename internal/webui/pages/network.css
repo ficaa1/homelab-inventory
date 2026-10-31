@@ -1,6 +1,5 @@
-/* Network page (pages/network.js). The cards use the private dashboard's
-   Network panel markup, so the rules down to the public-only section are its
-   stylesheet unchanged; only the seeding sheet's rules are scoped. */
+/* Network page (pages/network.js). The cards are the Network panel's markup,
+   so the rules down to the Traffic section are its stylesheet unchanged. */
 .net { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-bottom:8px; align-items:start; }
 .net-ports-h { display:flex; align-items:center; gap:8px; }
 .net-card h2 { flex-wrap:wrap; }
@@ -26,15 +25,15 @@
 .net-seed { min-height:44px; min-width:44px; font:inherit; font-size:var(--fs-xs); font-weight:500; padding:0 12px; border:1px solid var(--line-2); border-radius:var(--r-pill); background:var(--surface-2); color:var(--text-2); cursor:pointer; }
 .net-seed:hover { color:var(--text); }
 .net-seed:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-.net-seeding .seed-totals { display:flex; flex-wrap:wrap; gap:6px 16px; font-size:var(--fs-sm); color:var(--text-2); font-variant-numeric:tabular-nums; }
-.net-seeding .seed-totals b { color:var(--text); font-weight:600; }
-.net-seeding .seed-list { list-style:none; margin:14px 0 0; padding:0; }
-.net-seeding .seed-row { padding:12px 0; border-top:1px solid var(--line); min-width:0; }
-.net-seeding .seed-head { display:flex; justify-content:space-between; gap:12px; align-items:baseline; min-width:0; }
-.net-seeding .seed-name { font-weight:600; overflow-wrap:anywhere; min-width:0; }
-.net-seeding .seed-left { font-size:var(--fs-xs); color:var(--text-2); white-space:nowrap; font-variant-numeric:tabular-nums; }
-.net-seeding .seed-left.done { color:var(--ok); }
-.net-seeding .seed-facts { display:flex; flex-wrap:wrap; gap:4px 14px; margin-top:4px; font-size:var(--fs-xs); color:var(--text-3); font-variant-numeric:tabular-nums; }
+.seed-totals { display:flex; flex-wrap:wrap; gap:6px 16px; font-size:var(--fs-sm); color:var(--text-2); font-variant-numeric:tabular-nums; }
+.seed-totals b { color:var(--text); font-weight:600; }
+.seed-list { list-style:none; margin:14px 0 0; padding:0; }
+.seed-row { padding:12px 0; border-top:1px solid var(--line); min-width:0; }
+.seed-head { display:flex; justify-content:space-between; gap:12px; align-items:baseline; min-width:0; }
+.seed-name { font-weight:600; overflow-wrap:anywhere; min-width:0; }
+.seed-left { font-size:var(--fs-xs); color:var(--text-2); white-space:nowrap; font-variant-numeric:tabular-nums; }
+.seed-left.done { color:var(--ok); }
+.seed-facts { display:flex; flex-wrap:wrap; gap:4px 14px; margin-top:4px; font-size:var(--fs-xs); color:var(--text-3); font-variant-numeric:tabular-nums; }
 .net-vpn .ops-detail { padding-top:0; }
 .net-cell { display:inline-flex; gap:6px; align-items:center; justify-content:flex-end; font-size:var(--fs-sm); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .net-cell b { min-width:58px; text-align:right; font-weight:600; }
@@ -96,9 +95,9 @@
 .net-speed-extra { padding:8px 0; font-size:var(--fs-sm); color:var(--text-2); overflow-wrap:anywhere; }
 .net-speed-row.head { font-size: 12px; color:var(--text-3); border-top:0; }
 .net-speed-row span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.net-seeding .seed-row { display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:16px; background:var(--surface); color:var(--text); border:1px solid var(--line); border-radius:12px; margin:8px 0; }
-.net-seeding .seed-row .seed-name { flex:1; min-width:0; overflow-wrap:anywhere; }
-.net-seeding .seed-row .seed-size { white-space:nowrap; text-align:right; }
+.seed-row { display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:16px; background:var(--surface); color:var(--text); border:1px solid var(--line); border-radius:12px; margin:8px 0; }
+.seed-row .seed-name { flex:1; min-width:0; overflow-wrap:anywhere; }
+.seed-row .seed-size { white-space:nowrap; text-align:right; }
 @media (max-width: 640px) {
   .net-speed-grid { grid-template-columns:repeat(2,minmax(0,1fr)); row-gap:12px; }
   .net-speed-cell:nth-child(3) { border-left:0; padding-left:0; }
@@ -120,52 +119,46 @@
   .net-row .net-spark.sm { width:32px; }
   .net-cell b { min-width:52px; font-size:var(--fs-xs); }
   .net-cell.loss b { min-width:34px; }
-  .hn input:not([type="checkbox"]) { min-height: 44px; }
-  .hn .field { height: 44px; }
-  .hn [data-def], .hn .why { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
-  .hn .cell { height: 44px; }
-  .hn .cells { gap: 2px; }
-  .hn tr[data-port] td { height: 44px; }
 }
 
-/* Public-only views: Traffic charts, Seeding, the routes link and the
+/* Traffic charts, Seeding, the routes link and the
    embedded ports grid. */
-.hn .net.hn-one { grid-template-columns: minmax(0, 1fr); }
-.hn .net > .banner { grid-column: 1 / -1; margin-bottom: 0; }
-.hn .hn-ports { margin-top: var(--s2); }
-.hn .hn-ports > .ports-heading { margin: 24px 0 14px; font-size: var(--fs-sm); font-weight: 600; }
-.hn .hn-ports > .ports-heading > .ic { display: inline-block; }
-.hn .hn-ports > .ports-heading .count { font: inherit; color: var(--text-3); }
-.hn .hn-link { min-height: 32px; padding: 4px 12px; font-size: var(--fs-xs); border-radius: var(--r-pill); }
-.hn .hn-more { padding: 10px 16px 14px; }
-.hn .hn-seedbox { padding: 12px 16px 16px; }
-.hn .hn-host .net-cell b { min-width: 76px; }
-.hn .hn-crow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(60px, 120px) 86px; gap: 12px; align-items: center; padding: 10px 16px; border-top: 1px solid var(--line); font-size: var(--fs-sm); }
-.hn .hn-crow:first-of-type { border-top: 0; }
-.hn .hn-crow b { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.hn .hn-crow .ops-meter { margin: 0; }
-.hn .hn-chart { padding: 12px 16px 14px; min-width: 0; }
-.hn .hn-chart-head { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; margin-bottom: 8px; }
-.hn .hn-chart-title { font-size: var(--fs-xs); color: var(--text-3); }
-.hn .hn-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-left: auto; font-size: var(--fs-xs); color: var(--text-2); }
-.hn .hn-key { display: inline-flex; align-items: center; gap: 6px; }
-.hn .hn-key i { width: 12px; height: 2px; border-radius: 1px; background: currentColor; }
-.hn .hn-key b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
-.hn .hn-key.c1 i { background: var(--accent); } .hn .hn-key.c2 i { background: var(--ok); }
-.hn .hn-plotwrap { position: relative; }
-.hn .hn-plot { display: block; width: 100%; height: 140px; overflow: visible; }
-.hn .hn-peak { position: absolute; top: -2px; left: 0; font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; background: var(--surface); padding-right: 6px; }
-.hn .hn-plot .hn-gl { stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 3 4; }
-.hn .hn-plot .hn-gl.base { stroke-dasharray: none; }
-.hn .hn-line.c1 { stroke: var(--accent); } .hn .hn-line.c2 { stroke: var(--ok); }
-.hn .net-stale .hn-line { stroke: var(--text-3); opacity: .7; }
-.hn .hn-axis { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+#panel-network .net.hn-one { grid-template-columns: minmax(0, 1fr); }
+#panel-network .net > .banner { grid-column: 1 / -1; margin-bottom: 0; }
+#panel-network .hn-ports { margin-top: var(--s2); }
+#panel-network .hn-ports > .ports-heading { margin: 24px 0 14px; font-size: var(--fs-sm); font-weight: 600; }
+#panel-network .hn-ports > .ports-heading > .ic { display: inline-block; }
+#panel-network .hn-ports > .ports-heading .count { font: inherit; color: var(--text-3); }
+#panel-network .hn-link { min-height: 32px; padding: 4px 12px; font-size: var(--fs-xs); border-radius: var(--r-pill); }
+#panel-network .hn-more { padding: 10px 16px 14px; }
+#panel-network .hn-seedbox { padding: 12px 16px 16px; }
+#panel-network .hn-host .net-cell b { min-width: 76px; }
+#panel-network .hn-crow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(60px, 120px) 86px; gap: 12px; align-items: center; padding: 10px 16px; border-top: 1px solid var(--line); font-size: var(--fs-sm); }
+#panel-network .hn-crow:first-of-type { border-top: 0; }
+#panel-network .hn-crow b { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#panel-network .hn-crow .ops-meter { margin: 0; }
+#panel-network .hn-chart { padding: 12px 16px 14px; min-width: 0; }
+#panel-network .hn-chart-head { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; margin-bottom: 8px; }
+#panel-network .hn-chart-title { font-size: var(--fs-xs); color: var(--text-3); }
+#panel-network .hn-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-left: auto; font-size: var(--fs-xs); color: var(--text-2); }
+#panel-network .hn-key { display: inline-flex; align-items: center; gap: 6px; }
+#panel-network .hn-key i { width: 12px; height: 2px; border-radius: 1px; background: currentColor; }
+#panel-network .hn-key b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+#panel-network .hn-key.c1 i { background: var(--accent); } #panel-network .hn-key.c2 i { background: var(--ok); }
+#panel-network .hn-plotwrap { position: relative; }
+#panel-network .hn-plot { display: block; width: 100%; height: 140px; overflow: visible; }
+#panel-network .hn-peak { position: absolute; top: -2px; left: 0; font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; background: var(--surface); padding-right: 6px; }
+#panel-network .hn-plot .hn-gl { stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 3 4; }
+#panel-network .hn-plot .hn-gl.base { stroke-dasharray: none; }
+#panel-network .hn-line.c1 { stroke: var(--accent); } #panel-network .hn-line.c2 { stroke: var(--ok); }
+#panel-network .net-stale .hn-line { stroke: var(--text-3); opacity: .7; }
+#panel-network .hn-axis { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 @media (max-width: 640px) {
   /* Six views do not fit a phone's width: the control scrolls instead. */
-  .hn .pv-head .seg { overflow-x: auto; scrollbar-width: none; }
-  .hn .pv-head .seg .btn { flex: 1 0 auto; min-width: 0; padding: 4px 10px; }
-  .hn .hn-host > summary { flex-wrap: wrap; }
-  .hn .hn-host .ops-name { flex-basis: 100%; }
-  .hn .hn-chart, .hn .hn-seedbox { padding-left: 12px; padding-right: 12px; }
-  .hn .hn-crow { grid-template-columns: minmax(0, 1fr) 60px 78px; padding: 10px 12px; }
+  #panel-network .pv-head .seg { overflow-x: auto; scrollbar-width: none; }
+  #panel-network .pv-head .seg .btn { flex: 1 0 auto; min-width: 0; padding: 4px 10px; }
+  #panel-network .hn-host > summary { flex-wrap: wrap; }
+  #panel-network .hn-host .ops-name { flex-basis: 100%; }
+  #panel-network .hn-chart, #panel-network .hn-seedbox { padding-left: 12px; padding-right: 12px; }
+  #panel-network .hn-crow { grid-template-columns: minmax(0, 1fr) 60px 78px; padding: 10px 12px; }
 }
