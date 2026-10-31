@@ -17,7 +17,7 @@
 
   function HI() { return window.HI; }
   function h(tag, attrs, kids) { return HI().h(tag, attrs, kids); }
-  // Decimal units with one place, as the private dashboard's Library writes sizes.
+  // Decimal units with one place, as the Library writes sizes.
   function lb(n) { n = n || 0; return n >= 1e12 ? (n / 1e12).toFixed(1) + " TB" : (n / 1e9).toFixed(1) + " GB"; }
   function gb(n) { return typeof n === "number" ? (n < 10 ? n.toFixed(1) : Math.round(n)) + " GB" : "—"; }
   function num(n) { return n == null ? "—" : String(n); }
@@ -81,14 +81,14 @@
     var v = st.status, card = h("div", { class: "arc-title" });
     if (!v) { card.appendChild(skel(2)); return card; }
     var q = v.queue || {};
-    card.appendChild(h("div", { class: "tdp-metrics" }, [metric(q.queued, "queued"), metric(q.processing, "active"), metric(q.error, "errors")]));
+    card.appendChild(h("div", { class: "tdarr-metrics" }, [metric(q.queued, "queued"), metric(q.processing, "active"), metric(q.error, "errors")]));
     if (v.status !== "ok") card.appendChild(h("div", { class: "note", text:
       (v.status === "not_configured" ? "Not configured" : "Status unavailable") + (v.error ? " · " + v.error : "") }));
     (v.nodes || []).forEach(function (n) {
       var tone = !n.online ? "off" : n.paused ? "paused" : "on";
-      var row = h("div", { class: "tdp-node" }, [
+      var row = h("div", { class: "tdarr-node" }, [
         h("div", {}, [
-          h("span", { class: "tdp-dot " + tone }),
+          h("span", { class: "tdarr-dot " + tone }),
           h("b", { text: n.name || "Unknown node" }),
           h("span", { class: "sub", text: nodeState(n) }),
           h("span", { class: "spacer" }),
@@ -97,7 +97,7 @@
       ]);
       (n.active || []).forEach(function (a) {
         var pct = typeof a.pct === "number" && isFinite(a.pct) ? Math.max(0, Math.min(100, a.pct)) : null;
-        row.appendChild(h("div", { class: "tdp-active" }, [
+        row.appendChild(h("div", { class: "tdarr-active" }, [
           h("span", { title: a.file || "", text: base(a.file) || "Current file" }),
           h("b", { text: pct == null ? "—" : Math.round(pct) + "%" })
         ]));
@@ -114,8 +114,8 @@
   }
 
   function renderStatus() {
-    var el = byId("tdp-status");
-    if (el) el.replaceWith(withId(statusCard(), "tdp-status"));
+    var el = byId("tdarr-status");
+    if (el) el.replaceWith(withId(statusCard(), "tdarr-status"));
   }
   function withId(el, id) { el.id = id; return el; }
 
@@ -144,45 +144,45 @@
 
   function message(s) {
     st.notice = s;
-    var el = byId("tdp-notice"); if (!el) return;
+    var el = byId("tdarr-notice"); if (!el) return;
     clear(el);
     el.classList.toggle("hidden", !s);
     if (!s) return;
     el.appendChild(document.createTextNode(s));
     if (st.unknown) el.appendChild(document.createTextNode(" "));
     if (st.unknown) el.appendChild(h("button", { class: "btn", type: "button", text: "Check Tdarr", onclick: function () {
-      loadStatus(); var s2 = byId("tdp-status"); if (s2) s2.scrollIntoView({ block: "center" });
+      loadStatus(); var s2 = byId("tdarr-status"); if (s2) s2.scrollIntoView({ block: "center" });
     } }));
   }
 
   function libraryView() {
-    var wrap = h("div", { class: "tdp-lib" });
-    wrap.appendChild(withId(statusCard(), "tdp-status"));
+    var wrap = h("div", { class: "tdarr-lib" });
+    wrap.appendChild(withId(statusCard(), "tdarr-status"));
     var seg = h("div", { class: "library-filters", role: "group", "aria-label": "Tdarr media type" }, ["all", "radarr", "sonarr"].map(function (k, i) {
       return h("button", { type: "button", "aria-pressed": st.filter === k ? "true" : "false", text: ["All", "Movies", "TV"][i],
         onclick: function () { st.filter = k; seg.querySelectorAll("button").forEach(function (b, j) { b.setAttribute("aria-pressed", j === i ? "true" : "false"); }); renderRows(); } });
     }));
-    var search = h("input", { id: "tdp-search", type: "search", placeholder: "Search titles…", "aria-label": "Search Tdarr titles", value: st.query,
+    var search = h("input", { id: "tdarr-search", type: "search", placeholder: "Search titles…", "aria-label": "Search Tdarr titles", value: st.query,
       oninput: function () { st.query = search.value; renderRows(); } });
     wrap.appendChild(h("div", { class: "library-tools" }, [seg, h("div", { class: "library-find" }, [search,
       h("button", { class: "btn", type: "button", text: "Refresh", onclick: function () { loadLibrary(); loadStatus(); } })])]));
-    wrap.appendChild(h("div", { id: "tdp-notice", class: "note hidden", role: "status" }));
-    var pc = h("input", { id: "tdp-pc", type: "checkbox", checked: st.pc, onchange: function () { st.pc = pc.checked; } });
-    wrap.appendChild(h("div", { class: "tdp-selection arc-title" }, [
-      h("span", { id: "tdp-total", role: "status" }),
+    wrap.appendChild(h("div", { id: "tdarr-notice", class: "note hidden", role: "status" }));
+    var pc = h("input", { id: "tdarr-pc", type: "checkbox", checked: st.pc, onchange: function () { st.pc = pc.checked; } });
+    wrap.appendChild(h("div", { class: "tdarr-selection arc-title" }, [
+      h("span", { id: "tdarr-total", role: "status" }),
       h("span", { class: "spacer" }),
-      h("label", { class: "library-keep", title: "Also arm the secondary worker for this batch" }, [pc, " ", h("span", { id: "tdp-pc-label", text: st.pcLabel || "Secondary worker" })]),
-      h("button", { id: "tdp-preview", class: "btn primary", type: "button", text: "Preview", onclick: preview })
+      h("label", { class: "library-keep", title: "Also arm the secondary worker for this batch" }, [pc, " ", h("span", { id: "tdarr-pc-label", text: st.pcLabel || "Secondary worker" })]),
+      h("button", { id: "tdarr-preview", class: "btn primary", type: "button", text: "Preview", onclick: preview })
     ]));
-    wrap.appendChild(h("div", { id: "tdp-rows" }));
+    wrap.appendChild(h("div", { id: "tdarr-rows" }));
     wrap.appendChild(candidatesView());
     return wrap;
   }
 
   function renderRows() {
-    var el = byId("tdp-rows"); if (!el) return;
+    var el = byId("tdarr-rows"); if (!el) return;
     clear(el);
-    var lab = byId("tdp-pc-label"); if (lab) lab.textContent = st.pcLabel || "Secondary worker";
+    var lab = byId("tdarr-pc-label"); if (lab) lab.textContent = st.pcLabel || "Secondary worker";
     if (!st.items) {
       if (st.libError) { el.appendChild(h("div", { class: "empty", text: "Library unavailable" })); message(st.libError); }
       else el.appendChild(skel(3));
@@ -205,14 +205,14 @@
     var busy = archiveBusy(i.archiveStatus) || (i.seasons || []).some(function (s) { return archiveBusy(s.archiveStatus); });
     var box = h("input", { type: "checkbox", "aria-label": "Select " + i.title, checked: !!chosen, disabled: !!blocked || locked(),
       onchange: function () { select(k, box); } });
-    var size = h("div", { class: "tdp-size" }, [h("strong", { text: lb(i.sizeBytes) }), bar(i.sizeBytes / max * 100)]);
+    var size = h("div", { class: "tdarr-size" }, [h("strong", { text: lb(i.sizeBytes) }), bar(i.sizeBytes / max * 100)]);
     var end;
-    if (blocked) end = h("span", { class: "tdp-lock", title: blocked, text: "Locked" });
+    if (blocked) end = h("span", { class: "tdarr-lock", title: blocked, text: "Locked" });
     else if (tv(i)) end = h("button", { class: "btn", type: "button", disabled: locked(), onclick: function () { seasons(k); },
       text: "Seasons" + (chosen ? " · " + chosen.selection.seasons.map(function (n) { return n || "S"; }).join(", ") : "") });
     else end = h("span", { class: "sub", text: [i.resolution ? i.resolution + "p" : "", i.videoCodec || ""].filter(Boolean).join(" · ") });
-    return h("div", { class: "tdp-row arc-title" + (blocked ? " tdp-locked" : "") }, [
-      h("label", { class: "tdp-title" }, [box, h("span", {}, [
+    return h("div", { class: "tdarr-row arc-title" + (blocked ? " tdarr-locked" : "") }, [
+      h("label", { class: "tdarr-title" }, [box, h("span", {}, [
         h("b", { text: i.title }), i.year ? h("span", { class: "library-year", text: String(i.year) }) : null,
         busy ? HI().pill("Archive busy", "warn") : null,
         h("span", { class: "sub", text: (tv(i) ? "TV" : "Movie") + (chosen ? " · " + chosen.plan.paths.length + " files" : "") })
@@ -222,10 +222,10 @@
   }
 
   function updateTotal() {
-    var t = total(), el = byId("tdp-total");
+    var t = total(), el = byId("tdarr-total");
     if (el) { clear(el); el.appendChild(h("b", { text: t.count + "/" + LIMIT })); el.appendChild(document.createTextNode(" files ")); el.appendChild(h("span", { class: "sub", text: "· " + lb(t.bytes) + " est." })); }
-    var p = byId("tdp-preview"); if (p) p.disabled = locked() || t.count === 0 || t.count > LIMIT;
-    var pc = byId("tdp-pc"); if (pc) pc.disabled = st.busy || st.unknown;
+    var p = byId("tdarr-preview"); if (p) p.disabled = locked() || t.count === 0 || t.count > LIMIT;
+    var pc = byId("tdarr-pc"); if (pc) pc.disabled = st.busy || st.unknown;
   }
 
   function select(k, box) {
@@ -247,8 +247,8 @@
   // ------------------------------------------------------------ drawers
 
   function drawer(label, kids) {
-    HI().openDrawer('<div class="tdp-drawer"></div>', label);
-    var box = document.querySelector("#drawer-body .tdp-drawer");
+    HI().openDrawer('<div class="tdarr-drawer"></div>', label);
+    var box = document.querySelector("#drawer-body .tdarr-drawer");
     kids.forEach(function (c) { if (c) box.appendChild(c); });
     return box;
   }
@@ -262,14 +262,14 @@
     var r = st.items.filter(function (x) { return key(x.entry) === k; })[0];
     if (!r || r.blocked_reason) return;
     var i = r.entry, chosen = st.selected[k], epoch = ++st.epoch, draft = null, seq = 0;
-    var msg = h("div", { class: "note", role: "status" });
-    var save = h("button", { class: "btn primary", type: "button", text: "Save", disabled: true, onclick: function () {
+    var msg = h("div", { id: "tdarr-season-msg", class: "note", role: "status" });
+    var save = h("button", { id: "tdarr-season-add", class: "btn primary", type: "button", text: "Save", disabled: true, onclick: function () {
       if (draft) st.selected[k] = draft; else delete st.selected[k];
       HI().closeDrawer(); renderRows();
     } });
     var boxes = (i.seasons || []).map(function (s) {
-      var c = h("input", { type: "checkbox", value: String(s.season), checked: !!chosen && chosen.selection.seasons.indexOf(s.season) >= 0, onchange: inspect });
-      return h("label", { class: archiveBusy(s.archiveStatus) ? "tdp-locked" : "" }, [c,
+      var c = h("input", { type: "checkbox", name: "tdarr-season", value: String(s.season), checked: !!chosen && chosen.selection.seasons.indexOf(s.season) >= 0, onchange: inspect });
+      return h("label", { class: archiveBusy(s.archiveStatus) ? "tdarr-locked" : "" }, [c,
         " " + (s.season ? "Season " + s.season : "Specials"),
         archiveBusy(s.archiveStatus) ? HI().pill("Archive busy", "warn") : null,
         h("span", { text: lb(s.sizeBytes) })]);
@@ -278,7 +278,7 @@
       h("div", { class: "arc-eyebrow", text: "TDARR" }), h("h3", { text: i.title }),
       h("fieldset", { class: "library-season-picker" }, [h("legend", { text: "Seasons" })].concat(boxes)),
       msg,
-      h("div", { class: "actions" }, [h("button", { class: "btn", type: "button", text: "Cancel", onclick: HI().closeDrawer }), save])
+      h("div", { class: "actions" }, [h("button", { id: "tdarr-season-cancel", class: "btn", type: "button", text: "Cancel", onclick: HI().closeDrawer }), save])
     ]);
     function inspect() {
       var run = ++seq, picked = boxes.map(function (l) { return l.querySelector("input"); }).filter(function (c) { return c.checked; }).map(function (c) { return Number(c.value); });
@@ -298,11 +298,11 @@
   }
 
   function fileList(plan) {
-    return h("div", { class: "tdp-files" }, plan.files.map(function (f) {
-      return h("details", { class: "tdp-file" }, [
+    return h("div", { class: "tdarr-files" }, plan.files.map(function (f) {
+      return h("details", { class: "tdarr-file" }, [
         h("summary", {}, [h("b", { text: base(f.path) }), h("span", { class: "sub", text: lb(f.size_bytes) + (f.codec ? " · " + f.codec : "") }),
-          f.skip_reason ? h("span", { class: "tdp-skip", title: f.skip_reason, text: "Skipped" }) : null]),
-        h("div", { class: "tdp-path" }, [f.path, f.skip_reason ? h("div", { text: f.skip_reason }) : null])
+          f.skip_reason ? h("span", { class: "tdarr-skip", title: f.skip_reason, text: "Skipped" }) : null]),
+        h("div", { class: "tdarr-path" }, [f.path, f.skip_reason ? h("div", { text: f.skip_reason }) : null])
       ]);
     }));
   }
@@ -333,13 +333,13 @@
 
   function review(v, epoch) {
     var n = v.plan.paths.length, ok = !!v.hash && !!v.confirmation_token && !v.error && n > 0 && n <= LIMIT;
-    var msg = h("div", { class: "note", role: "status", text: v.error || (waiting() ? "Tdarr already has " + waiting() + " queued or active; the server refuses a batch until that queue is empty." : "") });
-    var queue = h("button", { class: "btn primary", type: "button", text: "Queue", disabled: !ok, onclick: run });
+    var msg = h("div", { id: "tdarr-confirm-msg", class: "note", role: "status", text: v.error || (waiting() ? "Tdarr already has " + waiting() + " queued or active; the server refuses a batch until that queue is empty." : "") });
+    var queue = h("button", { id: "tdarr-queue", class: "btn primary", type: "button", text: "Queue", disabled: !ok, onclick: run });
     var box = drawer("Tdarr batch review", [
       h("div", { class: "arc-eyebrow", text: "TDARR · " + (st.pcLabel || "Secondary").toUpperCase() + (v.plan.withPc ? " ON" : " OFF") }),
       h("h3", { text: n + (n === 1 ? " file · " : " files · ") + lb(v.plan.total_bytes) }),
       fileList(v.plan), msg,
-      h("div", { class: "actions" }, [h("button", { class: "btn", type: "button", text: "Cancel", onclick: HI().closeDrawer }), queue])
+      h("div", { class: "actions" }, [h("button", { id: "tdarr-cancel", class: "btn", type: "button", text: "Cancel", onclick: HI().closeDrawer }), queue])
     ]);
     function expired() { var t = Date.parse(v.expires_at); return !isFinite(t) || Date.now() >= t; }
     function again(text) {
@@ -367,7 +367,7 @@
         if (outcome === "canceled") { queue.disabled = false; queue.textContent = "Queue"; return; }
         if (outcome === "again") { if (epoch === st.epoch && drawerOpen(box)) again("Plan changed or expired"); return; }
         if (epoch === st.epoch) drawer("Tdarr batch", [h("h3", { text: st.notice }),
-          h("div", { class: "actions" }, [h("button", { class: "btn", type: "button", text: "Close", onclick: HI().closeDrawer })])]);
+          h("div", { class: "actions" }, [h("button", { id: "tdarr-result-close", class: "btn", type: "button", text: "Close", onclick: HI().closeDrawer })])]);
         if (live) { render(); loadStatus(); }
       });
     }
@@ -384,22 +384,22 @@
   }
 
   function candidatesView() {
-    var wrap = h("div", { class: "tdp-cands" });
-    var search = h("input", { class: "tdp-cand-search", type: "search", placeholder: "Search files…", "aria-label": "Search candidate files", value: st.candQuery,
+    var wrap = h("div", { class: "tdarr-cands" });
+    var search = h("input", { class: "tdarr-cand-search", type: "search", placeholder: "Search files…", "aria-label": "Search candidate files", value: st.candQuery,
       oninput: function () { st.candQuery = search.value; renderCands(); } });
     wrap.appendChild(h("div", { class: "library-find" }, [search,
       h("button", { class: "btn", type: "button", text: "Refresh", onclick: function () { st.cands = null; renderCands(); loadCands(); } })]));
-    wrap.appendChild(h("div", { id: "tdp-cand-rows", class: "pv-card tdp-rows" }));
+    wrap.appendChild(h("div", { id: "tdarr-cand-rows", class: "pv-card tdarr-rows" }));
     return wrap;
   }
 
   var KIND = { video: ["Re-encode", "info"], bloat: ["Bloated HEVC", "warn"], "audio-only": ["Audio only", "info"] };
   function renderCands() {
-    var el = byId("tdp-cand-rows"); if (!el) return;
+    var el = byId("tdarr-cand-rows"); if (!el) return;
     clear(el);
     if (!st.cands) {
       if (st.candError) el.appendChild(HI().stateBox("Candidates unavailable", st.candError, null, true));
-      else el.appendChild(h("div", { class: "tdp-pad" }, [skel(4)]));
+      else el.appendChild(h("div", { class: "tdarr-pad" }, [skel(4)]));
       return;
     }
     var q = st.candQuery.trim().toLowerCase();
@@ -410,13 +410,13 @@
     var max = Math.max.apply(null, [1].concat(rows.map(function (c) { return c.est_save_gb || 0; })));
     rows.forEach(function (c) {
       var k = KIND[c.kind] || [c.kind, "info"], dir = c.path.split("/").slice(-2, -1)[0] || "";
-      el.appendChild(h("div", { class: "tdp-cand" }, [
-        h("div", { class: "tdp-name" }, [
-          h("span", { class: "tdp-line" }, [h("b", { title: c.path, text: base(c.path) }), HI().pill(k[0], k[1])]),
+      el.appendChild(h("div", { class: "tdarr-cand" }, [
+        h("div", { class: "tdarr-name" }, [
+          h("span", { class: "tdarr-line" }, [h("b", { title: c.path, text: base(c.path) }), HI().pill(k[0], k[1])]),
           h("span", { class: "sub", text: [dir, c.codec, c.resolution, c.reason].filter(Boolean).join(" · ") })
         ]),
-        h("div", { class: "tdp-size" }, [h("strong", { text: "≈" + gb(c.est_save_gb) }), bar((c.est_save_gb || 0) / max * 100)]),
-        h("span", { class: "sub tdp-of", text: "of " + gb(c.size_gb) })
+        h("div", { class: "tdarr-size" }, [h("strong", { text: "≈" + gb(c.est_save_gb) }), bar((c.est_save_gb || 0) / max * 100)]),
+        h("span", { class: "sub tdarr-of", text: "of " + gb(c.size_gb) })
       ]));
     });
   }
@@ -426,8 +426,8 @@
   function render() {
     if (!root) return;
     clear(root);
-    var page = h("div", { class: "tdp" });
-    root.appendChild(page);
+    var page = h("div", { id: "archive-tdarr" });
+    root.appendChild(h("section", { id: "panel-archive" }, [page]));
     page.appendChild(HI().head(ID, view, HI().archivePause()));
     page.appendChild(libraryView());
     renderRows(); renderCands(); message(st.notice);

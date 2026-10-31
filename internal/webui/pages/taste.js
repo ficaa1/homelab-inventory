@@ -425,7 +425,7 @@
       if (s.flash) kids.push(HI.notice(s.flash[0], s.flash[1]));
       kids.push(!s.profiles ? (s.error ? failed("Taste") : loading()) : s.view === "known" ? renderKnown() : s.view === "familiar" ? renderWall() : s.view === "watchlist" ? renderWatchlist() : s.view === "import" ? renderImport() : renderPick());
     }
-    root.replaceChildren(h("div", { class: "taste-page" }, [h("div", { id: "taste" }, kids)]));
+    root.replaceChildren(h("section", { id: "panel-archive" }, [h("div", { id: "taste" }, kids)]));
     pumpPosters();
     if (focus === "taste-filter" || focus === "taste-search") {
       var f = document.getElementById(focus);

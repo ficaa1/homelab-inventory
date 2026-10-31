@@ -33,7 +33,7 @@
   function esc(s) { return HI.esc(s); }
   function $(id) { return document.getElementById(id); }
   function drawerOpen() { var d = $("drawer"); return d && !d.classList.contains("hidden"); }
-  function sheet(html, label) { HI.openDrawer('<div class="arc-page arc-sheet">' + html + "</div>", label || "Archive"); }
+  function sheet(html, label) { HI.openDrawer(html, label || "Archive"); }
   function msg(id, text, bad) { var el = $(id); if (el) { el.textContent = text; el.classList.toggle("arc-bad", !!bad); } }
   function row(k, v) { return "<dt>" + esc(k) + "</dt><dd>" + esc(v == null || v === "" ? "—" : v) + "</dd>"; }
   function real(iso) { return iso && new Date(iso).getFullYear() > 1; }
@@ -65,7 +65,7 @@
   function morph(el, html) {
     var t = document.createElement("template"), focus = document.activeElement;
     t.innerHTML = html;
-    if (st.strip && el === st.body && st.strip.parentNode === el) st.root.insertBefore(st.strip, el);
+    if (st.strip && el === st.body && st.strip.parentNode === el) el.parentNode.insertBefore(st.strip, el);
     morphKids(el, t.content);
     if (focus && focus !== document.activeElement && focus.isConnected && el.contains(focus)) focus.focus({ preventScroll: true });
   }
@@ -1245,14 +1245,15 @@
       root.addEventListener("toggle", onToggle, true);
       st.root = root;
       root.textContent = "";
-      root.className = "arc-page";
+      var panel = HI.h("section", { id: "panel-archive" });
       st.tools = HI.h("div", { class: "arc-head-tools" });
       st.strip = HI.h("section", { class: "arc-strip", "aria-label": "Activity", hidden: true });
       st.body = HI.h("div", { id: st.view === "library" ? "archive-library" : st.view === "seeding" ? "archive-seeding" : "archive", class: "arc-view arc-view-" + st.view });
       st.strip.id = "arc-strip";
       st.strip.innerHTML = '<div class="arc-strip-card"></div><div class="arc-live" aria-live="polite"></div>';
-      root.appendChild(st.strip);
-      root.appendChild(st.body);
+      panel.appendChild(st.strip);
+      panel.appendChild(st.body);
+      root.appendChild(panel);
       var t = ctx.params && (ctx.params.get("title") || ctx.params.get("hash"));
       if (t && !pending) pending = { view: st.view, title: ctx.params.get("title"), hash: ctx.params.get("hash") };
       if (st.view === "seeding") { seeding = seeding || null; loadSeeding(); }
@@ -1271,7 +1272,7 @@
       st.root = root;
       st.body = root;
       st.strip = st.tools = null;
-      root.className = "arc-page arc-admin";
+      root.className = "arc-admin";
       root.addEventListener("click", onClick);
       root.addEventListener("input", onInput);
       root.addEventListener("keydown", onKey);

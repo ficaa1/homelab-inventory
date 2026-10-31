@@ -956,24 +956,32 @@ button.ops-tile { cursor:pointer; }
   .schip { padding: 0 8px; gap: 4px; }
   .schip:first-child { padding-left: 4px; }
   .actions-bar .ibtn { min-width: 44px; width: 44px; height: 44px; }
-  :is(#panel-home, #panel-alerts, #panel-hosts, #panel-ports, #panel-admin, #view-host, #view-plugin, #pal, #gate) :is(button, select, summary),
-  body:not(:has(#view-plugin:not(.hidden) :is(.arc-page, .tdp, .taste-page))) #drawer :is(button, select), #drawer-close { min-height: 44px; min-width: 44px; }
-  :is(#panel-home, #panel-alerts, #panel-ports, #panel-admin, #view-host, #gate) input:not([type="checkbox"]) { min-height: 44px; }
-  :is(#panel-home, #panel-alerts, #panel-ports, #panel-admin, #view-host) .field { height: 44px; }
-  :is(#panel-home, #view-host) a:not(.svc):not(.ops-link), #panel-ports [data-def], #panel-ports .why { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
+  :is(#panel-home, #panel-alerts, #panel-hosts, #panel-network, #panel-admin, #view-host, #pal, #gate) :is(button, select, summary),
+  body:not(:has(#view-plugin:not(.hidden) #panel-archive:not(.hidden))) #drawer :is(button, select) { min-height: 44px; min-width: 44px; }
+  :is(#panel-home, #panel-alerts, #panel-network, #panel-admin, #view-host, #gate) input:not([type="checkbox"]) { min-height: 44px; }
+  :is(#panel-home, #panel-alerts, #panel-network, #panel-admin, #view-host) .field { height: 44px; }
+  :is(#panel-home, #view-host) a:not(.svc):not(.ops-link), #panel-network [data-def], #panel-network .why { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
   #view-host [data-def] { display: inline-flex; align-items: center; min-height: 44px; }
   #panel-admin label:has(input[type="checkbox"]) { display: flex; align-items: center; min-height: 44px; }
-  body:not(:has(#view-plugin:not(.hidden) :is(.arc-page, .tdp, .taste-page))) #drawer input:not([type="checkbox"]) { min-height: 44px; }
-  body:not(:has(#view-plugin:not(.hidden) :is(.arc-page, .tdp, .taste-page))) #drawer label[for="e-hide"] { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
+  body:not(:has(#view-plugin:not(.hidden) #panel-archive:not(.hidden))) #drawer input:not([type="checkbox"]) { min-height: 44px; }
+  body:not(:has(#view-plugin:not(.hidden) #panel-archive:not(.hidden))) #drawer label[for="e-hide"] { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
   #pal [data-pal] { min-height: 44px; }
   #view-host tr[data-cfile] td { height: 44px; }
   #panel-home .svc:has(.edit) .txt { padding-right: 0; }
   #panel-home .svc .edit { position: static; align-self: flex-start; }
   #panel-home .svc:has(.edit) .top { align-items: flex-start; }
-  #panel-ports .cell, #view-host .cell { height: 44px; }
-  #panel-ports .cells, #view-host .cells { gap: 2px; }
-  #panel-ports tr[data-port] td, #view-host tr[data-port] td { height: 44px; }
+  #panel-network .cell, #view-host .cell { height: 44px; }
+  #panel-network .cells, #view-host .cells { gap: 2px; }
+  #panel-network tr[data-port] td, #view-host tr[data-port] td { height: 44px; }
   .storage-policy > div { min-width: 0; }
+  /* The standalone Ports tab (no Network plugin) and declarative plugin views. */
+  :is(#panel-ports, #view-plugin:not(:has(#panel-archive))) :is(button, select, summary) { min-height: 44px; min-width: 44px; }
+  #panel-ports input:not([type="checkbox"]) { min-height: 44px; }
+  #panel-ports .field { height: 44px; }
+  #panel-ports [data-def], #panel-ports .why { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
+  #panel-ports .cell { height: 44px; }
+  #panel-ports .cells { gap: 2px; }
+  #panel-ports tr[data-port] td { height: 44px; }
 }
 
 /* ------------------------------------------------------------------ motion */
@@ -5265,7 +5273,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     var viewSeg = views.length > 1 && (!g || id === "taste") ? seg(name + " views", views.map(function (x) { return { key: x.name, title: str(x.title) || x.name }; }),
       function (x) { return x.key === current; }, function (x) { go(pluginHash(id, x.key === views[0].name ? "" : x.key, "")); }) : null;
     if (g) {
-      // As on the private page: the section's name, its undo pill, Pause, the
+      // The section's name, its undo pill, Pause, the
       // switcher, then the section's own buttons (CSS orders the page's tools).
       var sections = mediaSections(), here = sections.filter(function (x) { return x.plugin === id && x.view === current; })[0] || sections.filter(function (x) { return x.plugin === id; })[0];
       var nav = seg("Media views", sections.map(function (x) { return { key: x.key, section: x, title: x.title }; }),
@@ -8509,7 +8517,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   }
 
   // The archive's Pause, for Media sections the archive page does not draw
-  // (Tdarr), as the private dashboard shows it there. Null without the archive.
+  // (Tdarr). Null without the archive.
   var arcHold = { v: null, at: 0, busy: false, loading: null };
   function archiveApi(path, body) { var id = "archive"; return body ? write(pagePath(id, path), "POST", body) : api(pagePath(id, path)); }
   function archiveHold() {

@@ -43,4 +43,7 @@ plugin is disabled or the page is hidden.
 The views in the tab come from the plugin's manifest, so keep its `Tab.Views`
 and the page's sections in step. The dashboard's CSP forbids inline handlers
 and injected `<style>` elements: build nodes with `h` and put styles in
-`<id>.css`, scoped under a page class. Never put a credential in page data.
+`<id>.css`. The built-in pages render under the panel ids their rules name
+(`#panel-archive` for Archive, Tdarr and Taste, `#panel-network`) and share
+one global stylesheet, so a new page picks class names nothing else uses.
+Never put a credential in page data.

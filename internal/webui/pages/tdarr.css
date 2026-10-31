@@ -1,93 +1,70 @@
-/* Tdarr page: the page lives under .tdp, its drawers under .tdp-drawer.
-   The rules are the private dashboard's Tdarr section, with tdarr- read as
-   tdp-, plus the Library pieces it borrows (arc-title, library-*). */
-.tdp .arc-title { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); margin-bottom: 8px; min-width: 0; }
-.tdp .library-find { display: flex; gap: 8px; align-items: center; }
-.tdp .library-tools { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: var(--s4); flex-wrap: wrap; }
-.tdp .library-filters { display: flex; padding: 3px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); }
-.tdp .library-filters button { border: 0; background: none; color: var(--text-3); border-radius: var(--r-sm); padding: 6px 14px; cursor: pointer; font-size: var(--fs-sm); font-weight: 500; }
-.tdp .library-filters button[aria-pressed="true"] { background: var(--surface-3); color: var(--text); }
-.tdp .library-year { color: var(--text-3); font-size: var(--fs-xs); margin-left: 8px; }
-.tdp .library-bar { display: block; width: 100%; height: 4px; border-radius: 3px; background: var(--track); margin-top: 8px; overflow: hidden; }
-.tdp .library-bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; min-width: 1px; }
-.tdp .library-keep { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 16px 0; }
-.tdp-drawer .arc-eyebrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: var(--fs-xs); color: var(--text-3); }
-.tdp-drawer .library-season-picker { border: 1px solid var(--line-2); border-radius: var(--r); padding: 14px; margin: 16px 0; }
-.tdp-drawer .library-season-picker legend { color: var(--text-2); font-size: var(--fs-xs); padding: 0 5px; }
-.tdp-drawer .library-season-picker label { display: flex; align-items: center; gap: 8px; padding: 8px 0; font-size: var(--fs-sm); }
-.tdp-drawer .library-season-picker label span { margin-left: auto; color: var(--text-3); }
-@media (max-width: 900px) {
-  .tdp .library-tools { align-items: stretch; flex-direction: column; gap: 12px; }
-  .tdp .library-filters { align-self: flex-start; }
-  .tdp .library-find { width: 100%; }
-}
-@media (max-width: 640px) {
-  .tdp .library-keep, .tdp-drawer .library-season-picker label { min-height: 44px; min-width: 44px; box-sizing: border-box; }
-}
-
-#drawer:has(.tdp-drawer) .close { min-width:44px; min-height:44px; }
-.tdp #tdp-search, .tdp .tdp-cand-search { width:230px; color:var(--text); background:var(--surface); border:1px solid var(--line-2); border-radius:var(--r); padding:9px 12px; font:inherit; }
-.tdp #tdp-status, .tdp .tdp-row, .tdp .tdp-selection { padding:12px 14px; }
-.tdp-drawer .actions .btn { min-height:44px; }
-.tdp-drawer .library-season-picker label { min-height:44px; }
-
-.tdp .tdp-metrics, .tdp .tdp-node > div:first-child, .tdp .tdp-selection { display:flex; align-items:center; gap:16px; }
-.tdp .tdp-metrics { padding:4px 0 16px; justify-content:space-between; }
-.tdp .tdp-metrics b { font-size:24px; font-variant-numeric:tabular-nums; }
-.tdp .tdp-node { padding:12px 0; border-top:1px solid var(--line); }
-.tdp .tdp-node > div:first-child { gap:8px; flex-wrap:wrap; }
-.tdp .tdp-dot { width:7px; height:7px; border-radius:50%; background:var(--muted); }
-.tdp .tdp-dot.on { background:var(--good); }
-.tdp .tdp-dot.paused { background:var(--warning); }
-.tdp .tdp-active { display:flex; gap:12px; justify-content:space-between; margin-top:10px; }
-.tdp .tdp-active span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.tdp .tdp-row { display:grid; grid-template-columns:minmax(0,1fr) 130px auto; align-items:center; gap:16px; margin-bottom:8px; }
-.tdp .tdp-title { display:flex; align-items:center; gap:12px; min-height:44px; cursor:pointer; min-width:0; }
-.tdp .tdp-title > span { min-width:0; overflow-wrap:anywhere; }
-.tdp .tdp-title input, .tdp-drawer .library-season-picker input { width:20px; height:20px; flex-shrink:0; accent-color:var(--accent); }
-.tdp .tdp-title .sub { display:block; }
-.tdp .tdp-locked { opacity:.55; }
-.tdp .tdp-lock { font-size:12px; }
-.tdp .tdp-selection { position:sticky; top:calc(var(--arc-sticky-top, var(--top-h)) + 8px); z-index:2; margin-top:16px; box-shadow:var(--shadow); flex-wrap:wrap; }
-.tdp .tdp-selection .library-keep { margin:0; min-height:44px; }
-.tdp-drawer .tdp-file > summary { min-height:44px; cursor:pointer; }
-.tdp-drawer .tdp-file > summary > .sub { display:block; margin-top:6px; }
-.tdp-drawer .tdp-file > summary > .tdp-skip { display:inline-block; margin-top:6px; }
-.tdp-drawer .tdp-file .tdp-path { color:var(--text-3); font-size:var(--fs-xs); }
-.tdp-drawer .tdp-file { padding:12px 0; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:6px; overflow-wrap:anywhere; }
-.tdp-drawer .tdp-skip { border:1px solid var(--line); border-radius:var(--r); padding:4px 8px; font-size:11px; align-self:flex-start; color:var(--muted); }
-.tdp button, .tdp input[type=search] { min-height:44px; }
-@media (max-width:600px) {
-  .tdp .tdp-row { grid-template-columns:minmax(0,1fr) auto; gap:8px 12px; }
-  .tdp .tdp-title { grid-column:1/-1; }
-  .tdp #tdp-search, .tdp .tdp-cand-search { width:100%; min-width:0; flex:1; }
-  .tdp .tdp-selection { gap:8px; }
-  .tdp .tdp-metrics { gap:8px; font-size:12px; }
-  .tdp .tdp-node .sub { font-size:11px; }
+/* Tdarr page (pages/tdarr.js). The library rows, filters and season picker
+   come from archive.css. */
+#drawer:has(.tdarr-drawer) .close { min-width:44px; min-height:44px; }
+#tdarr-search { width:230px; color:var(--text); background:var(--surface); border:1px solid var(--line-2); border-radius:var(--r); padding:9px 12px; font:inherit; }
+#tdarr-status, .tdarr-row, .tdarr-selection { padding:12px 14px; }
+#tdarr-queue, #tdarr-cancel, #tdarr-season-add, #tdarr-season-cancel, #tdarr-result-close { min-height:44px; }
+.library-season-picker:has([name="tdarr-season"]) label { min-height:44px; }
+/* Tdarr reuses Library's typography, meters, season picker and drawer. */
+.tdarr-metrics, .tdarr-node > div:first-child, .tdarr-selection { display:flex; align-items:center; gap:16px; }
+.tdarr-metrics { padding:4px 0 16px; justify-content:space-between; }
+.tdarr-metrics b { font-size:24px; font-variant-numeric:tabular-nums; }
+.tdarr-node { padding:12px 0; border-top:1px solid var(--line); }
+.tdarr-node > div:first-child { gap:8px; flex-wrap:wrap; }
+.tdarr-dot { width:7px; height:7px; border-radius:50%; background:var(--muted); }
+.tdarr-dot.on { background:var(--good); }
+.tdarr-dot.paused { background:var(--warning); }
+.tdarr-active { display:flex; gap:12px; justify-content:space-between; margin-top:10px; }
+.tdarr-active span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tdarr-row { display:grid; grid-template-columns:minmax(0,1fr) 130px auto; align-items:center; gap:16px; margin-bottom:8px; }
+.tdarr-title { display:flex; align-items:center; gap:12px; min-height:44px; cursor:pointer; min-width:0; }
+.tdarr-title > span { min-width:0; overflow-wrap:anywhere; }
+.tdarr-title input, .library-season-picker input { width:20px; height:20px; flex-shrink:0; accent-color:var(--accent); }
+.tdarr-title .sub { display:block; }
+.tdarr-locked { opacity:.55; }
+.tdarr-lock { font-size:12px; }
+.tdarr-selection { position:sticky; top:calc(var(--arc-sticky-top, var(--top-h)) + 8px); z-index:2; margin-top:16px; box-shadow:var(--shadow); flex-wrap:wrap; }
+.tdarr-selection .library-keep { margin:0; min-height:44px; }
+.tdarr-file > summary { min-height:44px; cursor:pointer; }
+.tdarr-file > summary > .sub { display:block; margin-top:6px; }
+.tdarr-file > summary > .tdarr-skip { display:inline-block; margin-top:6px; }
+.tdarr-file .tdarr-path { color:var(--text-3); font-size:var(--fs-xs); }
+.tdarr-file { padding:12px 0; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:6px; overflow-wrap:anywhere; }
+.tdarr-skip { border:1px solid var(--line); border-radius:var(--r); padding:4px 8px; font-size:11px; align-self:flex-start; color:var(--muted); }
+#archive-tdarr button, #archive-tdarr input[type=search] { min-height:44px; }
+@media(max-width:600px) {
+  .tdarr-row { grid-template-columns:minmax(0,1fr) auto; gap:8px 12px; }
+  .tdarr-title { grid-column:1/-1; }
+  #tdarr-search { width:100%; min-width:0; flex:1; }
+  .tdarr-selection { gap:8px; }
+  .tdarr-metrics { gap:8px; font-size:12px; }
+  .tdarr-node .sub { font-size:11px; }
 }
 
-/* Public only: an Archive-busy pill on a title, and the "Worth compressing"
+/* Beyond the Tdarr section: an Archive-busy pill on a title, and the "Worth compressing"
    list of files the scanner thinks would shrink. */
-.tdp .tdp-title .pill, .tdp-drawer .library-season-picker .pill { margin-left: 8px; }
-.tdp .tdp-pad { padding: 14px 16px; }
-.tdp .tdp-cands { display: grid; gap: var(--s3); min-width: 0; margin-top: var(--s5); }
-.tdp .tdp-cand {
+#archive-tdarr .tdarr-title .pill, #drawer .library-season-picker .pill { margin-left: 8px; }
+#archive-tdarr .tdarr-cand-search { width:230px; color:var(--text); background:var(--surface); border:1px solid var(--line-2); border-radius:var(--r); padding:9px 12px; font:inherit; }
+@media (max-width:600px) { #archive-tdarr .tdarr-cand-search { width:100%; min-width:0; flex:1; } }
+#archive-tdarr .tdarr-pad { padding: 14px 16px; }
+#archive-tdarr .tdarr-cands { display: grid; gap: var(--s3); min-width: 0; margin-top: var(--s5); }
+#archive-tdarr .tdarr-cand {
   display: grid; grid-template-columns: minmax(0, 1fr) 150px 120px; align-items: center; gap: 16px;
   padding: 8px 16px; border-top: 1px solid var(--line); min-width: 0;
 }
-.tdp .tdp-rows > h3 + .tdp-cand { border-top: 0; }
-.tdp .tdp-cand > :last-child { justify-self: end; }
-.tdp .tdp-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.tdp .tdp-line { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--fs-sm); }
-.tdp .tdp-line b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.tdp .tdp-line .pill { flex: none; font-size: 11px; padding: 0 6px; line-height: 16px; }
-.tdp .tdp-name .sub { font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tdp .tdp-cand .tdp-size { display: grid; gap: 5px; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
-.tdp .tdp-cand .tdp-size strong { font-weight: 500; }
-.tdp .tdp-cand .library-bar { margin-top: 0; }
-.tdp .tdp-of { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+#archive-tdarr .tdarr-rows > h3 + .tdarr-cand { border-top: 0; }
+#archive-tdarr .tdarr-cand > :last-child { justify-self: end; }
+#archive-tdarr .tdarr-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+#archive-tdarr .tdarr-line { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--fs-sm); }
+#archive-tdarr .tdarr-line b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+#archive-tdarr .tdarr-line .pill { flex: none; font-size: 11px; padding: 0 6px; line-height: 16px; }
+#archive-tdarr .tdarr-name .sub { font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#archive-tdarr .tdarr-cand .tdarr-size { display: grid; gap: 5px; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+#archive-tdarr .tdarr-cand .tdarr-size strong { font-weight: 500; }
+#archive-tdarr .tdarr-cand .library-bar { margin-top: 0; }
+#archive-tdarr .tdarr-of { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 @media (max-width: 600px) {
-  .tdp .tdp-cand { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 8px 12px; }
-  .tdp .tdp-cand > .tdp-name { grid-column: 1 / -1; }
-  .tdp .tdp-cand .tdp-size { grid-template-columns: auto minmax(40px, 1fr); align-items: center; gap: 10px; }
+  #archive-tdarr .tdarr-cand { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 8px 12px; }
+  #archive-tdarr .tdarr-cand > .tdarr-name { grid-column: 1 / -1; }
+  #archive-tdarr .tdarr-cand .tdarr-size { grid-template-columns: auto minmax(40px, 1fr); align-items: center; gap: 10px; }
 }
