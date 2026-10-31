@@ -852,18 +852,19 @@
     var d = draft, off = scBusy ? " disabled" : "";
     // A full replace keeps the form simple: typing never races a re-render
     // because number inputs update the draft without re-rendering.
-    st.body.innerHTML = '<section class="arc-sc card" id="arc-sc">' +
-      '<p class="subtitle">How the service scores freeleech releases. Preview uses cached releases only; saving changes cached scores without starting a search or a grab.</p>' +
-      (selection.warning ? '<div class="arc-msg warn" role="status">Invalid overrides · using the file policy</div>' : "") +
+    var inAdmin = st.view === "admin";
+    st.body.innerHTML = '<section class="arc-sc' + (inAdmin ? "" : " card") + '" id="arc-sc">' +
+      (inAdmin ? "" : '<p class="subtitle">How the service scores freeleech releases. Preview uses cached releases only; saving changes cached scores without starting a search or a grab.</p>') +
+      (selection.warning ? '<div class="arc-msg warn" role="status">Invalid overrides · File policy</div>' : "") +
       '<div class="form">' + ["1080p", "2160p"].map(function (mode) {
-        return '<fieldset><legend>' + mode + ' · GB per hour</legend><div class="arc-sc-fields">' + ["floor", "target", "cap"].map(function (k) {
+        return '<fieldset><legend>' + mode + ' · GB/h</legend><div class="arc-sc-fields">' + ["floor", "target", "cap"].map(function (k) {
           return num("arc-sc-" + mode + "-" + k, k[0].toUpperCase() + k.slice(1), d.sizes[mode][k], 0.1, 100);
         }).join("") + "</div></fieldset>";
       }).join("") +
-      '<fieldset><legend>Codec factors</legend><div class="arc-sc-fields">' + ["hevc", "avc", "av1"].map(function (k) { return num("arc-sc-" + k, k.toUpperCase(), d.codecFactors[k], 0.1, 10); }).join("") + "</div></fieldset>" +
+      '<fieldset><legend>Codecs</legend><div class="arc-sc-fields">' + ["hevc", "avc", "av1"].map(function (k) { return num("arc-sc-" + k, k.toUpperCase(), d.codecFactors[k], 0.1, 10); }).join("") + "</div></fieldset>" +
       groups("trustedGroups", "Trusted groups") + groups("deniedGroups", "Denied groups") +
-      '<fieldset><legend>Minimum score</legend><input class="arc-sc-min" id="arc-sc-min" aria-label="Minimum score" type="number" inputmode="decimal" step="any" min="0" max="100" value="' + esc(d.minScore) + '"></fieldset>' +
-      '<div class="actions"><button class="btn" type="button" id="arc-sc-preview"' + off + '>Preview</button><button class="btn primary" type="button" id="arc-sc-save"' + (!preview || scBusy ? " disabled" : "") + '>Save</button><button class="btn" type="button" id="arc-sc-reset"' + off + ">Reset to file</button></div>" +
+      '<label for="arc-sc-min">Min score</label><input class="arc-sc-min" id="arc-sc-min" type="number" inputmode="decimal" step="any" min="0" max="100" value="' + esc(d.minScore) + '">' +
+      '<div class="actions"><button class="btn" type="button" id="arc-sc-preview"' + off + '>Preview</button><button class="btn primary" type="button" id="arc-sc-save"' + (!preview || scBusy ? " disabled" : "") + '>Save</button><button class="btn" type="button" id="arc-sc-reset"' + off + ">Reset</button></div>" +
       '<div class="arc-msg" id="arc-sc-msg" role="status"></div><div id="arc-sc-results">' + previewHTML() + "</div></div></section>";
   }
 
@@ -1261,6 +1262,7 @@
       poll.busy = false; poll.again = false;
       tick();
     },
+    adminTitle: "Archive scoring",
     admin: function (root) {
       HI = window.HI;
       st.gen++;

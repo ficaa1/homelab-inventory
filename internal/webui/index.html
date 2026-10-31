@@ -4679,8 +4679,10 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     box.replaceChildren();
     (capabilities.plugins || []).forEach(function (p) {
       if (!p || !p.id || !PAGES[p.id] || typeof PAGES[p.id].admin !== "function") return;
+      // A page may name its section; a named one reads as a plain heading.
+      var title = str(PAGES[p.id].adminTitle);
       var sec = h("section", { class: "setting plugin-admin", "data-plugin-admin": p.id }, [
-        h("h4", {}, [iconNode((p.tab && p.tab.icon) || "puzzle", "sm"), str(p.name) || p.id])]);
+        h("h4", {}, title ? [title] : [iconNode((p.tab && p.tab.icon) || "puzzle", "sm"), str(p.name) || p.id])]);
       var body = h("div", { class: "plugin-admin-body" });
       sec.appendChild(body); box.appendChild(sec);
       try { PAGES[p.id].admin(body, { id: p.id, name: p.name, first: true }); }
