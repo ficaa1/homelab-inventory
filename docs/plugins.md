@@ -207,3 +207,14 @@ Legacy migration preserves the source effective upload owner.
 Media keeps queue first-observed timestamps in its private plugin cache so a
 backup or runtime reopen does not reset the one-hour stuck-download threshold.
 Only a complete successful provider poll removes recovered observations.
+
+Overview shows Media playback and Arr queues and the Archive policy summary when
+those integrations are configured. Network can add a host-load tile: set
+`load_instance` to the exact node_exporter instance label, `load_job` to its job
+(default `node_exporter`), and `load_label` to the display name (default `Host load`).
+An empty instance disables host-load collection. Only fixed PromQL is used;
+these settings select label values, never expressions. CPU/load/memory readings
+and optional `plex_gpu_*` textfile metrics must be no older than 90 seconds, with
+at most five seconds of future clock skew. Missing GPU metrics remain unavailable.
+The host-load client caches for fifteen seconds and bounds parallel reads to three
+seconds. Generic installations retain the fleet Overview tiles.

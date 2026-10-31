@@ -5,7 +5,7 @@ const page = fs.readFileSync(process.argv[2], 'utf8');
 const start = page.indexOf('  var overviewOpen =');
 const end = page.indexOf("  document.addEventListener('click'", start);
 assert(start > 0 && end > start, 'overview rendering must exist');
-const output = {innerHTML:''};
+const output = {innerHTML:'', addEventListener: () => {}, focus: () => {}};
 const context = {
   data: {}, $: () => output, countUp: () => {}, ic: () => '',
   ago: () => '1m ago', bytes: String, fromNow: () => 'in 4d',
@@ -44,8 +44,28 @@ const summary = 'Guest <img src=x> & backup failed';
 html = render({hosts_total:1, hosts_reporting:1, agents_outdated:[], alerts:counts}, [
   {host:'atlas', subject:'204', rule:'backup', severity:'warning', summary}
 ]);
-assert.match(html, /class="ops-name">Guest &lt;img src=x&gt; &amp; backup failed/);
+assert.match(html, /class="ops-name">204/);
+assert.match(html, /Guest &lt;img src=x&gt; &amp; backup failed/);
 assert.match(html, /class="sr-only">warning: /);
 assert.doesNotMatch(html, /<img src=x>/);
 assert.match(html, /data-ops-alert="0"/);
 console.log('overview summaries, unknown versus empty data, stale hosts and escaped attention: PASS');
+
+context.data.overview.streams = {status:'ok', count:1, direct:0, transcode:1, bandwidth_kbps:1200, sessions:[{user:'Viewer', title:'Example episode', state:'playing', decision:'transcode', quality:'1080p', progress_pct:50}]};
+context.data.overview.plex_load = {status:'partial', label:'Media', cpu_pct:24, cpu_spark:[20,24], gpu:{status:'ok',devices:[{name:'Example GPU',status:'ok',gpu_util_pct:15,gpu_encoder_pct:12,gpu_decoder_pct:8}]}};
+context.data.overview.arr = {sonarr:{status:'ok',total:2,problems:1,attention:1},radarr:{status:'not_configured'}};
+context.data.overview.archive = {status:'ok',phase:'idle',pending_approvals:0,progress_pct:null,saved_bytes_total:null};
+context.renderOverview();
+html=output.innerHTML;
+assert.match(html,/Streams/);
+assert.match(html,/Media load/);
+assert.match(html,/0 critical · 0 warn/);
+assert.match(html,/Watching now/);
+assert.match(html,/ops-card ops-sessions hidden/);
+assert.match(html,/Encode 12% · decode 8%/);
+assert.match(html,/Arr queues/);
+assert.match(html,/Lifetime savings: —/);
+assert.doesNotMatch(html,/Reporting hosts|Agent updates/);
+context.overviewOpen.streams = true;
+context.renderOverview();
+assert.match(output.innerHTML,/ops-card ops-sessions"><h2>Watching now/);

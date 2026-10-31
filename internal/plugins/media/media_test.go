@@ -223,6 +223,14 @@ func TestViewsChecksCacheAndImages(t *testing.T) {
 	f, server := newFixture(t)
 	var logs bytes.Buffer
 	r, m := registry(t, server, &logs)
+	sections := r.Overview(context.Background())
+	streams := sections["streams"].(map[string]any)
+	sessions := streams["sessions"].([]any)
+	session := sessions[0].(map[string]any)
+	queue := sections["arr"].(map[string]any)["sonarr"].(map[string]any)
+	if streams["count"] != float64(1) || streams["transcode"] != float64(1) || session["title"] != "Example series: Sample episode" || session["progress_pct"] != float64(25) || queue["total"] != float64(2) || queue["attention"] != float64(2) {
+		t.Fatalf("overview projection differs from playback and queue facts: %v", sections)
+	}
 	now := view(t, r, "now")
 	playing := block(t, now, "Now playing")
 	if len(playing.Items) != 1 || playing.Items[0].Subtitle != "a user" || playing.Items[0].Progress.Value != 0.25 {

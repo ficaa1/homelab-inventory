@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
+	"github.com/ficaa1/homelab-inventory/internal/plugins/network/plexload"
 	"github.com/ficaa1/homelab-inventory/internal/plugins/network/speed"
 )
 
@@ -26,6 +27,7 @@ var (
 )
 
 type Network struct {
+	load                         *plexload.Client
 	inventory                    func() ([]plugin.NetworkHost, error)
 	dnsRecords                   func(context.Context) ([]plugin.DNSRecord, error)
 	speed                        *speed.Speedtester
@@ -61,6 +63,9 @@ func (*Network) Manifest() plugin.Manifest {
 		{Key: "speed_fallback_size", Label: "Fallback file bytes", Type: plugin.Number},
 		{Key: "prometheus_url", Label: "Prometheus URL", Type: plugin.URL},
 		{Key: "prometheus_token", Label: "Bearer token", Type: plugin.Secret},
+		{Key: "load_job", Label: "Load exporter job", Type: plugin.Text, Default: "node_exporter", Group: "Overview load"},
+		{Key: "load_instance", Label: "Load exporter instance", Type: plugin.Text, Help: "Exact Prometheus instance label. Empty disables the Overview load tile.", Group: "Overview load"},
+		{Key: "load_label", Label: "Load tile label", Type: plugin.Text, Default: "Host load", Help: "Host name shown before load; a label ending in load is used as written.", Group: "Overview load"},
 		{Key: "exclude_interfaces", Label: "Exclude interfaces", Type: plugin.Text, Default: defaultExclude, Help: "Regular expression matched against the whole device name."},
 		{Key: "vpn_container", Label: "VPN container", Type: plugin.Text, Help: "cAdvisor container name whose traffic is the VPN tunnel. Empty hides VPN traffic."},
 		{Key: "diag_prefix", Label: "Diagnostics metric prefix", Type: plugin.Text, Help: "Prefix of a network-diagnostics exporter: <prefix>_ping_rtt_seconds, _ping_loss_percent, _dns_resolve_seconds and _collection_success. Empty hides ping and DNS quality."},
@@ -114,6 +119,9 @@ func (n *Network) Configure(c plugin.Config) error {
 		return &plugin.FieldError{Key: "wan_device", Message: "Set the diagnostics metric prefix as well"}
 	}
 	n.vpnContainer, n.diagPrefix, n.wanDevice = names["vpn_container"], names["diag_prefix"], names["wan_device"]
+	if err := n.configureLoad(c, base, token); err != nil {
+		return err
+	}
 	n.answers = nil
 	base = strings.TrimRight(base, "/")
 	if n.base != base || n.token != token || n.exclude != exclude || n.window != window {
@@ -124,6 +132,7 @@ func (n *Network) Configure(c plugin.Config) error {
 	return nil
 }
 func (n *Network) Close() error {
+	n.load = nil
 	if n.speed != nil {
 		n.speed.Close()
 		n.speed = nil

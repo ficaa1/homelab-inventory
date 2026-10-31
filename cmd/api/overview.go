@@ -8,5 +8,8 @@ import (
 
 func (s *server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	b := overview.Builder{Store: s.store, Cache: &s.overviewCache, Runs: &s.overviewRuns, Evaluate: s.evaluateAlerts}
+	if s.plugins != nil {
+		b.Contributions = s.plugins.Overview
+	}
 	writeJSON(w, http.StatusOK, b.Build(r.Context(), time.Now()))
 }

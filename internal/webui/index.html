@@ -909,6 +909,10 @@ pre.code {
 .protection-reason { border-left:2px solid var(--line); padding-left:10px; margin:8px 0; }
 @media (prefers-reduced-motion: reduce) { .protection-line::after { transition:none; } }
 
+.ops-person { display:flex; align-items:center; gap:6px; margin-top:6px; min-width:0; }
+.ops-person span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ops-avatar { display:inline-flex; flex:none; width:24px; height:24px; border-radius:50%; background:var(--surface-3); color:var(--text); justify-content:center; align-items:center; font-size: 12px; font-weight: 600; }
+.ops-sessions { margin-bottom:16px; }
 .ops-meter { height:4px; background:var(--track); border-radius:4px; overflow:hidden; margin:8px 0; }
 .ops-meter i { display:block; height:100%; background:var(--accent); border-radius:4px; }
 .ops-storage summary { display:block; }
@@ -3705,37 +3709,63 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     }, 'No guests');
   }
   function renderOverview() {
-    var o = data.overview;
+    var streamsOpen = !!overviewOpen["streams"], o = data.overview;
+    var streamsIcon = '<svg class="ic" aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>';
     if (!o) {
       $('home-ops').innerHTML = '<div class="skel skel-hero" role="status" aria-label="Loading">' +
         new Array(4).join('<div class="ops-tile"><span class="sk s"></span><span class="sk n"></span><span class="sk"></span></div>') + '</div>';
       return;
     }
     if (o.status) { $('home-ops').innerHTML = opsEmpty(o); return; }
-    var fleet = o.fleet, counts = !opsState(fleet) && !opsState(fleet.alerts) && fleet.alerts;
+    var streams = o.streams, load = o.plex_load, fleet = o.fleet, counts = !opsState(fleet) && !opsState(fleet.alerts) && fleet.alerts;
+    var sessions = !opsState(streams) && Array.isArray(streams.sessions) ? streams.sessions : [];
     var recentInfo = counts && counts.recent;
     var recent = recentInfo ? !opsState(recentInfo) && recentInfo.has_recent === true : Array.isArray(o.attention) && o.attention.some(opsRecent);
     var html = '<div class="ops-heading"><h1>Overview</h1><span class="ops-stamp">' + esc(o.generated_at ? 'Updated ' + ago(o.generated_at) : 'Time not collected') + '</span></div>';
-    var knownFleet = !opsState(fleet), outdated = knownFleet && Array.isArray(fleet.agents_outdated) ? fleet.agents_outdated.length : null;
-    html += '<div class="ops-hero"><details class="ops-tile" data-ops-key="alert-counts"' + (overviewOpen['alert-counts'] ? ' open' : '') + '><summary><span class="ops-label">Active alerts' + (recent ? '<span class="ops-recent" aria-label="Alert first seen within 24 hours"></span>' : '') + '</span><span class="ops-number' + (counts && counts.critical ? ' crit' : counts && counts.warning ? ' warn' : '') + '">' + (counts ? opsNumber(counts.critical + counts.warning + counts.info) : '—') + '</span><span class="ops-sub">' + (counts ? esc(counts.critical) + ' critical · ' + esc(counts.warning) + ' warnings' : esc(opsState(fleet) || opsState(fleet.alerts))) + '</span></summary><div class="ops-detail">' + (counts ? esc(counts.info) + ' informational · ' + esc(counts.silenced) + ' silenced<br>' : '') + (recent ? 'New in past 24h<br>' : '') + '<a href="#/alerts">View alerts ↗</a></div></details>';
-    html += '<a class="ops-tile ops-link" href="#/hosts"><span class="ops-label">Reporting hosts</span><span class="ops-number">' + (knownFleet ? opsNumber(fleet.hosts_reporting) + '<small> / ' + opsNumber(fleet.hosts_total) + '</small>' : '—') + '</span><span class="ops-sub">' + (knownFleet ? fleet.hosts_total === 0 ? 'No hosts collected' : fleet.hosts_reporting === fleet.hosts_total ? 'All hosts reporting' : esc(fleet.hosts_total - fleet.hosts_reporting) + ' not reporting' : esc(opsState(fleet))) + '</span></a>';
-    html += '<a class="ops-tile ops-link" href="#/hosts"><span class="ops-label">Agent updates</span><span class="ops-number">' + opsNumber(outdated) + '</span><span class="ops-sub">' + (outdated === null ? 'Not collected' : outdated ? 'Hosts with an older agent' : 'No outdated agents') + '</span></a></div>';
+    if (streams == null && load == null) {
+      var knownFleet = !opsState(fleet), outdated = knownFleet && Array.isArray(fleet.agents_outdated) ? fleet.agents_outdated.length : null;
+      html += '<div class="ops-hero"><details class="ops-tile" data-ops-key="alert-counts"' + (overviewOpen['alert-counts'] ? ' open' : '') + '><summary><span class="ops-label">Active alerts' + (recent ? '<span class="ops-recent" aria-label="Alert first seen within 24 hours"></span>' : '') + '</span><span class="ops-number' + (counts && counts.critical ? ' crit' : counts && counts.warning ? ' warn' : '') + '">' + (counts ? opsNumber(counts.critical + counts.warning + counts.info) : '—') + '</span><span class="ops-sub">' + (counts ? esc(counts.critical) + ' critical · ' + esc(counts.warning) + ' warnings' : esc(opsState(fleet) || opsState(fleet.alerts))) + '</span></summary><div class="ops-detail">' + (counts ? esc(counts.info) + ' informational · ' + esc(counts.silenced) + ' silenced<br>' : '') + (recent ? 'New in past 24h<br>' : '') + '<a href="#/alerts">View alerts ↗</a></div></details>';
+      html += '<a class="ops-tile ops-link" href="#/hosts"><span class="ops-label">Reporting hosts</span><span class="ops-number">' + (knownFleet ? opsNumber(fleet.hosts_reporting) + '<small> / ' + opsNumber(fleet.hosts_total) + '</small>' : '—') + '</span><span class="ops-sub">' + (knownFleet ? fleet.hosts_total === 0 ? 'No hosts collected' : fleet.hosts_reporting === fleet.hosts_total ? 'All hosts reporting' : esc(fleet.hosts_total - fleet.hosts_reporting) + ' not reporting' : esc(opsState(fleet))) + '</span></a>';
+      html += '<a class="ops-tile ops-link" href="#/hosts"><span class="ops-label">Agent updates</span><span class="ops-number">' + opsNumber(outdated) + '</span><span class="ops-sub">' + (outdated === null ? 'Not collected' : outdated ? 'Hosts with an older agent' : 'No outdated agents') + '</span></a></div>';
+    } else {
+      html += '<div class="ops-hero"><button type="button" class="ops-tile" id="ops-streams-toggle" aria-expanded="' + streamsOpen + '" aria-controls="ops-sessions"><span class="ops-label">' + streamsIcon + 'Streams</span><span class="ops-number">' + (!opsState(streams) ? opsNumber(streams.count) : '—') + '</span><span class="ops-sub">' +
+        (opsState(streams) || (sessions.length ? sessions.slice(0,2).map(function (s) { var initials = (s.user || '?').split(/\s+/).map(function (w) { return w.charAt(0); }).join('').slice(0,2); return '<span class="ops-person"><span class="ops-avatar" aria-label="' + esc(s.user) + '">' + esc(initials) + '</span><span>' + esc(s.title) + '</span></span>'; }).join('') + (sessions.length > 2 ? '+' + (sessions.length - 2) + ' watching' : '') : 'Idle')) + '</span></button>';
+      var devices = !opsState(load) && load.gpu && !opsState(load.gpu) && Array.isArray(load.gpu.devices) ? load.gpu.devices : [];
+      var gpuLabel = devices.length ? devices.map(function (g) { return opsState(g) ? '—' : opsNumber(g.gpu_util_pct, '%'); }).join(' / ') : !opsState(load) ? opsNumber(load.gpu_pct, '%') : '—';
+      html += '<details class="ops-tile" data-ops-key="plex-load"' + (overviewOpen['plex-load'] ? ' open' : '') + '><summary><span class="ops-label">' + ic('server') + esc(load && load.label ? (/\bload$/i.test(load.label) ? load.label : load.label + ' load') : 'Host load') + '</span><span class="ops-number">' + (!opsState(load) ? opsNumber(load.cpu_pct, '%') : '—') + '</span><span class="ops-sub">GPU ' + gpuLabel + '</span>' + (!opsState(load) && (load.cpu_spark || load.spark) ? opsSpark(load.cpu_spark || load.spark, 'CPU usage') : '') + '</summary><div class="ops-detail">' +
+        (opsState(load) ? esc(opsState(load)) : 'CPU · host usage' + devices.map(function (g) { return '<br>' + esc(g.name || 'GPU') + ' · ' + (opsState(g) || opsNumber(g.gpu_util_pct, '%')) + '<br>Encode ' + opsNumber(g.gpu_encoder_pct, '%') + ' · decode ' + opsNumber(g.gpu_decoder_pct, '%') + (g.spark && !opsState(g) ? opsSpark(g.spark, 'GPU usage') : ''); }).join('') + (!devices.length ? '<br>GPU · ' + esc(opsState(load.gpu) || 'Not collected') : '') + (load.sampled_at ? '<br>' + esc(ago(load.sampled_at)) : '')) + '</div></details>';
+      html += '<details class="ops-tile" data-ops-key="alert-counts"' + (overviewOpen['alert-counts'] ? ' open' : '') + '><summary><span class="ops-label">' + ic('bell') + 'Alerts' + (recent ? '<span class="ops-recent" aria-label="Alert first seen within 24 hours"></span>' : '') + '</span><span class="ops-number">' + (counts ? opsNumber(counts.critical + counts.warning + counts.info) : '—') + '</span><span class="ops-sub">' + (counts ? esc(counts.critical) + ' critical · ' + esc(counts.warning) + ' warn' : esc(opsState(fleet))) + '</span></summary><div class="ops-detail">' + (counts ? esc(counts.info) + ' info · ' + esc(counts.silenced) + ' silenced<br>' : '') + (recent ? 'New in past 24h<br>' : '') + '<a href="#/alerts">Alerts ↗</a></div></details></div>';
+      html += '<div id="ops-sessions" class="ops-card ops-sessions' + (streamsOpen ? '' : ' hidden') + '"><h2>Watching now</h2>' + opsList(streams && !opsState(streams) ? streams.sessions : streams, function (s, i) {
+        return opsDetails('session-' + i, '<span class="ops-name"><b>' + esc(s.user || 'Unknown viewer') + '</b><span class="ops-sub">' + esc(s.title) + '</span></span><span class="ops-chip">' + esc(s.state || 'Unknown') + '</span>',
+          esc(s.decision || 'Playback —') + ' · ' + esc(s.quality || 'Quality —') + '<br>Progress ' + opsNumber(s.progress_pct, '%') + opsMeter(s.progress_pct));
+      }, 'Idle') + (opsState(streams) ? '' : '<div class="ops-detail">' + opsNumber(streams.direct) + ' direct · ' + opsNumber(streams.transcode) + ' transcode · ' + opsNumber(streams.bandwidth_kbps) + ' kbps</div>') + '</div>';
+    }
     html += '<div class="ops-grid">';
     html += opsCard('Attention', 'bell', opsList(o.attention, function (a, i) {
-      return opsDetails('attention-' + i, '<span class="ops-severity ' + esc(a.severity) + '" aria-hidden="true"></span><span class="sr-only">' + esc(a.severity) + ': </span><span class="ops-name">' + esc(a.summary || a.subject || a.rule) + '<span class="ops-sub">' + esc(a.host) + '</span></span>' + (opsRecent(a) ? '<span class="ops-chip">New</span>' : ''), esc(a.summary) + '<br>' + esc(a.severity) + ' · ' + esc(a.rule) + '<br>First seen ' + esc(a.first_seen || a.since ? ago(a.first_seen || a.since) : 'not collected') + '<br>' + opsHost(a.host) + '<a href="#/alerts" data-ops-alert="' + i + '">Alert ↗</a>');
-    }, 'No issues need attention', 4, 'more-attention'), 'alerts');
+      return opsDetails('attention-' + i, '<span class="ops-severity ' + esc(a.severity) + '" aria-hidden="true"></span><span class="sr-only">' + esc(a.severity) + ': </span><span class="ops-name">' + esc(a.subject || a.rule) + '<span class="ops-sub">' + esc(a.host) + '</span></span>' + (opsRecent(a) ? '<span class="ops-chip">New</span>' : ''), esc(a.summary) + '<br>' + esc(a.severity) + ' · ' + esc(a.rule) + '<br>First seen ' + esc(a.first_seen || a.since ? ago(a.first_seen || a.since) : 'not collected') + '<br>' + opsHost(a.host) + '<a href="#/alerts" data-ops-alert="' + i + '">Alert ↗</a>');
+    }, 'Clear', 4, 'more-attention'), 'alerts');
     html += opsCard('Storage', 'disk', opsList(o.storage, function (r, i) {
       var f = r.forecast, forecast = !f ? 'Not collected' : f.status === 'ok' && f.full_at ? 'Full ' + fromNow(f.full_at) : f.status === 'flat' ? 'Stable' : f.status === 'unavailable' ? 'Unavailable' : 'No forecast';
-      return opsDetails('storage-' + i, '<span class="ops-storage-line"><span class="ops-name">' + esc(r.name) + '<span class="ops-sub">' + esc(r.host) + ' · ' + esc(r.kind === 'pve' ? 'allocation' : r.kind === 'fs' ? 'filesystem' : r.kind === 'zfs' ? 'ZFS pool' : r.kind) + '</span></span><b>' + (!opsState(r) ? opsNumber(r.pct, '%') : '—') + '</b></span>' + (!opsState(r) ? opsMeter(r.pct) : '') + '<span class="ops-storage-foot">' + (!opsState(r) ? opsSpark(r.spark) : '<span class="ops-sub">' + esc(opsState(r)) + '</span>') + '<span class="ops-chip">' + esc(forecast) + '</span></span>',
+      return opsDetails('storage-' + i, '<span class="ops-storage-line"><span class="ops-name">' + esc(r.name) + '<span class="ops-sub">' + esc(r.host) + ' · ' + esc(r.kind === 'pve' ? 'allocation' : r.kind) + '</span></span><b>' + (!opsState(r) ? opsNumber(r.pct, '%') : '—') + '</b></span>' + (!opsState(r) ? opsMeter(r.pct) : '') + '<span class="ops-storage-foot">' + (!opsState(r) ? opsSpark(r.spark) : '<span class="ops-sub">' + esc(opsState(r)) + '</span>') + '<span class="ops-chip">' + esc(forecast) + '</span></span>',
         (opsState(r) ? esc(r.error || opsState(r)) : opsBytes(r.used_bytes) + ' / ' + opsBytes(r.size_bytes) + '<br>24h change: ' + (r.delta_24h_bytes == null ? 'Not collected' : (r.delta_24h_bytes < 0 ? '−' : '+') + opsBytes(Math.abs(r.delta_24h_bytes)))) + '<br>' + esc(f && f.reason || '') + '<br>' + opsHost(r.host), 'ops-storage');
-    }, 'No storage', 2, 'more-storage'));
+    }, 'No storage', 4, 'more-storage'));
     html += opsCard('ZFS protection', 'shield', protectionPools(o.zfs, 'home-'));
     html += opsCard('Backup coverage', 'archive', protectionBackups(o.backups, 'home-'));
     html += opsCard('Failed units', 'server', opsList(o.units_failed, function (u, i) {
       return opsDetails('unit-' + i, '<span class="ops-name">' + esc(u.unit) + '<span class="ops-sub">' + esc(u.host) + '</span></span>' + (u.silenced ? '<span class="ops-chip">Silenced</span>' : ''), 'Failed' + (u.silenced ? ' · silenced' : '') + '<br>' + opsHost(u.host) + '<a href="#/alerts">Alerts ↗</a>');
     }, 'None failed', 4, 'more-units'));
+    if (o.arr != null) {
+      html += opsCard('Arr queues', 'archive', ['sonarr', 'radarr'].map(function (name) {
+        var q = o.arr[name];
+        return opsDetails('arr-' + name, '<span class="ops-name">' + esc(name === 'sonarr' ? 'Sonarr' : 'Radarr') + '</span><span class="ops-chip">' + (opsState(q) ? esc(opsState(q)) : opsNumber(q.attention) + ' attention') + '</span>', opsState(q) ? opsEmpty(q) : opsNumber(q.total) + ' queued · ' + opsNumber(q.problems) + ' problems');
+      }).join(''));
+    }
+    var archive = o.archive;
+    if (archive != null) html += opsCard('Archive', 'archive', opsState(archive) ? opsEmpty(archive) : opsDetails('archive-overview', '<span class="ops-name">' + esc(archive.title || 'Archive') + '<span class="ops-sub">' + esc(archive.phase || 'Not collected') + '</span></span><span class="ops-chip">' + opsNumber(archive.pending_approvals) + ' pending</span>', 'Progress ' + opsNumber(archive.progress_pct, '%') + opsMeter(archive.progress_pct) + 'Lifetime savings: ' + opsBytes(archive.saved_bytes_total) + '<br><a href="#/archive">Archive ↗</a>'), 'archive');
     $('home-ops').innerHTML = html + '</div>';
     countUp($('home-ops'));
+    var toggle = $('ops-streams-toggle');
+    if (toggle) toggle.addEventListener('click', function () { overviewOpen['streams'] = !streamsOpen; renderOverview(); $('ops-streams-toggle').focus(); });
   }
   document.addEventListener('click', function (e) {
     var link = e.target.closest ? e.target.closest('[data-ops-alert]') : null;
