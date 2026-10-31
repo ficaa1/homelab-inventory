@@ -7807,6 +7807,14 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
       if (trailing) bar.push(trailing);
       return h("div", { class: "pv-head" }, bar);
     },
+    // Hand one file to the upload sheet for this plugin's own destination; the
+    // sheet sends it with progress and errors. False when it is not configured.
+    upload: function (id, target, file) {
+      var t = up.targets.filter(function (x) { return x.plugin === id && x.id === target; })[0];
+      if (!t || !file) return false;
+      up.files = [file]; openUpSheet(); upEnqueue(t);
+      return true;
+    },
     // Same view, new parameters (a selected title, a filter) without a reload.
     link: function (id, view, params) { var views = pluginViews(pluginInfo(id)); return pluginHash(id, views[0] && view === views[0].name ? "" : view, params || ""); },
     visible: function () { return !document.hidden && route.view === "plugin"; }
