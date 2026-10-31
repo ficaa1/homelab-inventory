@@ -8,10 +8,73 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
 )
+
+func (u *Uploads) FolderFiles(ctx context.Context) ([]plugin.FolderFile, error) {
+	if u.folder == "" {
+		return nil, plugin.ErrNotFound
+	}
+	entries, err := os.ReadDir(u.folder)
+	if err != nil {
+		return nil, errors.New("folder listing unavailable")
+	}
+	out := []plugin.FolderFile{}
+	for _, e := range entries {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		out = append(out, plugin.FolderFile{Name: e.Name(), Size: info.Size(), Modified: info.ModTime().UTC()})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Modified.After(out[j].Modified) })
+	if len(out) > 500 {
+		out = out[:500]
+	}
+	return out, nil
+}
+func (u *Uploads) OpenFolderFile(ctx context.Context, name string) (io.ReadCloser, int64, error) {
+	if u.folder == "" || name == "" || strings.HasPrefix(name, ".") || strings.ContainsAny(name, "/\\\x00") {
+		return nil, 0, plugin.ErrNotFound
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
+	}
+	root, err := os.OpenRoot(u.folder)
+	if err != nil {
+		return nil, 0, errors.New("folder unavailable")
+	}
+	f, err := root.Open(name)
+	if err != nil {
+		root.Close()
+		return nil, 0, plugin.ErrNotFound
+	}
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		f.Close()
+		root.Close()
+		return nil, 0, plugin.ErrNotFound
+	}
+	// Keep the root alive through the file lifetime on platforms where OpenRoot
+	// owns the descriptor used for path resolution.
+	return &rootFile{ReadCloser: f, root: root}, info.Size(), nil
+}
+
+type rootFile struct {
+	io.ReadCloser
+	root *os.Root
+}
+
+func (f *rootFile) Close() error { err := f.ReadCloser.Close(); f.root.Close(); return err }
 
 type contextReader struct {
 	ctx    context.Context

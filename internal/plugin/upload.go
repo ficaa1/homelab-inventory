@@ -37,6 +37,16 @@ type TargetStatus struct {
 	UploadTarget
 }
 
+type FolderFile struct {
+	Name     string    `json:"name"`
+	Size     int64     `json:"size"`
+	Modified time.Time `json:"modified"`
+}
+type FolderBrowser interface {
+	FolderFiles(context.Context) ([]FolderFile, error)
+	OpenFolderFile(context.Context, string) (io.ReadCloser, int64, error)
+}
+
 func validTarget(t UploadTarget) bool {
 	if !viewPattern.MatchString(t.ID) || t.Label == "" || t.MaxBytes <= 0 {
 		return false
@@ -63,6 +73,37 @@ func (r *Registry) UploadTargets() []TargetStatus {
 		e.op.Unlock()
 	}
 	return out
+}
+
+func (r *Registry) FolderFiles(ctx context.Context) ([]FolderFile, error) {
+	for _, id := range r.ids() {
+		e := r.entries[id]
+		e.op.Lock()
+		if e.stored.Enabled && e.ready {
+			if b, ok := e.plugin.(FolderBrowser); ok {
+				out, err := b.FolderFiles(ctx)
+				e.op.Unlock()
+				return out, err
+			}
+		}
+		e.op.Unlock()
+	}
+	return nil, ErrNotFound
+}
+func (r *Registry) OpenFolderFile(ctx context.Context, name string) (io.ReadCloser, int64, error) {
+	for _, id := range r.ids() {
+		e := r.entries[id]
+		e.op.Lock()
+		if e.stored.Enabled && e.ready {
+			if b, ok := e.plugin.(FolderBrowser); ok {
+				f, size, err := b.OpenFolderFile(ctx, name)
+				e.op.Unlock()
+				return f, size, err
+			}
+		}
+		e.op.Unlock()
+	}
+	return nil, 0, ErrNotFound
 }
 
 // UploadName decodes encodeURIComponent-compatible UTF-8. Paths are refused,

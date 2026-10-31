@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
@@ -203,20 +204,35 @@ func (n *Network) qbitHealth(ctx context.Context) qbitHealth {
 // ------------------------------------------------------------ routes and torrents
 
 type routesAnswer struct {
-	Status      string    `json:"status"`
-	Stale       bool      `json:"stale"`
-	GeneratedAt time.Time `json:"generatedAt"`
-	Routes      []route   `json:"routes"`
+	Status        string             `json:"status"`
+	Stale         bool               `json:"stale"`
+	GeneratedAt   time.Time          `json:"generatedAt"`
+	Routes        []route            `json:"routes"`
+	CloudflareDNS string             `json:"cloudflareDns,omitempty"`
+	DNS           []plugin.DNSRecord `json:"dns,omitempty"`
 }
 
 func (n *Network) routesAnswer(ctx context.Context) routesAnswer {
-	r := routesAnswer{Status: "not configured", Stale: true, GeneratedAt: n.host.Now().UTC(), Routes: []route{}}
-	if n.extraText("routes_url") == "" {
-		return r
+	r := routesAnswer{Status: "not configured", Stale: true, GeneratedAt: n.host.Now().UTC(), Routes: []route{}, CloudflareDNS: "not configured", DNS: []plugin.DNSRecord{}}
+	if n.extraText("routes_url") != "" {
+		r.Status = "unavailable"
+		if routes, err := n.fetchRoutes(ctx); err == nil {
+			r.Status, r.Stale, r.Routes = "ok", false, routes
+		}
 	}
-	r.Status = "unavailable"
-	if routes, err := n.fetchRoutes(ctx); err == nil {
-		r.Status, r.Stale, r.Routes = "ok", false, routes
+	if n.dnsRecords != nil {
+		r.CloudflareDNS = "unavailable"
+		if records, err := n.dnsRecords(ctx); err == nil {
+			r.CloudflareDNS, r.DNS = "ok", records
+			for i := range r.DNS {
+				for _, route := range r.Routes {
+					if strings.EqualFold(strings.TrimSuffix(r.DNS[i].Name, "."), strings.TrimSuffix(route.Hostname, ".")) {
+						r.DNS[i].MatchesRoute = true
+						break
+					}
+				}
+			}
+		}
 	}
 	return r
 }
