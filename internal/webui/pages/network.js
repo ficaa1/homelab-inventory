@@ -488,10 +488,10 @@
         speedCell("Jitter", ms(last && last.jitter_ms), "", running ? "stale" : "")]));
       var meta = h("div", { class: "hn-speed-meta" });
       if (running) {
-        meta.appendChild(chip(PHASES[phase] || "Starting", "live"));
+        meta.appendChild(chip(PHASES[phase] || "Starting"));
         if (cur && num(cur.mbps) && phase !== "latency") meta.appendChild(chip(mbps(cur.mbps) + " Mbps", "", "Live"));
       } else if (last) {
-        meta.appendChild(chip(age(since(last.time)), "", "Age", "clock"));
+        meta.appendChild(chip(age(since(last.time)), "", "Age"));
         meta.appendChild(chip(server(last), "", "Download / upload server"));
         if (last.error) meta.appendChild(chip(last.error, "warn", "Last run"));
         if (last.uploadRefused) meta.appendChild(chip(refusal(last), "warn", last.uploadRetryAfter || ""));
