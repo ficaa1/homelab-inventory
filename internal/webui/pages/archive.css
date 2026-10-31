@@ -103,7 +103,8 @@
 .arc-page .arc-find-row .arc-find { flex: 1; min-width: 0; }
 .arc-page .arc-lib-tools { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: var(--s4); flex-wrap: wrap; }
 .arc-page .arc-find { display: flex; gap: 8px; align-items: center; margin: 0; height: 40px; flex: 0 0 auto; }
-.arc-page .arc-find input { width: 260px; min-width: 0; }
+.arc-page .arc-find input { width: 260px; min-width: 0; font-size: var(--fs-sm); }
+.arc-page .arc-lib-tools .btn { min-height: 44px; }
 .arc-page .arc-lib-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
 .arc-page .arc-lib { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--fs-sm); border: 0; }
 .arc-page .arc-lib th { text-align: left; padding: 12px 10px; }
@@ -271,7 +272,7 @@
   .arc-page .arc-history tr:last-child { border-bottom: 0; }
   .arc-page .arc-history td { display: block; padding: 0 12px; border: 0; }
   .arc-page .arc-history td:first-child { grid-column: 1 / -1; }
-  .arc-page .arc-find { height: 44px; }
+
   .arc-page .arc-title > summary { grid-template-columns: minmax(0, 1fr); }
   .arc-page .arc-title > summary > span:last-child { padding-left: 14px; }
   .arc-page .arc-season > div { flex: 1 1 100%; order: 3; }

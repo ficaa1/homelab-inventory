@@ -600,7 +600,7 @@
       '<div class="tile"><div class="label">Space saved</div><div class="value">' + metric(saved) + '</div><div class="sub">Verified</div></div></div>' +
       '<div class="arc-lib-tools" data-key="tools"><div class="seg" role="group" aria-label="Media type">' + ["all", "radarr", "sonarr"].map(function (k, i) {
         return '<button class="btn" type="button" data-library-filter="' + k + '" aria-pressed="' + (libFilter === k) + '">' + ["All", "Movies", "TV"][i] + "</button>";
-      }).join("") + '</div><div class="arc-find-row"><label class="field arc-find">' + HI.iconNode("search", "sm").outerHTML +
+      }).join("") + '</div><div class="arc-find-row"><label class="field arc-find">' +
       '<input id="arc-lib-search" type="search" placeholder="Search titles…" aria-label="Search library titles" autocomplete="off" value="' + esc(libQuery) + '"></label>' +
       '<button class="btn" type="button" data-library-refresh>Refresh</button></div></div>' +
       (library.dryRun || !library.archiveEnabled ? '<div class="arc-msg warn" data-key="mode">' + (library.dryRun ? "Dry run" : "Archive disabled") + "</div>" : "") +
