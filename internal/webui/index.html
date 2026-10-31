@@ -868,6 +868,7 @@ pre.code {
 .ops-link:hover { background:var(--surface-2); }
 .ops-sub { display:block; font-size:var(--fs-xs); color:var(--text-2); overflow-wrap:anywhere; }
 .ops-tile > summary { cursor:pointer; list-style:none; }
+button.ops-tile { cursor:pointer; }
 .ops-tile > summary::-webkit-details-marker { display:none; }
 .ops-recent { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--warn); margin-left:4px; vertical-align:middle; }
 .ops-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; align-items:start; }
@@ -956,14 +957,14 @@ pre.code {
   .schip:first-child { padding-left: 4px; }
   .actions-bar .ibtn { min-width: 44px; width: 44px; height: 44px; }
   :is(#panel-home, #panel-alerts, #panel-hosts, #panel-ports, #panel-admin, #view-host, #view-plugin, #pal, #gate) :is(button, select, summary),
-  #drawer :is(button, select) { min-height: 44px; min-width: 44px; }
+  body:not(:has(#view-plugin:not(.hidden) :is(.arc-page, .tdp, .taste-page))) #drawer :is(button, select), #drawer-close { min-height: 44px; min-width: 44px; }
   :is(#panel-home, #panel-alerts, #panel-ports, #panel-admin, #view-host, #gate) input:not([type="checkbox"]) { min-height: 44px; }
   :is(#panel-home, #panel-alerts, #panel-ports, #panel-admin, #view-host) .field { height: 44px; }
   :is(#panel-home, #view-host) a:not(.svc):not(.ops-link), #panel-ports [data-def], #panel-ports .why { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
   #view-host [data-def] { display: inline-flex; align-items: center; min-height: 44px; }
   #panel-admin label:has(input[type="checkbox"]) { display: flex; align-items: center; min-height: 44px; }
-  #drawer input:not([type="checkbox"]) { min-height: 44px; }
-  #drawer label[for="e-hide"] { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
+  body:not(:has(#view-plugin:not(.hidden) :is(.arc-page, .tdp, .taste-page))) #drawer input:not([type="checkbox"]) { min-height: 44px; }
+  body:not(:has(#view-plugin:not(.hidden) :is(.arc-page, .tdp, .taste-page))) #drawer label[for="e-hide"] { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
   #pal [data-pal] { min-height: 44px; }
   #view-host tr[data-cfile] td { height: 44px; }
   #panel-home .svc:has(.edit) .txt { padding-right: 0; }
