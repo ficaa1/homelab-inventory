@@ -25,7 +25,8 @@ while `HI.visible()` is false). `window.HI` is the kit:
 | `esc`, `str`, `ago`, `fromNow`, `bytes`, `dur` | formatting |
 | `head(id, view, trailing)` | page title and the plugin's views as tabs |
 | `get(id, path, signal)` | `GET /plugins/<id>/api/<path>` |
-| `send(id, path, method, body)` | JSON mutation to the same API |
+| `send(id, path, method, body, {operator})` | JSON mutation to the same API; `operator` sends the operator credential for routes the plugin gates with `plugin.APIOperator` |
+| `operatorEnabled()` | whether the server has an operator credential at all |
 | `image(id, path, signal)` | a picture as a blob URL |
 | `openDrawer(html, label)`, `closeDrawer()` | the side sheet |
 | `go(hash)`, `link(id, view, params)` | navigation |

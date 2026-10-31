@@ -116,7 +116,7 @@ func TestRequestsUseRetainedRoutes(t *testing.T) {
 func coreBody(t *testing.T) string {
 	t.Helper()
 	page := strings.Replace(body(t), "<script>"+pageAssets(".js")+"\n", "<script>", 1)
-	return strings.Replace(page, pageAssets(".css")+"\n</style>", "</style>", 1)
+	return strings.Replace(page, pageAssets(".css")+"\n", "", 1)
 }
 
 // Pages are core code but reach the network only through the kit, so the
