@@ -406,7 +406,7 @@
     }
     var nav = h("div", { class: "library-nav", role: "group", "aria-label": "Media views" }, HI.mediaSections().map(function (section) {
       var on = section.plugin === ID;
-      return h("button", { class: "btn" + (on ? " primary" : ""), type: "button", "aria-pressed": String(on),
+      return h("button", { class: "btn" + (on ? " primary" : ""), type: "button", "aria-pressed": String(on), "data-library-view": section.key,
         onclick: function () { HI.go(HI.link(section.plugin, section.view)); } }, [section.title]);
     }));
     var heading = h("div", { class: "arc-head library-heading" }, [h("h2", { text: "Taste" }), h("span", { class: "spacer" }), nav]);

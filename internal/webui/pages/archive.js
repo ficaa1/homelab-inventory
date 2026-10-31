@@ -325,7 +325,7 @@
     return (noPause ? "" : ownerButton("pause", paused ? "Resume" : "Pause", { paused: !paused }, v.dryRun)) +
       '<div class="library-nav" role="group" aria-label="Media views">' + HI.mediaSections().map(function (section) {
         var on = section.plugin === ID && section.view === st.view;
-        return '<button class="btn' + (on ? ' primary' : '') + '" type="button" data-library-link="' + esc(HI.link(section.plugin, section.view)) + '" aria-pressed="' + on + '">' + esc(section.title) + '</button>';
+        return '<button class="btn' + (on ? ' primary' : '') + '" type="button" data-library-link="' + esc(HI.link(section.plugin, section.view)) + '" data-library-view="' + esc(section.key) + '" aria-pressed="' + on + '">' + esc(section.title) + '</button>';
       }).join("") + '</div>';
   }
 

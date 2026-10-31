@@ -303,7 +303,6 @@
 .arc-page .seed-left { font-size:var(--fs-xs); color:var(--text-2); white-space:nowrap; font-variant-numeric:tabular-nums; }
 .arc-page .seed-left.done { color:var(--ok); }
 .arc-page .seed-facts { display:flex; flex-wrap:wrap; gap:4px 14px; margin-top:4px; font-size:var(--fs-xs); color:var(--text-3); font-variant-numeric:tabular-nums; }
-.arc-page .library-nav [data-library-view="tdarr"] { min-height:44px; }
 .arc-page .library-season-picker:has([name="tdarr-season"]) label { min-height:44px; }
 .arc-page .library-season-picker input { width:20px; height:20px; flex-shrink:0; accent-color:var(--accent); }
 .arc-page .tdarr-selection .library-keep { margin:0; min-height:44px; }

@@ -1247,6 +1247,7 @@ button.ops-tile { cursor:pointer; }
 .library-nav { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); }
 .library-nav .btn { border: 0; background: none; color: var(--text-3); min-height: 28px; padding: 4px 12px; }
 .library-nav .btn[aria-pressed="true"] { background: var(--surface-3); color: var(--text); filter: none; }
+.library-nav [data-library-view="tdarr"] { min-height:44px; }
 .pv-head.media-head { gap: 10px; margin-bottom: var(--s4); }
 .pv-head.media-head > .media-tools { display: contents; }
 .media-head > h2 { order: 0; }
@@ -5270,6 +5271,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       var nav = seg("Media views", sections.map(function (x) { return { key: x.key, section: x, title: x.title }; }),
         function (x) { return x === here || x.section === here; }, function (x) { go(mediaHash(x.section)); });
       nav.className = "library-nav";
+      Array.prototype.forEach.call(nav.children, function (btn, i) { btn.setAttribute("data-library-view", sections[i].key); });
       var mbar = [h("h2", { text: here ? here.title : "Media" }), h("span", { class: "spacer" }), nav];
       if (trailing) { var tools = trailing.tagName === "DIV" ? trailing : h("div", {}, [trailing]); tools.classList.add("media-tools"); mbar.push(tools); }
       var mhead = h("div", attrs || { class: "pv-head media-head" }, mbar);
