@@ -9,8 +9,9 @@ import (
 // Walk every request expression, including paths composed with a host/key.
 // Unknown dynamic expressions fail closed so adding a new fetch requires review.
 func TestRequestsUseRetainedRoutes(t *testing.T) {
-	page := body(t)
+	page := coreBody(t)
 	script := strings.Split(strings.Split(page, "<script>")[1], "</script>")[0]
+	pageHelpers := 0
 	calls := regexp.MustCompile(`\b(api|write|operatorWrite|actionPost|fetch)\(|\bxhr\.open\("POST", `)
 	literals := regexp.MustCompile(`"([^"\n]*)"|'([^'\n]*)'`)
 	encode := regexp.MustCompile(`encodeURIComponent\([^)]*\)`)
@@ -64,6 +65,14 @@ func TestRequestsUseRetainedRoutes(t *testing.T) {
 			helpers++
 			continue
 		}
+		// Plugin pages reach only their own plugin's API, through the kit.
+		if strings.Contains(expr, "pagePath(id, path)") {
+			if !strings.Contains(script, `function pagePath(id, path) { return "/plugins/" + encodeURIComponent(id) + "/api/" + path; }`) {
+				t.Fatal("plugin page API path changed without review")
+			}
+			pageHelpers++
+			continue
+		}
 		if strings.HasPrefix(expr, "base +") {
 			if !strings.Contains(script, `var base = "/hosts/" + encodeURIComponent(name) + "/packages";`) {
 				t.Fatal("package request base changed")
@@ -96,14 +105,33 @@ func TestRequestsUseRetainedRoutes(t *testing.T) {
 		}
 		checked++
 	}
-	if checked < 40 || helpers != 5 {
+	if checked < 40 || helpers != 5 || pageHelpers != 3 {
 		t.Errorf("request scan missed calls: checked=%d helper calls=%d", checked, helpers)
 	}
 	t.Logf("checked %d request paths and %d shared-helper calls", checked, helpers)
 }
 
+// coreBody is the served page without the built-in plugin pages, which are
+// checked by TestPluginPagesUseTheKit.
+func coreBody(t *testing.T) string {
+	t.Helper()
+	page := strings.Replace(body(t), "<script>"+pageAssets(".js")+"\n", "<script>", 1)
+	return strings.Replace(page, pageAssets(".css")+"\n</style>", "</style>", 1)
+}
+
+// Pages are core code but reach the network only through the kit, so the
+// token handling and the 401 gate stay in one place.
+func TestPluginPagesUseTheKit(t *testing.T) {
+	js := pageAssets(".js")
+	for _, banned := range []string{"fetch(", "XMLHttpRequest", "sessionStorage", "localStorage.getItem(\"homelab", "eval(", "new Function"} {
+		if strings.Contains(js, banned) {
+			t.Errorf("plugin page uses %s; use window.HI", banned)
+		}
+	}
+}
+
 func TestDashboardScopeAndBranding(t *testing.T) {
-	page := body(t)
+	page := coreBody(t)
 	for _, feature := range []string{"panel-archive", "panel-network", "arcPoll", "loadUploadCaps", "netTimer", "tdarrTimer", "/seasongate", "/digest/send", `"/network`, `"/upload"`, `"/upload?`, "/taste", "/archive", "/tdarr"} {
 		if strings.Contains(page, feature) {
 			t.Errorf("removed feature remains: %s", feature)

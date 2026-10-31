@@ -5067,6 +5067,7 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
   }
 
   function leavePluginView() {
+    hidePage();
     if (!pv.key) return;
     if (pv.ctrl) pv.ctrl.abort();
     clearTimeout(pv.timer);
@@ -5078,6 +5079,12 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
   // same route (the page's own 60-second refresh) leaves it alone: a view
   // refreshes on its own schedule or when the refresh button is pressed.
   function openPluginView() {
+    if (Object.prototype.hasOwnProperty.call(PAGES, route.plugin)) {
+      if (pv.key) { var keep = activePage; activePage = null; leavePluginView(); activePage = keep; }
+      showPage(route.plugin, PAGES[route.plugin]);
+      return;
+    }
+    hidePage();
     var info = pluginInfo(route.plugin), views = pluginViews(info);
     var view = route.pview || (views[0] && views[0].name) || "";
     var key = route.plugin + "/" + view + "?" + route.params;
@@ -7728,6 +7735,81 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
       });
     });
   }
+
+  // ------------------------------------------------------------ plugin pages
+  //
+  // A built-in plugin may ship its own page (internal/webui/pages/<id>.js),
+  // which replaces the declarative view for that plugin. Pages are core code,
+  // reviewed with the dashboard; third-party plugins never get one. A page
+  // registers HI_PAGES[id] = { show(root, ctx), hide() } and owns its polling.
+
+  var PAGES = window.HI_PAGES = window.HI_PAGES || {};
+  var activePage = null;   // { id, key, page }
+
+  function pagePath(id, path) { return "/plugins/" + encodeURIComponent(id) + "/api/" + path; }
+
+  function hidePage() {
+    if (!activePage) return;
+    var p = activePage.page;
+    activePage = null;
+    try { if (p.hide) p.hide(); } catch (e) { /* a page failing to stop must not block navigation */ }
+    $("plugin-body").textContent = "";
+  }
+
+  function showPage(id, page) {
+    var views = pluginViews(pluginInfo(id));
+    var view = route.pview || (views[0] && views[0].name) || "";
+    var key = id + "/" + view + "?" + route.params;
+    if (activePage && activePage.key === key) return;
+    if (activePage && activePage.id !== id) hidePage();
+    var first = !activePage;
+    activePage = { id: id, key: key, page: page };
+    page.show($("plugin-body"), { id: id, view: view, params: new URLSearchParams(route.params), first: first });
+  }
+
+  window.HI = {
+    h: h, str: str, esc: esc, ago: ago, fromNow: fromNow, bytes: bytes, dur: dur,
+    iconNode: iconNode, pill: pill, stateBox: stateBox, notice: notice, skeleton: skeleton,
+    openDrawer: openDrawer, closeDrawer: closeDrawer, go: go,
+    // GET and mutation helpers for the plugin's own API; a 401 opens the gate.
+    get: function (id, path, signal) { return api(pagePath(id, path), signal).catch(pageFail); },
+    send: function (id, path, method, body) { return write(pagePath(id, path), method || "POST", body === undefined ? {} : body).catch(pageFail); },
+    // A picture from the plugin's API or image route, as a blob URL (an <img>
+    // cannot send the token). Callers revoke it when they drop the image.
+    image: function (id, path, signal) {
+      var headers = {"X-Requested-By": "homelab-inventory"};
+      if (token) headers.Authorization = "Bearer " + token;
+      return fetch(path.charAt(0) === "/" ? path : pagePath(id, path), { headers: headers, signal: signal }).then(function (r) {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.blob();
+      }).then(function (b) {
+        if (!/^image\//.test(b.type)) throw new Error("not an image");
+        return URL.createObjectURL(b);
+      });
+    },
+    // The page header: title, the plugin's views as a segmented control, and
+    // an optional trailing node (a timestamp or a button).
+    head: function (id, current, trailing) {
+      var info = pluginInfo(id), views = pluginViews(info);
+      var name = info ? str(info.tab.title) || str(info.name) : id;
+      var bar = [h("h2", { text: name })];
+      if (views.length > 1) bar.push(h("div", { class: "seg", role: "group", "aria-label": name + " views" }, views.map(function (x) {
+        return h("button", { class: "btn", type: "button", "aria-pressed": x.name === current ? "true" : "false",
+          onclick: function () { go(pluginHash(id, x.name === views[0].name ? "" : x.name, "")); } }, [str(x.title) || x.name]);
+      })));
+      if (trailing) bar.push(trailing);
+      return h("div", { class: "pv-head" }, bar);
+    },
+    // Same view, new parameters (a selected title, a filter) without a reload.
+    link: function (id, view, params) { var views = pluginViews(pluginInfo(id)); return pluginHash(id, views[0] && view === views[0].name ? "" : view, params || ""); },
+    visible: function () { return !document.hidden && route.view === "plugin"; }
+  };
+
+  function pageFail(err) {
+    if (err && err.unauthorized) showGate(true);
+    throw err;
+  }
+
 
   boot();
 })();
