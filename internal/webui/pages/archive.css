@@ -45,7 +45,7 @@
 .arc-page .arc-kpis .tile .value.warn { color: var(--warn); }
 .arc-page .arc-lib-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .arc-page .arc-section { margin: var(--s5) 0 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.arc-page .arc-section h3 { margin: 0; font-size: var(--fs-xs); font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.arc-page .arc-section h3 { margin: 0; font-size: var(--fs-xs); font-weight: 600; color: var(--text-3); }
 
 /* tagged titles and their releases */
 .arc-page .arc-title { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); margin-bottom: 8px; min-width: 0; }

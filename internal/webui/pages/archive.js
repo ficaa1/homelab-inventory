@@ -1157,7 +1157,7 @@
   function renderTools() {
     if (!st.tools) return;
     var v = status || {}, info = v.info || {}, paused = v.archivePaused, html = "";
-    var pause = v.reachable ? ownerButton("pause", paused ? "Resume" : "Pause", { paused: !paused }, v.dryRun) : "";
+    var pause = v.reachable ? ownerButton("pause", paused ? "Resume" : "Pause", { paused: !paused }, v.dryRun).replace('class="btn"', 'class="btn arc-pause"') : "";
     if (st.view === "status") {
       html = (v.reachable ? '<span class="pill" title="Originals kept in the recycle bin">' + HI.iconNode("clock", "sm").outerHTML + " undo " + esc(info.undoDays || 7) + "d</span>" : "") + pause +
         '<button class="btn" type="button" data-archive-action="run"' + (!v.archiveEnabled || (info.runNow || {}).pending ? " disabled" : "") + ">Check now</button>";

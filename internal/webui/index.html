@@ -1238,6 +1238,17 @@ pre.code {
 .pv-heads > .pv-head { margin-bottom: var(--s3); }
 .seg.pv-sub { margin-bottom: var(--s5); align-self: flex-start; }
 .pv-heads { display: flex; flex-direction: column; }
+.library-nav { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); }
+.library-nav .btn { border: 0; background: none; color: var(--text-3); min-height: 28px; padding: 4px 12px; }
+.library-nav .btn[aria-pressed="true"] { background: var(--surface-3); color: var(--text); filter: none; }
+.pv-head.media-head { gap: 10px; margin-bottom: var(--s4); }
+.media-head > .media-tools { display: contents; }
+.media-head > h2 { order: 0; }
+.media-head > .media-tools > .pill { order: 1; }
+.media-head > .spacer { order: 2; }
+.media-head > .media-tools > .arc-pause { order: 3; }
+.media-head > .library-nav { order: 4; }
+.media-head > .media-tools > * { order: 5; }
 .pv-stamp { margin-left: auto; font-size: var(--fs-xs); color: var(--text-3); font-variant-numeric: tabular-nums; }
 .pv-stamp.stale { color: var(--warn); }
 .pv-blocks { align-items: start; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
@@ -5061,8 +5072,10 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
       if (!v && views.length) d = Object.assign({}, d, { view: views[0].name });
       return d;
     });
+    // The read-only media plugin's views join the switcher only when none of
+    // the five sections exist; otherwise they stay reachable from search.
     var media = pluginInfo("media");
-    if (media) pluginViews(media).forEach(function (v) {
+    if (media && !out.length) pluginViews(media).forEach(function (v) {
       out.push({ key: "media-" + v.name, title: v.name === "library" ? "Services" : str(v.title) || v.name, plugin: "media", view: v.name, icon: "film", extra: true });
     });
     return out;
@@ -5104,15 +5117,25 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     };
     var viewSeg = views.length > 1 && (!g || id === "taste") ? seg(name + " views", views.map(function (x) { return { key: x.name, title: str(x.title) || x.name }; }),
       function (x) { return x.key === current; }, function (x) { go(pluginHash(id, x.key === views[0].name ? "" : x.key, "")); }) : null;
-    var bar = [h("h2", { text: g ? "Media" : name })];
-    if (g) bar.push(seg("Media sections", mediaSections().map(function (x) { return { key: x.key, section: x, title: x.title }; }),
-      function (x) { return x.section.plugin === id && x.section.view === current; }, function (x) { go(mediaHash(x.section)); }));
-    else if (viewSeg) bar.push(viewSeg);
+    if (g) {
+      // As on the private page: the section's name, its undo pill, Pause, the
+      // switcher, then the section's own buttons (CSS orders the page's tools).
+      var sections = mediaSections(), here = sections.filter(function (x) { return x.plugin === id && x.view === current; })[0] || sections.filter(function (x) { return x.plugin === id; })[0];
+      var nav = seg("Media views", sections.map(function (x) { return { key: x.key, section: x, title: x.title }; }),
+        function (x) { return x === here || x.section === here; }, function (x) { go(mediaHash(x.section)); });
+      nav.className = "library-nav";
+      var mbar = [h("h2", { text: here ? here.title : "Media" }), h("span", { class: "spacer" }), nav];
+      if (trailing) { var tools = trailing.tagName === "DIV" ? trailing : h("div", {}, [trailing]); tools.classList.add("media-tools"); mbar.push(tools); }
+      var mhead = h("div", attrs || { class: "pv-head media-head" }, mbar);
+      if (!viewSeg) return [mhead];
+      viewSeg.classList.add("pv-sub");
+      return [mhead, viewSeg];
+    }
+    var bar = [h("h2", { text: name })];
+    if (viewSeg) bar.push(viewSeg);
     if (trailing) bar.push(trailing);
     var head = h("div", attrs || { class: "pv-head" }, bar);
-    if (!g || !viewSeg) return [head];
-    viewSeg.classList.add("pv-sub");
-    return [head, viewSeg];
+    return [head];
   }
 
   // Plugin tabs sit between the built-ins and Admin: Network, Media, then the
