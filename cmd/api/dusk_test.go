@@ -86,6 +86,8 @@ func TestDuskHTTPPairingPoliciesIsolationAndRestart(t *testing.T) {
 			fmt.Fprint(w, `{"profiles":[{"id":6,"name":"Standard"}],"rootFolders":[{"path":"/synthetic/library"}]}`)
 		case "/api/v1/movie/42":
 			fmt.Fprint(w, `{"id":42,"title":"Synthetic film"}`)
+		case "/api/v1/movie/43":
+			fmt.Fprint(w, `{"id":43,"title":"Ambiguous film"}`)
 		case "/api/v1/search", "/api/v1/discover/trending", "/api/v1/movie/42/recommendations":
 			fmt.Fprint(w, `{"results":[{"id":42,"mediaType":"movie","title":"Synthetic film","releaseDate":"2020-01-01"},{"id":43,"mediaType":"movie","title":"Another film"}]}`)
 		case "/api/v1/request":
@@ -93,6 +95,12 @@ func TestDuskHTTPPairingPoliciesIsolationAndRestart(t *testing.T) {
 				t.Error("incorrect write method")
 			}
 			posts.Add(1)
+			var request map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&request)
+			if request["mediaId"] == float64(43) {
+				w.WriteHeader(500)
+				return
+			}
 			w.WriteHeader(201)
 			fmt.Fprint(w, `{"id":51,"status":1,"profileId":6,"serverId":4,"type":"movie","media":{"tmdbId":42}}`)
 		default:
@@ -166,6 +174,15 @@ func TestDuskHTTPPairingPoliciesIsolationAndRestart(t *testing.T) {
 	if posts.Load() != 1 {
 		t.Fatal("duplicate device request wrote twice")
 	}
+	ambiguous := map[string]any{"kind": "movie", "id": 43, "season": 0, "operation": "synthetic-operation-02", "confirmed": true}
+	out = h.call("POST", "/tv/v1/request", token, ambiguous, 200)
+	if out["state"] != "unknown" || posts.Load() != 2 {
+		t.Fatalf("ambiguous outcome %v posts %d", out, posts.Load())
+	}
+	h.call("POST", "/tv/v1/request", second, ambiguous, 200)
+	if posts.Load() != 2 {
+		t.Fatal("ambiguous write retried")
+	}
 	// Opening fresh registry and server instances against the same private state
 	// checks credentials, scoped preferences, policy and durable receipt reload.
 	h.http.Close()
@@ -183,8 +200,12 @@ func TestDuskHTTPPairingPoliciesIsolationAndRestart(t *testing.T) {
 		t.Fatal("policy or credential lost on restart")
 	}
 	h.call("POST", "/tv/v1/request", second, request, 200)
-	if posts.Load() != 1 {
+	if posts.Load() != 2 {
 		t.Fatal("restart lost durable duplicate protection")
+	}
+	out = h.call("POST", "/tv/v1/request", second, ambiguous, 200)
+	if out["state"] != "unknown" || posts.Load() != 2 {
+		t.Fatal("restart retried ambiguous operation")
 	}
 	h.call("DELETE", "/dusk/devices/"+device, s.token, nil, 200)
 	h.call("GET", "/tv/v1/capabilities", token, nil, 401)
