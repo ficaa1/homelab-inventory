@@ -6,7 +6,7 @@
   var ID = "network";
   var REFRESH = 60000;
   var VIEW_LOADS = {
-    overview: ["summary", "metrics", "routes", "torrents"],
+    overview: ["summary", "metrics", "routes"],
     vpn: ["summary", "metrics"],
     traffic: ["metrics", "traffic"],
     routes: ["routes"],
@@ -212,7 +212,7 @@
       var qb = h("span", { class: "hn-qbit" }, q.status === "ok"
         ? [chip("qB ↓ " + bytesPs(q.downloadBytesPerSecond), "", "qBittorrent download"), chip("qB ↑ " + bytesPs(q.uploadBytesPerSecond), "", "qBittorrent upload")]
         : [chip("qB —", "", state(q.status))]);
-      qb.appendChild(link("seeding", "Seeding"));
+      qb.appendChild(h("button", { class: "hn-seed-btn", type: "button", onclick: function (e) { e.preventDefault(); e.stopPropagation(); openSeeding(); } }, ["Seeding"]));
       flow.appendChild(qb);
     }
     var where = d ? [d.country ? h("b", { text: d.country }) : null, d.city ? h("span", { text: d.city }) : null] : [];
@@ -338,15 +338,15 @@
       if (x.sso != null) f.push(["SSO", x.sso ? "Yes" : "No"]);
       var host = String(x.hostname || "");
       return details("route-" + host + "-" + x.target, "hn-row hn-route", [
-        h("span", { class: "hn-glyph" }, [svc ? HI.iconNode(svc.icon_slug || svc.icon || "puzzle") : HI.iconNode("link")]),
+        svc ? HI.serviceIcon(svc) : h("span", { class: "ico hn-glyph" }, [HI.iconNode("link")]),
         h("span", { class: "hn-name" }, [h("b", { text: svc ? svc.name : host }), h("span", { class: "hn-sub2", text: svc ? host : "→ " + x.target })]),
-        dnsOK ? h("span", { class: "hn-mark " + (records.length ? "ok" : "warn"), title: records.length ? "DNS record" : "No DNS record", text: records.length ? "✓" : "!" }) : null,
-        x.sso === true ? h("span", { class: "hn-mark ok", title: "SSO" }, [HI.iconNode("key", "sm")]) : null],
+        !dnsOK ? null : records.length ? h("span", { class: "hn-mark ok", title: "DNS " + records.map(function (d) { return d.type; }).join(", ") }, [HI.iconNode("check", "sm")]) : h("span", { class: "hn-mark", title: "No DNS record", text: "○" }),
+        x.sso === true ? h("span", { class: "hn-mark ok", title: "SSO" }, [HI.iconNode("lock", "sm")]) : x.sso === false ? h("span", { class: "hn-mark warn", title: "No SSO" }, [HI.iconNode("unlock", "sm")]) : null],
         [facts(f), /^[a-z0-9.-]+$/.test(host) ? h("a", { href: "https://" + host, target: "_blank", rel: "noopener noreferrer", text: "Open ↗" }) : null]);
     });
     var loose = dns.filter(function (d) { return !d.matchesRoute; });
     var body = rows.length ? rows : [muted(r.status === "ok" ? "—" : state(r.status))];
-    if (loose.length) body.push(details("dns-unmatched", "hn-row", [h("span", { class: "hn-name", text: loose.length + " unmatched DNS records" })], [h("div", {}, loose.map(function (d) { return h("div", { class: "hn-dnsrow" }, [h("span", { text: d.name }), chip(d.type || "DNS"), d.proxied ? chip("proxied", "ok") : null]); }))]));
+    if (loose.length) body.push(details("dns-unmatched", "hn-row", [h("span", { class: "hn-name", text: loose.length + " DNS" })], [h("div", {}, loose.map(function (d) { return h("div", { class: "hn-dnsrow" }, [h("span", { text: d.name }), chip(d.type || "DNS"), d.proxied ? chip("proxied", "ok") : null]); }))]));
     if (!full && routes.length > shown.length) body.push(h("div", { class: "hn-more" }, [link("routes", "All " + routes.length + " routes")]));
     return card("hn-wide" + (stale ? " hn-stale" : ""), "link", "Routes", chips, body);
   }
@@ -356,7 +356,20 @@
   function seedingCard() {
     var list = s.data.torrents;
     if (!list) return card("hn-wide", "upload", "Seeding", [], [s.err.torrents ? muted("Unavailable") : skel()]);
-    if (list.status !== "ok") return card("hn-wide", "upload", "Seeding", [], [muted(state(list.status))]);
+    return card("hn-wide", "upload", "Seeding", list.status === "ok" ? [chip(String(list.count))] : [], seedingBody(list));
+  }
+  // The VPN card's Seeding button reads the list on open only, as private does;
+  // an answer for a closed or superseded drawer is dropped.
+  var seedEpoch = 0;
+  function openSeeding() {
+    var epoch = ++seedEpoch, title = h("h3", { text: "Seeding" });
+    function show(kids) { var box = h("div", { class: "hn hn-drawer" }, [title].concat(kids)); HI.openDrawer(box, "Seeding"); }
+    show([h("div", { class: "empty", text: "Loading…" })]);
+    HI.get(ID, "torrents").then(function (list) { if (epoch === seedEpoch) show(seedingBody(list)); },
+      function () { if (epoch === seedEpoch) show([h("div", { class: "note", text: "Unavailable" })]); });
+  }
+  function seedingBody(list) {
+    if (list.status !== "ok") return [muted(state(list.status))];
     var torrents = Array.isArray(list.torrents) ? list.torrents : [], need = list.requirementSeconds;
     var done = torrents.filter(function (t) { return t.done; }).length;
     var totals = h("div", { class: "hn-seed-totals" }, [
@@ -374,7 +387,7 @@
           h("span", { text: "Ratio " + (num(t.ratio) ? t.ratio.toFixed(2) : "—") }), t.category ? h("span", { text: t.category }) : null]),
         p == null ? null : meter(p, t.done ? "ok" : "")]);
     })));
-    return card("hn-wide", "upload", "Seeding", [chip(String(list.count))], body);
+    return body;
   }
   function qbitCard() {
     var q = s.data.summary && s.data.summary.qbit;
@@ -586,8 +599,7 @@
       main = main.concat(vpnSection(false));
       if (!report() || source("wan")) main.push(wanCard());
       main.push(qualityCard());
-      main.push(routesCard(false));
-      main.push(seedingCard());
+      main.push(routesCard(true));
     } else if (v === "vpn") {
       main = main.concat(vpnSection(true));
       main.push(qbitCard());
@@ -601,7 +613,7 @@
     }
     s.main.replaceChildren.apply(s.main, main);
     if (v === "overview" && s.ports) HI.ports(s.ports);
-    var head = HI.head(ID, v, stamp());
+    var head = v === "overview" ? h("div") : HI.head(ID, v, stamp());
     s.head.replaceWith(head);
     s.head = head;
   }

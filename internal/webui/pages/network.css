@@ -4,7 +4,10 @@
 .hn .hn-grid > * { min-width: 0; }
 .hn .hn-wide, .hn .hn-grid > .banner { grid-column: 1 / -1; margin-bottom: 0; }
 .hn .hn-ports { margin-top: var(--s2); }
-.hn .hn-ports > .ports-heading { margin-top: 0; }
+/* Ports under Network read as one more section heading, as on the private page. */
+.hn .hn-ports > .ports-heading { margin: 24px 0 14px; font-size: var(--fs-sm); font-weight: 600; }
+.hn .hn-ports > .ports-heading > .ic { display: inline-block; }
+.hn .hn-ports > .ports-heading .count { font: inherit; color: var(--text-3); }
 .hn .hn-card > h3 { align-items: center; flex-wrap: wrap; }
 .hn .hn-card > h3 > .ic { color: var(--text-3); }
 .hn .hn-card > h3 .hn-chips { margin-left: auto; }
@@ -187,3 +190,12 @@
   .hn .hn-chart, .hn .hn-seed { padding-left: 12px; padding-right: 12px; }
   .hn .hn-crow { grid-template-columns: minmax(0, 1fr) 60px 78px; padding: 10px 12px; }
 }
+
+/* Private parity: the Seeding pill on the VPN card, chevrons on expandable rows,
+   and the seeding list inside the side sheet. */
+.hn .hn-seed-btn { min-height: 44px; min-width: 44px; font: inherit; font-size: var(--fs-xs); font-weight: 500; padding: 0 12px; border: 1px solid var(--line-2); border-radius: var(--r-pill); background: var(--surface-2); color: var(--text-2); cursor: pointer; }
+.hn .hn-seed-btn:hover { color: var(--text); }
+.hn .hn-seed-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hn .hn-row > summary::after { content: "›"; color: var(--text-3); transition: transform var(--dur-1) var(--ease-out); }
+.hn .hn-row[open] > summary::after { transform: rotate(90deg); }
+.hn.hn-drawer .hn-seed-totals, .hn.hn-drawer .hn-seed { padding-left: 0; padding-right: 0; }

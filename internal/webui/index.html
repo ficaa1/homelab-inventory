@@ -1613,6 +1613,7 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
   <symbol id="i-network" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/></symbol>
   <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></symbol>
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-unlock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></symbol>
   <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
 </svg>
@@ -1732,8 +1733,8 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
           <select id="f-porthost" class="sel" aria-label="Host"></select>
           <span class="spacer"></span>
           <span class="seg" role="group" aria-label="View">
-            <button class="btn" id="m-grid" aria-pressed="true">Grid</button>
-            <button class="btn" id="m-table" aria-pressed="false">Table</button>
+            <button class="btn" id="m-grid" aria-pressed="true">grid</button>
+            <button class="btn" id="m-table" aria-pressed="false">table</button>
           </span>
         </div>
 
@@ -4357,7 +4358,8 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     var opening = $("drawer").classList.contains("hidden") || !!$("drawer").motionOut;
     if (opening) drawerReturnFocus = document.activeElement;
     $("drawer").setAttribute("aria-label", label || "Details");
-    $("drawer-body").innerHTML = html;
+    if (typeof html === "string") $("drawer-body").innerHTML = html;
+    else $("drawer-body").replaceChildren(html);
     reveal($("drawer"), opening && (phone() ? [{ opacity: 0, transform: "translateY(40px)" }, { opacity: 1, transform: "none" }]
       : [{ opacity: 0, transform: "translateX(28px)" }, { opacity: 1, transform: "none" }]), motion.d3);
     reveal($("scrim"), opening && FADE_IN, motion.d2);
@@ -7989,6 +7991,13 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     },
     mediaSections: mediaSections,
     services: function () { return data.services; },
+    // A catalog service's launcher picture, hydrated once the page has placed it.
+    serviceIcon: function (svc) {
+      var t = document.createElement("template");
+      t.innerHTML = icon(svc);
+      Promise.resolve().then(hydrateIcons);
+      return t.content.firstChild;
+    },
     ports: function (root) { mountPorts(root); return true; },
     // Hand one file to the upload sheet for this plugin's own destination; the
     // sheet sends it with progress and errors. False when it is not configured.
