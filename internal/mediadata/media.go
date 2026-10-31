@@ -103,3 +103,9 @@ type ProfileSource interface {
 	TVProfiles(context.Context) ([]Choice, error)
 	TVHistory(context.Context, int) ([]Title, error)
 }
+
+// PolicySource verifies administrator-selected request choices and actual
+// upstream approval permissions before a household policy is saved.
+type PolicySource interface {
+	TVValidatePolicy(context.Context, RequestPolicy) error
+}
