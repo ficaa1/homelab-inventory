@@ -59,6 +59,8 @@ func (s *server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		NotifyInterval    string          `json:"notify_interval"`
 		DigestInterval    string          `json:"digest_interval"`
 		NotifyEnabled     bool            `json:"notify_enabled"`
+		DashboardName     string          `json:"dashboard_name"`
+		IconsFetch        bool            `json:"icons_fetch"`
 		AppriseSet        bool            `json:"apprise_set"`
 		AppriseHint       string          `json:"apprise_hint,omitempty"`
 		DigestAppriseSet  bool            `json:"digest_apprise_set"`
@@ -80,6 +82,8 @@ func (s *server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		NotifyInterval:    eff.NotifyInterval.String(),
 		DigestInterval:    eff.DigestInterval.String(),
 		NotifyEnabled:     eff.NotifyEnabled,
+		DashboardName:     eff.DashboardName,
+		IconsFetch:        eff.IconsFetch,
 		AppriseSet:        eff.AppriseURL != "",
 		AppriseHint:       settings.Redacted(eff.AppriseURL),
 		DigestAppriseSet:  eff.DigestAppriseURL != "",
@@ -98,6 +102,8 @@ func (s *server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		"apprise_url":        st.AppriseURL != nil && *st.AppriseURL != "",
 		"digest_apprise_url": st.DigestAppriseURL != nil && *st.DigestAppriseURL != "",
 		"notify_enabled":     st.NotifyEnabled != nil,
+		"dashboard_name":     st.DashboardName != nil,
+		"icons_fetch":        st.IconsFetch != nil,
 	}
 	if !st.UpdatedAt.IsZero() {
 		t := st.UpdatedAt
@@ -174,6 +180,9 @@ func (s *server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	// present. The rest is worth having in the log: a notification floor that
 	// silently changed is a thing you want to be able to find later.
 	eff := settings.Resolve(next, s.defaults)
+	if s.icons != nil {
+		s.icons.SetFetch(eff.IconsFetch)
+	}
 	s.log.Printf("settings updated: level=%s interval=%s digest=%s enabled=%t apprise=%t digest_apprise=%t",
 		eff.NotifyLevel, eff.NotifyInterval, eff.DigestInterval, eff.NotifyEnabled, eff.AppriseURL != "", eff.DigestAppriseURL != "")
 
@@ -195,5 +204,8 @@ func (s *server) handleResetSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Printf("settings reset to the environment defaults")
+	if s.icons != nil {
+		s.icons.SetFetch(s.defaults.IconsFetch)
+	}
 	s.handleGetSettings(w, r)
 }

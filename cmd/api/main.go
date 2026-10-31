@@ -214,6 +214,11 @@ func run() error {
 			DigestInterval:   *digestEvery,
 			AppriseURL:       os.Getenv("APPRISE_URL"),
 			DigestAppriseURL: os.Getenv("DIGEST_APPRISE_URL"),
+			DashboardName:    envOr("DASHBOARD_NAME", "homelab-inventory"),
+			IconsFetch:       os.Getenv("ICONS_FETCH") == "1",
+		}
+		if srv.icons != nil {
+			srv.icons.SetFetch(srv.effective().IconsFetch)
 		}
 
 		if err := applyBackupDefaults(srv); err != nil {
