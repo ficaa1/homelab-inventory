@@ -48,6 +48,7 @@ func (*Integration) Manifest() plugin.Manifest {
 	for _, k := range []struct{ key, label string }{{"radarr_root", "Radarr media root"}, {"sonarr_root", "Sonarr media root"}, {"tdarr_movie_root", "Tdarr movie root"}, {"tdarr_series_root", "Tdarr series root"}} {
 		fields = append(fields, plugin.Field{Key: k.key, Label: k.label, Type: plugin.Text, Help: "Absolute media root; no host filesystem is read by the dashboard."})
 	}
+	fields = append(fields, plugin.Field{Key: "secondary_label", Label: "Secondary worker name", Type: plugin.Text, Help: "Shown beside Preview on the Tdarr page, for example PC. Empty reads Secondary worker."})
 	fields = append(fields, plugin.Field{Key: "protected_titles", Label: "Protected title identities (JSON array)", Type: plugin.Text, Help: "Explicit kind/id, tmdb_id, imdb_id, title and/or path exclusions. Empty means none."})
 	return plugin.Manifest{ID: "tdarr", Name: "Tdarr", Version: "1", Description: "Review compression candidates and explicitly execute guarded batches through an existing sidecar.", Settings: fields, Actions: actions(), Tab: &plugin.Tab{Title: "Tdarr", Icon: "film", Group: "media", Views: []plugin.ViewRef{{Name: "library", Title: "Tdarr"}}}}
 }

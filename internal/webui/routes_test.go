@@ -105,8 +105,8 @@ func TestRequestsUseRetainedRoutes(t *testing.T) {
 		}
 		checked++
 	}
-	if checked < 40 || helpers != 5 || pageHelpers != 3 {
-		t.Errorf("request scan missed calls: checked=%d helper calls=%d", checked, helpers)
+	if checked < 40 || helpers != 5 || pageHelpers != 5 {
+		t.Errorf("request scan missed calls: checked=%d helper calls=%d page calls=%d", checked, helpers, pageHelpers)
 	}
 	t.Logf("checked %d request paths and %d shared-helper calls", checked, helpers)
 }

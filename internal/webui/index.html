@@ -8016,6 +8016,35 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
     page.show($("plugin-body"), { id: id, view: view, params: new URLSearchParams(route.params), first: first });
   }
 
+  // The archive's Pause, for Media sections the archive page does not draw
+  // (Tdarr), as the private dashboard shows it there. Null without the archive.
+  var arcHold = { v: null, at: 0, busy: false, loading: null };
+  function archiveApi(path, body) { var id = "archive"; return body ? write(pagePath(id, path), "POST", body) : api(pagePath(id, path)); }
+  function archiveHold() {
+    if (!arcHold.loading) arcHold.loading = archiveApi("status").then(function (v) { arcHold.v = v; arcHold.at = Date.now(); }, function () {})
+      .then(function () { arcHold.loading = null; });
+    return arcHold.loading;
+  }
+  function archivePause() {
+    if (!pluginInfo("archive")) return null;
+    var b = h("button", { class: "btn arc-pause", type: "button", text: "Pause", disabled: true });
+    function paint() {
+      var v = arcHold.v;
+      b.hidden = !!v && !v.reachable;
+      b.textContent = v && v.archivePaused ? "Resume" : "Pause";
+      b.disabled = !v || !!v.dryRun || arcHold.busy;
+    }
+    b.addEventListener("click", function () {
+      if (!arcHold.v || arcHold.busy) return;
+      arcHold.busy = true; paint();
+      archiveApi("pause", { paused: !arcHold.v.archivePaused, apply: true }).catch(pageFail).catch(function () {})
+        .then(function () { arcHold.busy = false; arcHold.at = 0; return archiveHold(); }).then(paint);
+    });
+    paint();
+    if (arcHold.loading || Date.now() - arcHold.at > 15000) archiveHold().then(paint);
+    return b;
+  }
+
   window.HI = {
     h: h, str: str, esc: esc, ago: ago, fromNow: fromNow, bytes: bytes, dur: dur,
     iconNode: iconNode, pill: pill, stateBox: stateBox, notice: notice, skeleton: skeleton,
@@ -8045,6 +8074,7 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
       return parts.length === 1 ? parts[0] : h("div", { class: "pv-heads" }, parts);
     },
     mediaSections: mediaSections,
+    archivePause: archivePause,
     services: function () { return data.services; },
     // A catalog service's launcher picture, hydrated once the page has placed it.
     serviceIcon: function (svc) {

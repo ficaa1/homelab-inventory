@@ -96,7 +96,7 @@ func (p *Integration) apiCandidates(ctx context.Context, r plugin.APIRequest) (p
 	if err != nil {
 		return p.failure(err, true), nil
 	}
-	return reply(200, map[string]any{"status": "ok", "items": rows, "fetched": p.host.Now().UTC()}), nil
+	return reply(200, map[string]any{"status": "ok", "items": rows, "fetched": p.host.Now().UTC(), "secondary_label": p.str("secondary_label")}), nil
 }
 
 // apiExecute answers 200 queued, 500 failed (the sidecar ran and said no) or

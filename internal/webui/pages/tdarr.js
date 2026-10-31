@@ -10,7 +10,7 @@
     items: null, ready: false, loading: false, libError: "",
     status: null, statusLoading: null, statusCtrl: null, statusTimer: null,
     cands: null, candError: "", candQuery: "",
-    selected: {}, query: "", filter: "all", pc: false, busy: false,
+    selected: {}, query: "", filter: "all", pc: false, pcLabel: "", busy: false,
     notice: "", unknown: false, epoch: 0, expiry: null
   };
   var root = null, view = "", live = false;
@@ -18,6 +18,8 @@
   function HI() { return window.HI; }
   function h(tag, attrs, kids) { return HI().h(tag, attrs, kids); }
   function sz(n) { return n ? HI().bytes(n) : "0 B"; }
+  // Decimal units with one place, as the private dashboard's Library writes sizes.
+  function lb(n) { n = n || 0; return n >= 1e12 ? (n / 1e12).toFixed(1) + " TB" : (n / 1e9).toFixed(1) + " GB"; }
   function gb(n) { return typeof n === "number" ? (n < 10 ? n.toFixed(1) : Math.round(n)) + " GB" : "—"; }
   function num(n) { return n == null ? "—" : String(n); }
   function key(i) { return i.kind + ":" + i.id; }
@@ -76,54 +78,45 @@
     return !n.online || w.transcode_gpu == null || w.transcode_cpu == null ? null : w.transcode_gpu + w.transcode_cpu;
   }
 
-  function statusCard(full) {
-    var v = st.status, card = h("section", { class: "pv-card tdp-status", "aria-label": "Tdarr queue" });
-    if (!v) { card.appendChild(h("div", { class: "tdp-pad" }, [skel(2)])); return card; }
+  function statusCard() {
+    var v = st.status, card = h("section", { class: "tdp-card tdp-status", "aria-label": "Tdarr queue" });
+    if (!v) { card.appendChild(skel(2)); return card; }
     var q = v.queue || {};
-    card.appendChild(h("div", { class: "tdp-metrics" }, [
-      metric(q.queued, "queued"), metric(q.processing, "active"), metric(q.error, "errors", q.error > 0 ? "t-warn" : ""),
-      full && v.server_version ? h("span", { class: "tdp-ver", text: "Tdarr " + v.server_version }) : null
-    ]));
-    if (v.status !== "ok") card.appendChild(h("div", { class: "tdp-pad" }, [HI().notice("warn",
-      (v.status === "not_configured" ? "Tdarr is not configured" : "Status unavailable") + (v.error ? " · " + v.error : ""))]));
+    card.appendChild(h("div", { class: "tdp-metrics" }, [metric(q.queued, "queued"), metric(q.processing, "active"), metric(q.error, "errors")]));
+    if (v.status !== "ok") card.appendChild(h("div", { class: "tdp-why" , text:
+      (v.status === "not_configured" ? "Not configured" : "Status unavailable") + (v.error ? " · " + v.error : "") }));
     (v.nodes || []).forEach(function (n) {
-      var tone = !n.online ? "off" : n.paused ? "paused" : "on", w = n.workers || {};
+      var tone = !n.online ? "off" : n.paused ? "paused" : "on";
       var row = h("div", { class: "tdp-node" }, [
         h("div", { class: "tdp-node-line" }, [
           h("span", { class: "tdp-dot " + tone, "aria-hidden": "true" }),
           h("b", { text: n.name || "Unknown node" }),
           h("span", { class: "sub", text: nodeState(n) }),
-          h("span", { class: "tdp-armed", text: num(armed(n)) + " armed" })
+          h("span", { class: "spacer" }),
+          h("span", { text: num(armed(n)) + " armed" })
         ])
       ]);
-      if (full && n.online) row.appendChild(h("div", { class: "tdp-limits sub", text:
-        "Transcode " + num(w.transcode_gpu) + " GPU · " + num(w.transcode_cpu) + " CPU   Health check " + num(w.healthcheck_gpu) + " GPU · " + num(w.healthcheck_cpu) + " CPU" }));
       (n.active || []).forEach(function (a) {
         var pct = typeof a.pct === "number" && isFinite(a.pct) ? Math.max(0, Math.min(100, a.pct)) : null;
         row.appendChild(h("div", { class: "tdp-active" }, [
           h("span", { class: "tdp-file", title: a.file || "", text: base(a.file) || "Current file" }),
-          h("b", { text: pct == null ? "—" : Math.round(pct) + "%" + (typeof a.fps === "number" && full ? " · " + Math.round(a.fps) + " fps" : "") })
+          h("b", { text: pct == null ? "—" : Math.round(pct) + "%" })
         ]));
         if (pct != null) row.appendChild(bar(pct));
       });
       card.appendChild(row);
     });
-    if (full && v.last_batch) {
-      var b = v.last_batch;
-      card.appendChild(h("div", { class: "tdp-node sub", text: "Last batch: " + (b.state || "unknown") +
-        (b.outcome ? " · " + b.outcome : "") + (b.finished_at ? " · finished " + HI().ago(b.finished_at) : "") }));
-    }
     return card;
   }
-  function metric(n, label, cls) { return h("span", { class: "tdp-metric" }, [h("b", { class: cls || "", text: num(n) }), " " + label]); }
+  function metric(n, label) { return h("span", {}, [h("b", { text: num(n) }), " " + label]); }
   function bar(pct) {
     var fill = h("i"); fill.style.width = pct.toFixed(2) + "%";
-    return h("span", { class: "pv-track tdp-bar", "aria-hidden": "true" }, [fill]);
+    return h("span", { class: "tdp-bar", "aria-hidden": "true" }, [fill]);
   }
 
   function renderStatus() {
     var el = byId("tdp-status");
-    if (el) el.replaceWith(withId(statusCard(true), "tdp-status"));
+    if (el) el.replaceWith(withId(statusCard(), "tdp-status"));
   }
   function withId(el, id) { el.id = id; return el; }
 
@@ -135,7 +128,7 @@
     renderRows();
     HI().get(ID, "batch/candidates").then(function (v) {
       if (v.status !== "ok" || !Array.isArray(v.items)) throw new Error(v.error || "Library unavailable");
-      st.items = v.items; st.ready = true;
+      st.items = v.items; st.ready = true; st.pcLabel = v.secondary_label || "";
     }).catch(function (e) { st.libError = e.message; }).then(function () {
       st.loading = false;
       if (live) { renderRows(); }
@@ -164,25 +157,24 @@
 
   function libraryView() {
     var wrap = h("div", { class: "tdp-lib" });
-    wrap.appendChild(withId(statusCard(true), "tdp-status"));
-    var seg = h("div", { class: "seg", role: "group", "aria-label": "Media type" }, ["all", "radarr", "sonarr"].map(function (k, i) {
+    wrap.appendChild(withId(statusCard(), "tdp-status"));
+    var seg = h("div", { class: "seg", role: "group", "aria-label": "Tdarr media type" }, ["all", "radarr", "sonarr"].map(function (k, i) {
       return h("button", { class: "btn", type: "button", "aria-pressed": st.filter === k ? "true" : "false", text: ["All", "Movies", "TV"][i],
         onclick: function () { st.filter = k; seg.querySelectorAll(".btn").forEach(function (b, j) { b.setAttribute("aria-pressed", j === i ? "true" : "false"); }); renderRows(); } });
     }));
-    var search = h("input", { type: "search", placeholder: "Search titles…", "aria-label": "Search Library titles", value: st.query,
+    var search = h("input", { class: "tdp-search", type: "search", placeholder: "Search titles…", "aria-label": "Search Tdarr titles", value: st.query,
       oninput: function () { st.query = search.value; renderRows(); } });
-    wrap.appendChild(h("div", { class: "filters tdp-tools" }, [
-      seg, h("label", { class: "field" }, [HI().iconNode("search", "sm"), search]),
-      h("button", { class: "btn", type: "button", text: "Refresh", onclick: function () { loadLibrary(); loadStatus(); } })
-    ]));
+    wrap.appendChild(h("div", { class: "tdp-tools" }, [seg, h("div", { class: "tdp-find" }, [search,
+      h("button", { class: "btn", type: "button", text: "Refresh", onclick: function () { loadLibrary(); loadStatus(); } })])]));
     wrap.appendChild(h("div", { id: "tdp-notice", class: "tdp-notice hidden", role: "status" }));
     var pc = h("input", { id: "tdp-pc", type: "checkbox", checked: st.pc, onchange: function () { st.pc = pc.checked; } });
-    wrap.appendChild(h("div", { class: "tdp-selbar" }, [
+    wrap.appendChild(h("div", { class: "tdp-card tdp-selbar" }, [
       h("span", { id: "tdp-total", role: "status" }),
-      h("label", { class: "tdp-check", title: "Also arm the secondary worker for this batch" }, [pc, "Secondary worker"]),
+      h("span", { class: "spacer" }),
+      h("label", { class: "tdp-check", title: "Also arm the secondary worker for this batch" }, [pc, " ", h("span", { id: "tdp-pc-label", text: st.pcLabel || "Secondary worker" })]),
       h("button", { id: "tdp-preview", class: "btn primary", type: "button", text: "Preview", onclick: preview })
     ]));
-    wrap.appendChild(h("div", { id: "tdp-rows", class: "pv-card tdp-rows" }));
+    wrap.appendChild(h("div", { id: "tdp-rows" }));
     wrap.appendChild(candidatesView());
     return wrap;
   }
@@ -190,9 +182,10 @@
   function renderRows() {
     var el = byId("tdp-rows"); if (!el) return;
     clear(el);
+    var lab = byId("tdp-pc-label"); if (lab) lab.textContent = st.pcLabel || "Secondary worker";
     if (!st.items) {
       if (st.libError) el.appendChild(HI().stateBox("Library unavailable", st.libError, h("button", { class: "btn", type: "button", text: "Try again", onclick: loadLibrary }), true));
-      else el.appendChild(h("div", { class: "tdp-pad" }, [skel(4)]));
+      else el.appendChild(skel(3));
       updateTotal(); return;
     }
     var q = st.query.trim().toLowerCase();
@@ -201,8 +194,7 @@
       return (st.filter === "all" || i.kind === st.filter) && (i.title + " " + (i.year || "")).toLowerCase().indexOf(q) >= 0;
     }).slice().sort(function (a, b) { return b.entry.sizeBytes - a.entry.sizeBytes || a.entry.title.localeCompare(b.entry.title); });
     var max = Math.max.apply(null, [1].concat(rows.map(function (r) { return r.entry.sizeBytes; })));
-    el.appendChild(h("h3", {}, ["Library", h("span", { class: "n", text: rows.length + (rows.length === st.items.length ? "" : " of " + st.items.length) })]));
-    if (!rows.length) el.appendChild(h("div", { class: "pv-empty", text: q ? "No titles match." : "No titles." }));
+    if (!rows.length) el.appendChild(h("div", { class: "empty", text: "No titles" }));
     rows.forEach(function (r) { el.appendChild(row(r, max)); });
     if (st.libError) message(st.libError);
     updateTotal();
@@ -213,21 +205,17 @@
     var busy = archiveBusy(i.archiveStatus) || (i.seasons || []).some(function (s) { return archiveBusy(s.archiveStatus); });
     var box = h("input", { type: "checkbox", "aria-label": "Select " + i.title, checked: !!chosen, disabled: !!blocked || locked(),
       onchange: function () { select(k, box); } });
-    var meta = [tv(i) ? "TV" : "Movie"];
-    if (tv(i)) meta.push(((i.seasons || []).filter(function (s) { return s.season > 0; }).length) + " seasons");
-    else meta.push([i.resolution ? i.resolution + "p" : "", i.videoCodec || ""].filter(Boolean).join(" · "));
-    if (chosen) meta.push(chosen.plan.paths.length + (chosen.plan.paths.length === 1 ? " file" : " files") + " picked");
-    var size = h("div", { class: "tdp-size" }, [h("strong", { text: sz(i.sizeBytes) }), bar(i.sizeBytes / max * 100)]);
+    var size = h("div", { class: "tdp-size" }, [h("strong", { text: lb(i.sizeBytes) }), bar(i.sizeBytes / max * 100)]);
     var end;
-    if (blocked) end = h("span", { title: blocked }, [HI().pill("Protected", "info")]);
+    if (blocked) end = h("span", { class: "tdp-lock", title: blocked, text: "Protected" });
     else if (tv(i)) end = h("button", { class: "btn", type: "button", disabled: locked(), onclick: function () { seasons(k); },
       text: "Seasons" + (chosen ? " · " + chosen.selection.seasons.map(function (n) { return n || "S"; }).join(", ") : "") });
-    else end = h("span");
-    return h("div", { class: "tdp-row" + (blocked ? " tdp-locked" : "") + (chosen ? " tdp-on" : "") }, [
-      h("label", { class: "tdp-title" }, [box, h("span", { class: "tdp-name" }, [
-        h("span", { class: "tdp-line" }, [h("b", { text: i.title }), i.year ? h("span", { class: "tdp-year", text: String(i.year) }) : null,
-          busy ? HI().pill("Archive busy", "warn") : null]),
-        h("span", { class: "sub", text: meta.filter(Boolean).join(" · ") })
+    else end = h("span", { class: "sub", text: [i.resolution ? i.resolution + "p" : "", i.videoCodec || ""].filter(Boolean).join(" · ") });
+    return h("div", { class: "tdp-card tdp-row" + (blocked ? " tdp-locked" : "") }, [
+      h("label", { class: "tdp-title" }, [box, h("span", {}, [
+        h("b", { text: i.title }), i.year ? h("span", { class: "tdp-year", text: String(i.year) }) : null,
+        busy ? HI().pill("Archive busy", "warn") : null,
+        h("span", { class: "sub", text: (tv(i) ? "TV" : "Movie") + (chosen ? " · " + chosen.plan.paths.length + " files" : "") })
       ])]),
       size, end
     ]);
@@ -235,7 +223,7 @@
 
   function updateTotal() {
     var t = total(), el = byId("tdp-total");
-    if (el) { clear(el); el.appendChild(h("b", { class: t.count > LIMIT ? "t-warn" : "", text: t.count + "/" + LIMIT })); el.appendChild(document.createTextNode(" files")); el.appendChild(h("span", { class: "sub", text: " · " + sz(t.bytes) + " selected" })); }
+    if (el) { clear(el); el.appendChild(h("b", { class: t.count > LIMIT ? "t-warn" : "", text: t.count + "/" + LIMIT })); el.appendChild(document.createTextNode(" files ")); el.appendChild(h("span", { class: "sub", text: "· " + lb(t.bytes) + " est." })); }
     var p = byId("tdp-preview"); if (p) p.disabled = locked() || t.count === 0 || t.count > LIMIT;
     var pc = byId("tdp-pc"); if (pc) pc.disabled = st.busy || st.unknown;
   }
@@ -404,9 +392,9 @@
 
   function candidatesView() {
     var wrap = h("div", { class: "tdp-cands" });
-    var search = h("input", { type: "search", placeholder: "Search files…", "aria-label": "Search candidate files", value: st.candQuery,
+    var search = h("input", { class: "tdp-search", type: "search", placeholder: "Search files…", "aria-label": "Search candidate files", value: st.candQuery,
       oninput: function () { st.candQuery = search.value; renderCands(); } });
-    wrap.appendChild(h("div", { class: "filters tdp-tools" }, [h("label", { class: "field" }, [HI().iconNode("search", "sm"), search]),
+    wrap.appendChild(h("div", { class: "tdp-find" }, [search,
       h("button", { class: "btn", type: "button", text: "Refresh", onclick: function () { st.cands = null; renderCands(); loadCands(); } })]));
     wrap.appendChild(h("div", { id: "tdp-cand-rows", class: "pv-card tdp-rows" }));
     return wrap;
@@ -447,7 +435,7 @@
     clear(root);
     var page = h("div", { class: "tdp" });
     root.appendChild(page);
-    page.appendChild(HI().head(ID, view, null));
+    page.appendChild(HI().head(ID, view, HI().archivePause()));
     page.appendChild(libraryView());
     renderRows(); renderCands(); message(st.notice);
   }
