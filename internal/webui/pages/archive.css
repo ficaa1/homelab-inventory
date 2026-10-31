@@ -99,6 +99,8 @@
 .arc-page .arc-history .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
 
 /* library */
+.arc-page .arc-find-row { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 0; }
+.arc-page .arc-find-row .arc-find { flex: 1; min-width: 0; }
 .arc-page .arc-lib-tools { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: var(--s4); flex-wrap: wrap; }
 .arc-page .arc-find { display: flex; gap: 8px; align-items: center; margin: 0; height: 40px; flex: 0 0 auto; }
 .arc-page .arc-find input { width: 260px; min-width: 0; }

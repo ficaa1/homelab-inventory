@@ -447,8 +447,7 @@
     clear(root);
     var page = h("div", { class: "tdp" });
     root.appendChild(page);
-    var refresh = h("button", { class: "btn tdp-refresh", type: "button", text: "Refresh", onclick: function () { loadStatus(); loadLibrary(); loadCands(); } });
-    page.appendChild(HI().head(ID, view, refresh));
+    page.appendChild(HI().head(ID, view, null));
     page.appendChild(libraryView());
     renderRows(); renderCands(); message(st.notice);
   }

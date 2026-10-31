@@ -1236,13 +1236,13 @@ pre.code {
 .pv-head h2 { margin: 0; overflow-wrap: anywhere; }
 .pv-head .seg .btn { min-width: 64px; }
 .pv-heads > .pv-head { margin-bottom: var(--s3); }
-.seg.pv-sub { margin-bottom: var(--s5); align-self: flex-start; }
+.seg.pv-sub { margin-bottom: var(--s5); align-self: flex-start; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .pv-heads { display: flex; flex-direction: column; }
 .library-nav { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); }
 .library-nav .btn { border: 0; background: none; color: var(--text-3); min-height: 28px; padding: 4px 12px; }
 .library-nav .btn[aria-pressed="true"] { background: var(--surface-3); color: var(--text); filter: none; }
 .pv-head.media-head { gap: 10px; margin-bottom: var(--s4); }
-.media-head > .media-tools { display: contents; }
+.pv-head.media-head > .media-tools { display: contents; }
 .media-head > h2 { order: 0; }
 .media-head > .media-tools > .pill { order: 1; }
 .media-head > .spacer { order: 2; }
@@ -1779,7 +1779,6 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
         <!-- Who is signed in, when the session came from the provider. -->
         <div id="session-line" class="setting session-line hidden"></div>
         <div id="admin"></div>
-        <div id="plugin-admin-sections"></div>
         <!-- Sign-in: outside #admin for the same reason as the plugins below. -->
         <section id="signin" class="setting hidden" aria-labelledby="signin-h">
           <h4 id="signin-h"><svg class="ic" aria-hidden="true"><use href="#i-key"/></svg>Sign-in<span id="signin-state"></span></h4>
@@ -4631,10 +4630,12 @@ body.has-up-bubble main.wrap { padding-bottom: calc(88px + var(--safe-b)); }
 
   function renderAdmin() {
     var s = data.settings;
-    if (!s) { $("admin").innerHTML = adminHostsHTML() + recentActionsHTML() + skeleton(4); renderActionLog(); return; }
+    if (!s) { $("admin").innerHTML = recentActionsHTML() + skeleton(4); renderActionLog(); return; }
 
-    $("admin").innerHTML = adminHostsHTML() + recentActionsHTML() + adminVerdict(s) +
-      '<div class="admin-grid"><div>' + adminGeneral(s) + adminNotify(s) + adminLog(s) + "</div><div>" + adminStorage() + "</div></div>";
+    // Private order first (actions, notifications, scoring, storage); the
+    // public-only dashboard and host enrolment cards follow.
+    $("admin").innerHTML = recentActionsHTML() + adminVerdict(s) +
+      '<div class="admin-grid"><div>' + adminNotify(s) + adminLog(s) + adminGeneral(s) + '</div><div><div id="plugin-admin-sections"></div>' + adminStorage() + "</div></div>" + adminHostsHTML();
     mountPluginAdmins();
     renderActionLog();
     wireStorage();

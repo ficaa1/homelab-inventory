@@ -600,8 +600,9 @@
       '<div class="tile"><div class="label">Space saved</div><div class="value">' + metric(saved) + '</div><div class="sub">Verified</div></div></div>' +
       '<div class="arc-lib-tools" data-key="tools"><div class="seg" role="group" aria-label="Media type">' + ["all", "radarr", "sonarr"].map(function (k, i) {
         return '<button class="btn" type="button" data-library-filter="' + k + '" aria-pressed="' + (libFilter === k) + '">' + ["All", "Movies", "TV"][i] + "</button>";
-      }).join("") + '</div><label class="field arc-find">' + HI.iconNode("search", "sm").outerHTML +
-      '<input id="arc-lib-search" type="search" placeholder="Search titles…" aria-label="Search library titles" autocomplete="off" value="' + esc(libQuery) + '"></label></div>' +
+      }).join("") + '</div><div class="arc-find-row"><label class="field arc-find">' + HI.iconNode("search", "sm").outerHTML +
+      '<input id="arc-lib-search" type="search" placeholder="Search titles…" aria-label="Search library titles" autocomplete="off" value="' + esc(libQuery) + '"></label>' +
+      '<button class="btn" type="button" data-library-refresh>Refresh</button></div></div>' +
       (library.dryRun || !library.archiveEnabled ? '<div class="arc-msg warn" data-key="mode">' + (library.dryRun ? "Dry run" : "Archive disabled") + "</div>" : "") +
       (libNotice ? '<div class="arc-msg" role="status" data-key="notice">' + esc(libNotice) + "</div>" : "") +
       '<div class="arc-lib-card" data-key="table"><table class="arc-lib"><thead><tr><th>Title</th><th>Type</th><th>Disk usage ↓</th><th>Quality</th><th>Tags</th><th>Archive status</th><th>Action</th></tr></thead><tbody>' + body + "</tbody></table></div>");
@@ -1162,10 +1163,10 @@
       html = (v.reachable ? '<span class="pill" title="Originals kept in the recycle bin">' + HI.iconNode("clock", "sm").outerHTML + " undo " + esc(info.undoDays || 7) + "d</span>" : "") + pause +
         '<button class="btn" type="button" data-archive-action="run"' + (!v.archiveEnabled || (info.runNow || {}).pending ? " disabled" : "") + ">Check now</button>";
     } else if (st.view === "library") {
-      html = pause + '<button class="btn" type="button" data-library-refresh>Refresh</button>';
+      html = pause;
     } else if (st.view === "seeding" && seeding) {
       var s = seedPlans();
-      html = '<button class="btn" type="button" data-seed-all' + (s.canLink ? "" : " disabled") + ">Link all (" + s.links.length + ")</button>" +
+      html = pause + '<button class="btn" type="button" data-seed-all' + (s.canLink ? "" : " disabled") + ">Link all (" + s.links.length + ")</button>" +
         '<button class="btn" type="button" data-seed-move-all' + (s.canMove ? "" : " disabled") + ">Move all (" + s.moves.length + ")</button>" +
         (s.q.length ? '<button class="btn" type="button" data-seed-queue-cancel>Cancel queue</button>' : "") +
         '<button class="btn" type="button" data-seed-refresh>Refresh</button>';
