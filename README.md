@@ -36,9 +36,12 @@ More options, upgrades and removal: [Install](docs/install.md).
 - **Forecasts** of when a disk will fill up.
 - **Launcher** tiles for every web service it finds.
 - **History**: what changed on a host, and package versions.
-- **Plugins** for media (Sonarr, Radarr, Tautulli, Overseerr), uploads (folder,
-  Paperless-ngx, Calibre-Web) and network traffic from Prometheus.
+- **Plugins** for media, household Taste recommendations, Archive and Tdarr
+  controls, uploads, network health and speed tests, Cloudflare and security
+  canaries. Enable only the integrations you use.
   [Plugins](docs/plugins.md)
+- **Encrypted backups** in Admin, with previewed restore and private-dashboard
+  migration. [Backup and migration](docs/backups.md)
 - Optional: [sign-in](docs/configuration.md#browser-sign-in-oidc) with Google,
   Authentik, Authelia or Keycloak, [signed agent updates](docs/self-update.md),
   [container restarts](docs/restarts.md), and an MCP server for AI assistants.

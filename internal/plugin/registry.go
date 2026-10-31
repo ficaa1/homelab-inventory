@@ -29,26 +29,33 @@ type stateFile struct {
 	Plugins map[string]json.RawMessage `json:"plugins"`
 }
 type entry struct {
-	op             sync.Mutex // serializes calls on a plugin instance
-	mu             sync.Mutex // protects cached status independently of live calls
-	test           chan struct{}
-	plugin         Plugin
-	manifest       Manifest
-	host           *host
-	stored         storedPlugin
-	config         Config
-	ready          bool
-	state, message string
-	checked        *time.Time
-	failures       int
-	alerts         []Alert
+	alertPollSeen, alertPollOK bool
+	seeds                      Config
+	mediaRefresh               *mediaRefreshCache
+	op                         sync.Mutex // serializes calls on a plugin instance
+	mu                         sync.Mutex // protects cached status independently of live calls
+	test                       chan struct{}
+	plugin                     Plugin
+	manifest                   Manifest
+	host                       *host
+	stored                     storedPlugin
+	config                     Config
+	ready                      bool
+	active                     bool
+	state, message             string
+	checked                    *time.Time
+	failures                   int
+	alerts                     []Alert
 }
 type Registry struct {
-	entries map[string]*entry // immutable after Open
-	mu      sync.Mutex        // protects file, including unknown entries
-	file    stateFile
-	path    string
-	wake    chan struct{}
+	notificationCycle sync.RWMutex
+	initialPoll       chan struct{}
+	initialPollOnce   sync.Once
+	entries           map[string]*entry // immutable after Open
+	mu                sync.Mutex        // protects file, including unknown entries
+	file              stateFile
+	path              string
+	wake              chan struct{}
 }
 type ItemStatus struct {
 	ID             string     `json:"id"`
@@ -76,7 +83,7 @@ type Update struct {
 // Open loads state without discarding integrations absent from this build.
 // Built-ins start disabled; only persisted enablement activates them.
 func Open(data string, builtins []Builtin, logger *log.Logger) (r *Registry, err error) {
-	r = &Registry{entries: map[string]*entry{}, path: filepath.Join(data, "state-plugins.json"), file: stateFile{Plugins: map[string]json.RawMessage{}}, wake: make(chan struct{}, 1)}
+	r = &Registry{initialPoll: make(chan struct{}), entries: map[string]*entry{}, path: filepath.Join(data, "state-plugins.json"), file: stateFile{Plugins: map[string]json.RawMessage{}}, wake: make(chan struct{}, 1)}
 	if err = os.MkdirAll(data, 0700); err != nil {
 		return nil, errors.New("creating plugin data directory")
 	}
@@ -93,6 +100,10 @@ func Open(data string, builtins []Builtin, logger *log.Logger) (r *Registry, err
 			opened.Close()
 		}
 	}(r)
+	seeds, seedErr := loadBackupSeeds(data)
+	if seedErr != nil {
+		return nil, seedErr
+	}
 	for _, b := range builtins {
 		if !idPattern.MatchString(b.ID) || b.New == nil || r.entries[b.ID] != nil {
 			return nil, errors.New("invalid or duplicate builtin plugin")
@@ -108,7 +119,7 @@ func Open(data string, builtins []Builtin, logger *log.Logger) (r *Registry, err
 		if p == nil {
 			return nil, errors.New("nil builtin plugin")
 		}
-		e := &entry{plugin: p, manifest: p.Manifest(), host: h, test: make(chan struct{}, 1), state: "disabled", stored: storedPlugin{Settings: Config{}}}
+		e := &entry{seeds: seeds[b.ID], plugin: p, manifest: p.Manifest(), host: h, test: make(chan struct{}, 1), state: "disabled", stored: storedPlugin{Settings: Config{}}}
 		r.entries[b.ID] = e
 		if e.manifest.ID != b.ID {
 			return nil, errors.New("builtin plugin ID mismatch")
@@ -121,7 +132,7 @@ func Open(data string, builtins []Builtin, logger *log.Logger) (r *Registry, err
 				return nil, errors.New("invalid stored plugin settings")
 			}
 		}
-		e.config, err = resolve(e.manifest, e.stored.Settings, e.stored.Enabled)
+		e.config, err = resolveWithSeeds(e.manifest, e.stored.Settings, e.stored.Enabled, e.seeds)
 		if err != nil {
 			e.state = "error"
 			var invalid *ValidationError
@@ -237,7 +248,7 @@ func (e *entry) configError(err error) error {
 func (e *entry) restore() {
 	e.host.configure(e.manifest, e.config)
 	if e.ready {
-		if err := e.plugin.Configure(cloneConfig(e.config)); err != nil {
+		if err := e.configureLive(e.config); err != nil {
 			e.ready = false
 			e.state = "error"
 			e.message = e.host.safe(err.Error())
@@ -247,6 +258,8 @@ func (e *entry) restore() {
 	}
 }
 func (r *Registry) Update(id string, u Update) (ItemStatus, error) {
+	r.notificationCycle.Lock()
+	defer r.notificationCycle.Unlock()
 	e := r.entries[id]
 	if e == nil {
 		return ItemStatus{}, ErrNotFound
@@ -260,7 +273,7 @@ func (r *Registry) Update(id string, u Update) (ItemStatus, error) {
 	if u.Enabled != nil {
 		next.Enabled = *u.Enabled
 	}
-	cfg, err := resolve(e.manifest, next.Settings, next.Enabled)
+	cfg, err := resolveWithSeeds(e.manifest, next.Settings, next.Enabled, e.seeds)
 	if err != nil {
 		return ItemStatus{}, err
 	}
@@ -283,12 +296,21 @@ func (r *Registry) Update(id string, u Update) (ItemStatus, error) {
 	}
 	e.stored = next
 	e.config = cfg
+	e.mediaRefresh = nil
 	e.ready = next.Enabled
 	e.message = ""
 	e.failures = 0
 	e.checked = nil
+	e.alertPollSeen = false
+	e.alertPollOK = false
 	if next.Enabled {
-		e.state = "ok"
+		if err = e.start(); err != nil {
+			e.ready = false
+			e.state = "error"
+			e.message = e.host.safe(err.Error())
+		} else {
+			e.state = "ok"
+		}
 	} else {
 		e.state = "disabled"
 		e.alerts = nil
@@ -318,7 +340,7 @@ func (r *Registry) Test(ctx context.Context, id string, patch Config) (TestResul
 	defer e.op.Unlock()
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	cfg, err := resolve(e.manifest, Merge(e.stored.Settings, patch), true)
+	cfg, err := resolveWithSeeds(e.manifest, Merge(e.stored.Settings, patch), true, e.seeds)
 	if err != nil {
 		return TestResult{}, err
 	}
@@ -427,6 +449,56 @@ func (r *Registry) Close() {
 		e.mu.Lock()
 		_ = e.plugin.Close()
 		e.host.transport.CloseIdleConnections()
+		e.mu.Unlock()
+		e.op.Unlock()
+	}
+}
+
+// startPlugin runs only after configuration has become live, never while validating a patch.
+func startPlugin(p Plugin) error {
+	if s, ok := p.(interface{ Start() error }); ok {
+		return s.Start()
+	}
+	return nil
+}
+func (e *entry) start() error {
+	if !e.active {
+		return nil
+	}
+	return startPlugin(e.plugin)
+}
+func (e *entry) configureLive(c Config) error {
+	if err := e.plugin.Configure(cloneConfig(c)); err != nil {
+		return err
+	}
+	return e.start()
+}
+
+// Activate listeners only from the runtime worker loop, never preview registries.
+func (r *Registry) activate() {
+	for _, e := range r.entries {
+		e.op.Lock()
+		e.mu.Lock()
+		e.active = true
+		if e.ready {
+			if err := e.start(); err != nil {
+				e.ready = false
+				e.state = "error"
+				e.message = e.host.safe(err.Error())
+			}
+		}
+		e.mu.Unlock()
+		e.op.Unlock()
+	}
+}
+func (r *Registry) deactivate() {
+	for _, e := range r.entries {
+		e.op.Lock()
+		e.mu.Lock()
+		e.active = false
+		if _, ok := e.plugin.(interface{ Start() error }); ok {
+			_ = e.plugin.Close()
+		}
 		e.mu.Unlock()
 		e.op.Unlock()
 	}

@@ -146,3 +146,51 @@ budget across all series. `bytes_s` is also a table column format.
 A plugin writes only in `Host.CacheDir()`, except an Uploads destination folder
 the owner configured explicitly. Uploads refuses the API data directory and its
 subdirectories, including symlink aliases, and never overwrites a destination entry.
+
+
+## Shared Media data
+
+Dusk consumes the typed `internal/mediadata` contract through Registry's Media
+methods. The bridge holds the same lifecycle lock as views, settings, images and
+alerts; callers never obtain the Media instance, HTTP client or connection keys.
+Dusk configuration is a typed non-secret snapshot. Dependency capabilities are
+read on each request, independent of source health. Refreshes coalesce for thirty
+seconds and settings changes invalidate that result. Media's explicit TV request
+method is separate from its read methods and requires a selected server policy;
+core durably reserves each profile-scoped operation before invoking it.
+
+## Confirmed actions
+
+A plugin can declare `Manifest.Actions []ActionSpec` and implement
+`Action(context.Context, string, Config) (View, error)`. An action specification
+has a fixed `ID`, plain `Label`, typed `Fields`, and `Operator`. A returned
+`View.Actions` contains exact copies of selected manifest specifications; core
+rejects invented or modified actions. Core renders forms and dispatches only
+registered IDs through `POST /plugins/{id}/actions/{action}` with
+`{"confirmed":true,"values":{...}}`. Unknown fields and missing/invalid values
+are refused before dispatch. Action fields never inherit environment settings.
+
+Use `Operator: true` for infrastructure or external service changes. These calls
+require the separate operator credential. Local profile feedback may use normal
+administrator authentication and CSRF instead. Core serializes each action with
+plugin lifecycle operations, validates the returned view and never retries.
+Most actions have a ten-second deadline. A compiled `TimeoutSeconds` may extend
+that to at most 360 seconds for the guarded shrink sidecar.
+
+Keep upstream method/path mappings fixed in code. Use `WithoutRedirects` for
+fixed-endpoint actions so 307/308 responses cannot replay a privileged body to
+another route. Use durable pre-submit receipts and consumed preview tokens where
+an upstream operation must not replay after an uncertain response or restart.
+There is no shell, arbitrary URL proxy or plugin-supplied browser code.
+
+Security's optional `RequestObserver` is called before normal routing and can
+only cause refusal. Real API, agent and operator credentials are excluded by
+core. Network receives `NetworkHost` projections through `BindNetworkSource`;
+plugins do not receive the inventory store or its private configuration.
+
+A plugin that owns a background listener may implement `Start() error`. Core calls
+it only after the runtime worker loop activates an enabled configuration, and on live updates/restoration; preview registries do not activate listeners;
+it is never called for staging validation or temporary Test settings. Configure
+must only validate and prepare listener settings. Start must replace/join prior
+workers, and Close must stop/join them and allow a later Start. Start errors surface as plugin errors; optional listeners may log a safe diagnostic
+and keep the main plugin available. Keep listeners opt-in and avoid exposing private data.

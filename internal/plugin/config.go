@@ -25,6 +25,16 @@ func validateManifest(m Manifest) error {
 	if !idPattern.MatchString(m.ID) || m.Name == "" {
 		return errors.New("invalid plugin manifest identity")
 	}
+	actions := map[string]bool{}
+	for _, a := range m.Actions {
+		if !viewPattern.MatchString(a.ID) || actions[a.ID] || a.Label == "" || a.TimeoutSeconds < 0 || a.TimeoutSeconds > 360 {
+			return errors.New("invalid action manifest")
+		}
+		actions[a.ID] = true
+		if err := validateManifest(Manifest{ID: m.ID, Name: m.Name, Settings: a.Fields}); err != nil {
+			return err
+		}
+	}
 	keys := map[string]bool{}
 	for _, f := range m.Settings {
 		if !keyPattern.MatchString(f.Key) || keys[f.Key] {
@@ -94,6 +104,9 @@ func Merge(stored Config, patch Config) Config {
 }
 
 func resolve(m Manifest, stored Config, required bool) (Config, error) {
+	return resolveWithSeeds(m, stored, required, nil)
+}
+func resolveWithSeeds(m Manifest, stored Config, required bool, seeds Config) (Config, error) {
 	out := Config{}
 	fields := map[string]string{}
 	known := map[string]bool{}
@@ -101,19 +114,23 @@ func resolve(m Manifest, stored Config, required bool) (Config, error) {
 		known[f.Key] = true
 		v, present := stored[f.Key]
 		if !present {
-			env := "PLUGIN_" + strings.ToUpper(strings.ReplaceAll(m.ID, "-", "_")) + "_" + strings.ToUpper(f.Key)
-			if s, ok := os.LookupEnv(env); ok {
-				v = s
-				if f.Type == Bool {
-					b, err := strconv.ParseBool(s)
-					if err != nil {
-						fields[f.Key] = "must be a boolean"
-						continue
-					}
-					v = b
-				}
+			if seed, ok := seeds[f.Key]; ok {
+				v = seed
 			} else {
-				v = f.Default
+				env := "PLUGIN_" + strings.ToUpper(strings.ReplaceAll(m.ID, "-", "_")) + "_" + strings.ToUpper(f.Key)
+				if s, ok := os.LookupEnv(env); ok {
+					v = s
+					if f.Type == Bool {
+						b, err := strconv.ParseBool(s)
+						if err != nil {
+							fields[f.Key] = "must be a boolean"
+							continue
+						}
+						v = b
+					}
+				} else {
+					v = f.Default
+				}
 			}
 		}
 		if v == nil || (isString(v) && strings.TrimSpace(v.(string)) == "" && f.Type != Number && f.Type != Bool) {

@@ -1,0 +1,24 @@
+{
+  "checked_at": "2026-01-01T12:00:00Z",
+  "downloads": {
+    "sonarr": "ok",
+    "radarr": "unconfigured",
+    "titles": [],
+    "checked_at": "2026-01-01T12:00:00Z",
+    "truncated": 0
+  },
+  "plex": {
+    "status": "unconfigured",
+    "streams": null,
+    "direct_play": null,
+    "direct_stream": null,
+    "transcode": null
+  },
+  "upcoming": {
+    "status": "ok",
+    "episodes": [],
+    "checked_at": "2026-01-01T12:00:00Z",
+    "until": "2026-01-08T12:00:00Z",
+    "truncated": 0
+  }
+}

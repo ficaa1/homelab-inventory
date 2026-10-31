@@ -313,3 +313,40 @@ an empty digest; a failed outcome's digest covers only bytes consumed. File
 contents and credentials are never written to the audit. If outcome persistence
 fails, the destination may already have accepted the file; inspect it before
 retrying. There is no automatic retry or audit retention policy.
+
+
+## Dusk devices and administration
+
+The optional [Dusk protocol](dusk/protocol-v1.md) uses independent hashed device
+credentials under `/tv/v1`. These never authorize ordinary dashboard, agent,
+operator, inventory or upload routes. The API token does not authorize TV routes.
+`POST /tv/v1/pair` is public, single-use-code protected and rate limited. All TV
+writes require JSON and their endpoint's device scope; disabling Dusk returns 503.
+
+The following administrator routes accept API bearer or browser session authority.
+Browser writes require the existing `X-Requested-By: homelab-inventory` CSRF header.
+All setup responses are no-store.
+
+| Route | Purpose |
+| --- | --- |
+| GET `/dusk/admin` | Profiles, active devices, policies and history selections |
+| POST `/dusk/profiles` | `{name}` creates; `{id,name}` renames |
+| DELETE `/dusk/profiles/{id}` | Delete profile and revoke its devices/codes |
+| POST `/dusk/codes` | `{profile_id,scopes}` → `{code,expires_at}` |
+| DELETE `/dusk/devices/{id}` | Immediately revoke a device |
+| GET `/dusk/options` | Configured upstream requester and movie/TV choices |
+| PUT `/dusk/policies/{id}` | Save selected requester/approval/movie/TV policy |
+| GET `/dusk/enrichment` | Optional Tautulli account choices |
+| PUT `/dusk/enrichment/{id}` | `{user_id}` selects account; zero clears |
+| POST `/dusk/import/{id}` | `{csv}` imports bounded household Letterboxd CSV |
+
+Request policy fields are `label`, `approval` (`manual` or `automatic`),
+`requester_id`, `movie` and `tv`. Each selection contains `server_id`, `profile_id`
+and `root`; an unconfigured kind has zero profile and empty root. Upstream keys
+are neither accepted nor returned. Names and root folders are administrator-only.
+TV capabilities expose only policy label and approval.
+
+Private state lives under `<data>/plugins/dusk/core/`: `devices.json` contains
+credential/code hashes, `policy.json` policies, selected history users and durable
+operation receipts, and `personal.json` local feedback/imports. Files are private
+and atomically replaced. Never publish these files with protocol examples.

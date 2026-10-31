@@ -3,7 +3,6 @@ package network
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
+	"github.com/ficaa1/homelab-inventory/internal/plugins/network/speed"
 )
 
 const defaultExclude = `lo|veth.*|docker.*|br-.*|virbr.*|cali.*|flannel.*|cni.*|tap.*|fwbr.*|fwpr.*|fwln.*|tailscale.*|wg.*`
@@ -18,6 +18,9 @@ const containerQuery = `topk(10, sum by (name) (rate(container_network_receive_b
 const downQuery = `max_over_time(probe_success[10m]) == 0`
 
 type Network struct {
+	inventory                    func() ([]plugin.NetworkHost, error)
+	speed                        *speed.Speedtester
+	extra                        plugin.Config
 	host                         plugin.Host
 	base, token, exclude, window string
 	cache                        map[string]cached
@@ -28,17 +31,30 @@ var _ plugin.AlertSource = (*Network)(nil)
 
 func New(h plugin.Host) plugin.Plugin { return &Network{host: h} }
 func (*Network) Manifest() plugin.Manifest {
-	return plugin.Manifest{ID: "network", Name: "Network", Description: "Read network traffic and probe health from an existing Prometheus.", Version: "1", Tab: &plugin.Tab{Title: "Network", Icon: "network", Views: []plugin.ViewRef{{Name: "overview", Title: "Overview"}, {Name: "traffic", Title: "Traffic"}}}, Settings: []plugin.Field{
-		{Key: "prometheus_url", Label: "Prometheus URL", Type: plugin.URL, Required: true},
+	return plugin.Manifest{ID: "network", Name: "Network", Description: "Read optional network metrics, routes and seeding health, and run bounded speed measurements.", Version: "1", Actions: []plugin.ActionSpec{speedAction()}, Tab: &plugin.Tab{Title: "Network", Icon: "network", Views: []plugin.ViewRef{{Name: "overview", Title: "Overview"}, {Name: "vpn", Title: "VPN"}, {Name: "traffic", Title: "Traffic"}, {Name: "routes", Title: "Routes"}, {Name: "seeding", Title: "Seeding"}, {Name: "speedtest", Title: "Speed test"}}}, Settings: []plugin.Field{
+		{Key: "routes_url", Label: "HTTP route-provider URL", Type: plugin.URL},
+		{Key: "qbit_url", Label: "qBittorrent URL", Type: plugin.URL},
+		{Key: "qbit_user", Label: "qBittorrent username", Type: plugin.Text},
+		{Key: "qbit_password", Label: "qBittorrent password", Type: plugin.Secret},
+		{Key: "seed_hours", Label: "Required seeding hours", Type: plugin.Number, Default: 0, Help: "Zero means no configured tracker requirement."},
+		{Key: "speedtest_url", Label: "Upload and latency service URL", Type: plugin.URL, Help: "Cloudflare speed-test protocol (__down and __up)."},
+		{Key: "speed_download_url", Label: "Primary range-download URL", Type: plugin.URL},
+		{Key: "speed_fallback_url", Label: "Fallback range-download URL", Type: plugin.URL},
+		{Key: "speed_download_size", Label: "Primary file bytes", Type: plugin.Number},
+		{Key: "speed_fallback_size", Label: "Fallback file bytes", Type: plugin.Number},
+		{Key: "prometheus_url", Label: "Prometheus URL", Type: plugin.URL},
 		{Key: "prometheus_token", Label: "Bearer token", Type: plugin.Secret},
 		{Key: "exclude_interfaces", Label: "Exclude interfaces", Type: plugin.Text, Default: defaultExclude, Help: "Regular expression matched against the whole device name."},
 		{Key: "window", Label: "History window", Type: plugin.Select, Default: "6h", Options: []plugin.Option{{Value: "1h", Label: "1 hour"}, {Value: "6h", Label: "6 hours"}, {Value: "24h", Label: "24 hours"}}},
 	}}
 }
 func (n *Network) Configure(c plugin.Config) error {
+	if err := n.configureExtra(c); err != nil {
+		return err
+	}
 	base, _ := c["prometheus_url"].(string)
 	parsed, err := url.Parse(base)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" || parsed.Opaque != "" {
+	if base != "" && (err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" || parsed.Opaque != "") {
 		return &plugin.FieldError{Key: "prometheus_url", Message: "Use an http(s) base URL without credentials, query or fragment"}
 	}
 	exclude := defaultExclude
@@ -71,7 +87,12 @@ func (n *Network) Configure(c plugin.Config) error {
 	return nil
 }
 func (n *Network) Close() error {
+	if n.speed != nil {
+		n.speed.Close()
+		n.speed = nil
+	}
 	n.base, n.token = "", ""
+	n.extra = nil
 	n.cache = nil
 	n.cacheBytes = 0
 	return nil
@@ -102,6 +123,9 @@ func (n *Network) hostQuery(kind string) string {
 	panic("unknown server-owned query")
 }
 func (n *Network) Test(ctx context.Context) plugin.TestResult {
+	if n.base == "" {
+		return plugin.TestResult{OK: len(n.extra) > 0, Message: "Optional services configured; open their views to read status"}
+	}
 	result := plugin.TestResult{OK: true, Checks: []plugin.Check{}}
 	var build struct {
 		Status string `json:"status"`
@@ -135,6 +159,9 @@ func (n *Network) Test(ctx context.Context) plugin.TestResult {
 	return result
 }
 func (n *Network) Alerts(ctx context.Context) ([]plugin.Alert, error) {
+	if n.base == "" {
+		return []plugin.Alert{}, nil
+	}
 	samples, err := n.query(ctx, downQuery, false, true)
 	if err != nil {
 		return nil, err
@@ -151,6 +178,11 @@ func (n *Network) Alerts(ctx context.Context) ([]plugin.Alert, error) {
 	return alerts, nil
 }
 func (n *Network) text(s string) string {
+	for _, key := range []string{"qbit_password"} {
+		if secret := n.extraText(key); secret != "" {
+			s = strings.ReplaceAll(s, secret, "[redacted]")
+		}
+	}
 	if n.token != "" {
 		s = strings.ReplaceAll(s, n.token, "[redacted]")
 	}
@@ -168,11 +200,17 @@ func (n *Network) text(s string) string {
 }
 func (n *Network) windowDuration() time.Duration { d, _ := time.ParseDuration(n.window); return d }
 func (n *Network) View(ctx context.Context, name string, _ url.Values) (plugin.View, error) {
+	if name == "vpn" {
+		return n.vpnView()
+	}
+	if name == "routes" || name == "seeding" || name == "speedtest" {
+		return n.extraView(ctx, name)
+	}
 	if name != "overview" && name != "traffic" {
 		return plugin.View{}, plugin.ErrNotFound
 	}
 	if n.base == "" {
-		return plugin.View{}, errors.New("Prometheus is not configured")
+		return plugin.View{Title: "Network", UpdatedAt: n.host.Now(), Blocks: []plugin.Block{{Type: "notice", Tone: "info", Text: "Prometheus is not configured. Optional routes, seeding and speed tests have separate views."}}}, nil
 	}
 	view := plugin.View{Title: "Network", UpdatedAt: n.host.Now().UTC(), RefreshSeconds: 30, Blocks: []plugin.Block{}}
 	// Leave time for the core to validate the notice-only response even when

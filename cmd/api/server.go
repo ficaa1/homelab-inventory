@@ -48,6 +48,10 @@ import (
 const maxInventoryBytes = 16 << 20
 
 type server struct {
+	backupMaintenance func(context.Context, func() error) error
+	backupReload      func() error
+	backup            *backupAdmin
+
 	authOnce               sync.Once
 	browserAuth            *auth.Manager
 	authErr                error
@@ -55,43 +59,49 @@ type server struct {
 	authTestMu             sync.Mutex
 	authTestGeneration     uint64
 	authTestMessage        string
+	duskOnce               sync.Once
+	dusk                   *duskState
+	duskErr                error
 	plugins                *plugin.Registry
 	setup                  *setup.Manager
 	agentBinDir, publicURL string
 	trustedProxy           bool
 	// offerOperator is a test seam; production uses a separate operator token.
-	operatorToken   string
-	agentToken      string
-	actionPolicy    execallow.Policy
-	offerOperator   func(*http.Request) (string, bool)
-	ingestMu        sync.Mutex
-	softwareOnce    sync.Once
-	software        *softstore.Store
-	diskHealthMu    sync.Mutex
-	agentReleaseDir string
-	agentOffersMu   sync.Mutex
-	overviewCache   overview.StorageCache
-	overviewRuns    overview.RunMemo
-	trends          trend.Cache
-	settingsMu      sync.Mutex
-	pruneMu         sync.Mutex
-	scheduleMu      sync.Mutex
-	nextPrune       time.Time
-	store           *store.Store
-	log             *log.Logger
-	token           string
-	notifier        *notify.Notifier
-	icons           *icons.Cache
-	exec            *execallow.Runner
-	actions         *actions.Manager
-	defaults        settings.Defaults
+	operatorToken    string
+	agentToken       string
+	legacyAgentToken string
+	actionPolicy     execallow.Policy
+	offerOperator    func(*http.Request) (string, bool)
+	ingestMu         sync.Mutex
+	softwareOnce     sync.Once
+	software         *softstore.Store
+	diskHealthMu     sync.Mutex
+	agentReleaseDir  string
+	agentOffersMu    sync.Mutex
+	overviewCache    overview.StorageCache
+	overviewRuns     overview.RunMemo
+	trends           trend.Cache
+	settingsMu       sync.Mutex
+	pruneMu          sync.Mutex
+	scheduleMu       sync.Mutex
+	nextPrune        time.Time
+	store            *store.Store
+	log              *log.Logger
+	token            string
+	notifier         *notify.Notifier
+	icons            *icons.Cache
+	exec             *execallow.Runner
+	actions          *actions.Manager
+	defaults         settings.Defaults
 }
 
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
+	s.backupRoutes(mux)
 	s.setupRoutes(mux)
 	s.authRoutes(mux)
 	s.pluginRoutes(mux)
+	s.duskRoutes(mux)
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.HandleFunc("POST /inventory", s.agentAuth(s.handleIngest))
 	mux.HandleFunc("GET /agent/manifest", s.agentAuth(s.handleAgentManifest))
@@ -138,7 +148,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /storage/runs/prune", s.auth(s.handlePruneRuns))
 	mux.HandleFunc("DELETE /storage/runs/{host}", s.auth(s.handleForgetHost))
 	mux.Handle("GET /", webui.Handler())
-	return s.setupGate(mux)
+	return s.observePluginRequests(s.setupGate(mux))
 }
 
 func (s *server) auth(next http.HandlerFunc) http.HandlerFunc {
@@ -172,7 +182,7 @@ func (s *server) auth(next http.HandlerFunc) http.HandlerFunc {
 // agentAuth preserves the API-token fallback, but never accepts browser sessions.
 func (s *server) agentAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if httpx.BearerOK(r, s.agentCredential(), httpx.DenyWhenUnset) || httpx.BearerOK(r, s.apiToken(), httpx.OpenWhenUnset) {
+		if (r.Method == http.MethodPost && r.URL.Path == "/inventory" && httpx.BearerOK(r, s.legacyAgentToken, httpx.DenyWhenUnset)) || httpx.BearerOK(r, s.agentCredential(), httpx.DenyWhenUnset) || httpx.BearerOK(r, s.apiToken(), httpx.OpenWhenUnset) {
 			next(w, withActor(r, "bearer"))
 			return
 		}

@@ -11,10 +11,11 @@ import (
 const MaxViewBytes = 1 << 20
 
 type View struct {
-	Title          string    `json:"title"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	RefreshSeconds int       `json:"refresh_seconds"`
-	Blocks         []Block   `json:"blocks"`
+	Actions        []ActionSpec `json:"actions,omitempty"`
+	Title          string       `json:"title"`
+	UpdatedAt      time.Time    `json:"updated_at"`
+	RefreshSeconds int          `json:"refresh_seconds"`
+	Blocks         []Block      `json:"blocks"`
 }
 
 // Block is the closed union of the declarative block types. Fields not
@@ -82,6 +83,22 @@ func toneOK(t string) bool {
 
 // ValidateView returns the exact compact JSON to send, bounded before serving.
 func ValidateView(v View, manifest Manifest) ([]byte, error) {
+	for _, a := range v.Actions {
+		found := false
+		for _, registered := range manifest.Actions {
+			if a.ID == registered.ID {
+				found = true
+				left, _ := json.Marshal(a)
+				right, _ := json.Marshal(registered)
+				if string(left) != string(right) {
+					return nil, errors.New("action specification differs from manifest")
+				}
+			}
+		}
+		if !found {
+			return nil, errors.New("unknown view action")
+		}
+	}
 	count := 0
 	var walk func([]Block, int) error
 	walk = func(blocks []Block, depth int) error {

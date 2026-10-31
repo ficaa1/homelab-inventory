@@ -1,0 +1,20 @@
+#backup-admin { scroll-margin-top: 110px; }
+#backup-admin .backup-controls { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin:18px 0; }
+#backup-admin .backup-field { display:flex; flex-direction:column; gap:6px; font-size:var(--fs-sm); color:var(--text); min-width:0; flex:1 1 260px; max-width:440px; }
+#backup-admin input:not([type="checkbox"]) { box-sizing:border-box; min-height:44px; width:100%; padding:10px 12px; border:1px solid var(--line-2); border-radius:var(--r-sm); background:var(--surface-2); color:var(--text); font:inherit; }
+#backup-admin input:focus-visible, #backup-admin summary:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+#backup-admin .btn { min-height:44px; }
+#backup-admin .backup-restore { border-top:1px solid var(--line); padding-top:18px; }
+#backup-admin summary { cursor:pointer; font-size:var(--fs-sm); padding:8px 0; }
+#backup-admin details > p { margin-top:8px; }
+#backup-admin .backup-options { display:flex; flex-wrap:wrap; gap:12px; margin:12px 0; }
+#backup-admin .backup-check { display:flex; gap:8px; align-items:flex-start; font-size:var(--fs-sm); }
+#backup-admin .backup-check input { margin-top:3px; flex:0 0 auto; }
+#backup-admin .backup-confirm { margin:18px 0 12px; }
+#backup-plan { overflow-wrap:anywhere; }
+#backup-plan:empty, #backup-message:empty { display:none; }
+#backup-plan ul { font-size:var(--fs-sm); color:var(--text-3); padding-left:20px; }
+#backup-plan li { margin:6px 0; }
+#backup-plan .btn { margin-right:8px; margin-bottom:8px; }
+#backup-message { margin-top:12px; }
+@media (max-width:600px) { #backup-admin .backup-controls > .btn { width:100%; } #backup-admin .backup-field { max-width:none; flex-basis:100%; } }

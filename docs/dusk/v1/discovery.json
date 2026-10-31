@@ -1,0 +1,24 @@
+{
+  "status": "ok",
+  "checked_at": "2026-01-01T12:00:00Z",
+  "partial": false,
+  "library_status": "ok",
+  "titles": [
+    {
+      "id": 123,
+      "kind": "movie",
+      "title": "Example film",
+      "year": "2025",
+      "overview": "A synthetic example.",
+      "poster": "",
+      "because": [
+        "Similar to a title you liked"
+      ],
+      "availability": "not_in_plex"
+    }
+  ],
+  "seeds": [],
+  "hidden": [],
+  "recent": [],
+  "watchlist": []
+}

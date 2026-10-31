@@ -1,0 +1,21 @@
+{
+  "title": {
+    "id": 123,
+    "kind": "movie",
+    "title": "Example film",
+    "year": "2025",
+    "overview": "A synthetic example.",
+    "poster": "",
+    "state": "missing",
+    "can_request": true,
+    "runtime": 90,
+    "directors": [],
+    "creators": [],
+    "cast": []
+  },
+  "requests_enabled": true,
+  "request_policy": {
+    "label": "Standard",
+    "approval": "manual"
+  }
+}

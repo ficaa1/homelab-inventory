@@ -13,6 +13,13 @@ const PollInterval = 5 * time.Minute
 // Poll refreshes each enabled alert source. Failed polls preserve last good
 // evidence until the third failure replaces it with an unreachable condition.
 func (r *Registry) Poll(ctx context.Context) {
+	r.notificationCycle.Lock()
+	defer r.notificationCycle.Unlock()
+	defer r.initialPollOnce.Do(func() {
+		if r.initialPoll != nil {
+			close(r.initialPoll)
+		}
+	})
 	for _, id := range r.ids() {
 		if ctx.Err() != nil {
 			return
@@ -37,6 +44,8 @@ func (r *Registry) Poll(ctx context.Context) {
 			err = validateAlerts(alerts)
 		}
 		e.mu.Lock()
+		e.alertPollSeen = true
+		e.alertPollOK = err == nil
 		at := e.host.Now().UTC()
 		e.checked = &at
 		if err != nil {
@@ -76,7 +85,13 @@ func (r *Registry) Alerts() []alert.Alert {
 				out = append(out, alert.Alert{Host: id, Rule: "plugin.unreachable", Source: "plugin", Level: alert.LevelWarning, Subject: id, Message: "plugin alert source is unreachable", Detail: e.message})
 			} else {
 				for _, a := range e.alerts {
-					out = append(out, alert.Alert{Host: id, Rule: id + "." + a.Rule, Source: "plugin", Level: alert.Level(a.Severity), Subject: e.host.safe(a.Subject), Message: e.host.safe(a.Summary), Detail: e.host.safe(a.Detail)})
+					host := id
+					// Canary identity predates the plugin boundary; preserve notification,
+					// silence and age keys when importing existing trip history.
+					if id == "security" && a.Rule == "canary.tripped" {
+						host = "api"
+					}
+					out = append(out, alert.Alert{Host: host, Rule: id + "." + a.Rule, Source: "plugin", Level: alert.Level(a.Severity), Subject: e.host.safe(a.Subject), Message: e.host.safe(a.Summary), Detail: e.host.safe(a.Detail)})
 				}
 			}
 		}
@@ -85,6 +100,8 @@ func (r *Registry) Alerts() []alert.Alert {
 	return out
 }
 func (r *Registry) Loop(ctx context.Context) {
+	r.activate()
+	defer r.deactivate()
 	ticker := time.NewTicker(PollInterval)
 	defer ticker.Stop()
 	for {

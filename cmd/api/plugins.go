@@ -9,22 +9,33 @@ import (
 	"net/http"
 
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
+	"github.com/ficaa1/homelab-inventory/internal/plugins/archive"
+	"github.com/ficaa1/homelab-inventory/internal/plugins/cloudflare"
+	"github.com/ficaa1/homelab-inventory/internal/plugins/dusk"
 	"github.com/ficaa1/homelab-inventory/internal/plugins/media"
 	"github.com/ficaa1/homelab-inventory/internal/plugins/network"
+	"github.com/ficaa1/homelab-inventory/internal/plugins/security"
+	"github.com/ficaa1/homelab-inventory/internal/plugins/taste"
+	"github.com/ficaa1/homelab-inventory/internal/plugins/tdarr"
 	"github.com/ficaa1/homelab-inventory/internal/plugins/uploads"
 )
 
 // builtInPlugins is the explicit composition root. No implicit registration or
 // external plugin loading is supported.
 func builtInPlugins() []plugin.Builtin {
-	return []plugin.Builtin{{ID: "media", New: media.New}, {ID: "uploads", New: uploads.New}, {ID: "network", New: network.New}}
+	return []plugin.Builtin{{ID: "tdarr", New: tdarr.New}, {ID: "security", New: security.New}, {ID: "cloudflare", New: cloudflare.New}, {ID: "taste", New: taste.New}, {ID: "archive", New: archive.New}, {ID: "dusk", New: dusk.New}, {ID: "media", New: media.New}, {ID: "uploads", New: uploads.New}, {ID: "network", New: network.New}}
 }
 func openPlugins(data string, logger *log.Logger) (*plugin.Registry, error) {
-	return plugin.Open(data, builtInPlugins(), logger)
+	r, err := plugin.Open(data, builtInPlugins(), logger)
+	if err == nil {
+		r.BindTasteSource()
+	}
+	return r, err
 }
 func (s *server) pluginRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /uploads/targets", s.auth(s.handleUploadTargets))
 	mux.HandleFunc("POST /plugins/{id}/upload/{target}", s.auth(s.handlePluginUpload))
+	mux.HandleFunc("POST /plugins/{id}/actions/{action}", s.handlePluginAction)
 	mux.HandleFunc("GET /plugins", s.auth(s.handlePlugins))
 	mux.HandleFunc("PUT /plugins/{id}", s.auth(s.handlePluginUpdate))
 	mux.HandleFunc("POST /plugins/{id}/test", s.auth(s.handlePluginTest))
@@ -145,4 +156,49 @@ func (s *server) handlePluginImage(w http.ResponseWriter, r *http.Request) {
 	// SVG is an image too, but must remain inert when directly navigated to.
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
 	w.Write(data)
+}
+
+func (s *server) handlePluginAction(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if s.plugins == nil {
+		s.pluginError(w, plugin.ErrNotFound)
+		return
+	}
+	spec, err := s.plugins.ActionSpec(r.PathValue("id"), r.PathValue("action"))
+	if err != nil {
+		s.pluginError(w, err)
+		return
+	}
+	if spec.Operator {
+		if _, ok := s.agentSession(r); !ok {
+			writeError(w, 403, "operator credential required")
+			return
+		}
+	}
+	if !spec.Operator {
+		s.auth(s.handlePluginActionAuthenticated)(w, r)
+		return
+	}
+	s.handlePluginActionAuthenticated(w, r)
+}
+func (s *server) handlePluginActionAuthenticated(w http.ResponseWriter, r *http.Request) {
+	spec, err := s.plugins.ActionSpec(r.PathValue("id"), r.PathValue("action"))
+	if err != nil {
+		s.pluginError(w, err)
+		return
+	}
+	var in struct {
+		Confirmed bool          `json:"confirmed"`
+		Values    plugin.Config `json:"values"`
+	}
+	if !pluginBody(w, r, &in, false) {
+		return
+	}
+	out, err := s.plugins.Action(r.Context(), r.PathValue("id"), spec.ID, in.Confirmed, in.Values)
+	if err != nil {
+		s.pluginError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(out)
 }

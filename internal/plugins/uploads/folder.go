@@ -52,6 +52,9 @@ func (u *Uploads) writeFolder(ctx context.Context, name string, size int64, body
 	if err != nil || n != size || ctx.Err() != nil {
 		return fail()
 	}
+	if (u.folderUID != -1 || u.folderGID != -1) && file.Chown(u.folderUID, u.folderGID) != nil {
+		return fail()
+	}
 	if file.Chmod(0644) != nil || file.Sync() != nil || file.Close() != nil {
 		return fail()
 	}
