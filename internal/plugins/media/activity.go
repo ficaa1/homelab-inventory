@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func (m *Media) collectLibraryActivity(ctx context.Context) activity.Activity {
+func (m *Media) collectLibraryActivity(ctx context.Context) (activity.Activity, map[string]string) {
 	feeds := map[string]activity.Feed{}
 	for _, id := range []string{"sonarr", "radarr"} {
 		feed := activity.Feed{Status: activity.StatusUnconfigured}
@@ -29,12 +29,18 @@ func (m *Media) collectLibraryActivity(ctx context.Context) activity.Activity {
 		}
 		feeds[id] = feed
 	}
-	return activity.Build(m.host.Now(), feeds["sonarr"], feeds["radarr"])
+	status := map[string]string{"sonarr": feeds["sonarr"].Status, "radarr": feeds["radarr"].Status}
+	return activity.Build(m.host.Now(), feeds["sonarr"], feeds["radarr"]), status
 }
 
 func (m *Media) libraryActivity(ctx context.Context) plugin.View {
 	v := plugin.View{Title: "Library activity", UpdatedAt: m.host.Now(), RefreshSeconds: 10, Blocks: []plugin.Block{}}
-	a := m.collectLibraryActivity(ctx)
+	a, status := m.collectLibraryActivity(ctx)
+	for _, id := range []string{"sonarr", "radarr"} {
+		if status[id] != activity.StatusOK {
+			v.Blocks = append(v.Blocks, plugin.Block{Type: "notice", Tone: "warn", Text: id + " activity " + status[id]})
+		}
+	}
 	items := []plugin.Item{}
 	for _, title := range a.Titles {
 		meta := title.State
@@ -68,7 +74,8 @@ func (m *Media) API(ctx context.Context, req plugin.APIRequest) (plugin.APIRespo
 	if req.Method != "GET" || req.Path != "activity" {
 		return plugin.APIResponse{}, plugin.ErrNotFound
 	}
-	b, err := json.Marshal(m.collectLibraryActivity(ctx))
+	a, _ := m.collectLibraryActivity(ctx)
+	b, err := json.Marshal(a)
 	if err != nil {
 		return plugin.APIResponse{}, err
 	}
