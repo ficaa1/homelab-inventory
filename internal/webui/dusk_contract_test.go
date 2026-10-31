@@ -26,7 +26,7 @@ let calls=[]; function write(path,method,body) { calls.push({path,method,body});
 function showGate() { throw Error('unexpected auth'); } function loadDuskAdmin() { return Promise.resolve(); }
 const window={confirm:()=>true};
 eval(page.slice(start,end));
-const state={content:h('div'),data:{profiles:[{id:'room/a',name:'<Household>'}],policies:{},devices:[],options:{requesters:[{id:3,name:'Viewer'}],servers:[{id:7,name:'Movies',kind:'movie',profiles:[{id:9,name:'Standard'}],roots:['/movies']}]}}};
+const state={content:h('div'),data:{profiles:[{id:'room/a',name:'<Household>'}],policies:{},enrichment:{'room/a':4},enrichment_options:[{id:4,name:'Viewer'}],devices:[],options:{requesters:[{id:3,name:'Viewer'}],servers:[{id:7,name:'Movies',kind:'movie',profiles:[{id:9,name:'Standard'}],roots:['/movies']}]}}};
 renderDuskAdmin(state);
 function button(text) {return flat(state.content).find(c=>c.tag==='button'&&c.text===text);}
 const checks=flat(state.content).filter(c=>c.type==='checkbox');
@@ -39,6 +39,11 @@ Promise.resolve().then(()=>{
  assert.equal(typeof calls[1].body.requester_id,'number');
  assert.equal(typeof calls[1].body.movie.server_id,'number');
  assert.ok(calls[1].body.tv);
+ return Promise.resolve();
+}).then(()=>{
+ button('Save enrichment profile').onclick();
+ assert.equal(calls[2].path,'/dusk/enrichment/room%2Fa');
+ assert.deepStrictEqual(calls[2].body,{user_id:4});
  assert.ok(flat(state.content).some(c=>c.tag==='h3'&&c.text==='<Household>'));
 });
 `

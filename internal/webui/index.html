@@ -5750,7 +5750,8 @@ body.has-up-bubble main.wrap { padding-bottom: 88px; }
 
   function loadDuskAdmin(state) {
     state.content.textContent = "Loading Dusk setup…";
-    return api("/dusk/admin").then(function (data) {
+    return Promise.all([api("/dusk/admin"), api("/dusk/enrichment").catch(function (err) { if (err.unauthorized) throw err; return {error:err.message}; })]).then(function (results) {
+      var data = results[0]; data.enrichment_options = Array.isArray(results[1]) ? results[1] : []; data.enrichment_error = (results[1] && results[1].error) || "";
       state.loaded = true; state.data = data; renderDuskAdmin(state);
     }, function (err) {
       if (err.unauthorized) { showGate(true); return; }
@@ -5812,6 +5813,7 @@ body.has-up-bubble main.wrap { padding-bottom: 88px; }
           value: function () { return {server_id:Number(server.value),profile_id:Number(quality.value),root:root.value}; } };
       }
       var movie = mediaPolicy("movie"), tv = mediaPolicy("tv");
+      var enrichment = select(data.enrichment_options, (data.enrichment || {})[profile.id]);
       var scopes = ["media", "upcoming", "discover", "search", "requests", "preferences", "refresh", "taste"].map(function (scope) {
         var check = h("input", { type: "checkbox", value: scope }); check.checked = ["media", "upcoming", "discover", "search"].indexOf(scope) >= 0;
         return { scope: scope, check: check, node: h("label", { class: "chk" }, [check, " " + scope]) };
@@ -5825,6 +5827,11 @@ body.has-up-bubble main.wrap { padding-bottom: 88px; }
         h("h4", { text: "Pair a TV" }), h("p", { class: "help", text: "Read-only access is selected by default. Enable write permissions only for a trusted device. Enter this server’s URL and the generated code on your TV." }),
         h("fieldset", { class: "plug-group" }, [h("legend", { text: "Device permissions" })].concat(scopes.map(function (s) { return s.node; }))),
         action("Create pairing code", function () { mutate("/dusk/codes", "POST", { profile_id: profile.id, scopes: scopes.filter(function (s) { return s.check.checked; }).map(function (s) { return s.scope; }) }, function (result) { status.textContent = "Pairing code created."; code.textContent = "Code: " + result.code + " · Expires: " + result.expires_at; }); }), code,
+        h("h4", { text: "Optional Tautulli enrichment" }),
+        h("p", { class: "help", text: "Ratings and viewing history enrich only this household profile. Choose Not configured to clear the selection." }),
+        field("Tautulli user", enrichment),
+        action("Save enrichment profile", function () { mutate("/dusk/enrichment/" + encodeURIComponent(profile.id), "PUT", {user_id:Number(enrichment.value)}); }),
+        data.enrichment_error ? h("p", { class: "help", text: "Tautulli users unavailable: " + data.enrichment_error }) : null,
         h("h4", { text: "Letterboxd import" }), field("Choose an exported CSV file", csv),
         action("Import CSV", function () {
           var file = csv.files && csv.files[0];
