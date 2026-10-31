@@ -2,8 +2,8 @@
   <!-- The launcher icon. Deliberately a shape rather than a logo: it has to
        read at 48px on a home screen, and it reuses the dashboard's own port
        grid, which is the thing that makes this dashboard recognisable. -->
-  <rect width="512" height="512" rx="96" fill="#111415"/>
-  <g fill="#79c9bc">
+  <rect width="512" height="512" rx="96" fill="#121314"/>
+  <g fill="#6cb6ff">
     <rect x="96"  y="96"  width="72" height="72" rx="14"/>
     <rect x="220" y="96"  width="72" height="72" rx="14"/>
     <rect x="344" y="96"  width="72" height="72" rx="14" opacity=".35"/>
@@ -13,5 +13,5 @@
     <rect x="96"  y="344" width="72" height="72" rx="14" opacity=".35"/>
     <rect x="220" y="344" width="72" height="72" rx="14" opacity=".35"/>
   </g>
-  <rect x="344" y="344" width="72" height="72" rx="14" fill="#fab219"/>
+  <rect x="344" y="344" width="72" height="72" rx="14" fill="#e8a33d"/>
 </svg>
