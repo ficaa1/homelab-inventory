@@ -83,13 +83,15 @@ func TestDuskHTTPPairingPoliciesIsolationAndRestart(t *testing.T) {
 		case "/api/v1/user":
 			fmt.Fprint(w, `{"results":[{"id":12,"displayName":"Household"}]}`)
 		case "/api/v1/user/12":
-			fmt.Fprint(w, `{"id":12,"permissions":8}`)
+			fmt.Fprint(w, `{"id":12,"permissions":32}`)
 		case "/api/v1/settings/radarr":
-			fmt.Fprint(w, `[{"id":4,"name":"Movies"}]`)
+			fmt.Fprintf(w, `[{"id":4,"name":"Movies","hostname":"127.0.0.1","port":%s,"apiKey":"synthetic-upstream-secret"}]`, strings.Split(r.Host, ":")[1])
 		case "/api/v1/settings/sonarr":
 			fmt.Fprint(w, `[]`)
-		case "/api/v1/settings/radarr/4":
-			fmt.Fprint(w, `{"profiles":[{"id":6,"name":"Standard"}],"rootFolders":[{"path":"/synthetic/library"}]}`)
+		case "/api/v3/rootfolder":
+			fmt.Fprint(w, `[{"path":"/synthetic/library"}]`)
+		case "/api/v3/qualityprofile":
+			fmt.Fprint(w, `[{"id":6,"name":"Standard"}]`)
 		case "/api/v1/movie/42":
 			fmt.Fprint(w, `{"id":42,"title":"Synthetic film"}`)
 		case "/api/v1/movie/43":
@@ -137,7 +139,7 @@ func TestDuskHTTPPairingPoliciesIsolationAndRestart(t *testing.T) {
 		t.Fatal("missing Media advertised discovery")
 	}
 	h.call("GET", "/tv/v1/discover", token, nil, 403)
-	h.call("PUT", "/plugins/media", s.token, map[string]any{"enabled": true, "settings": map[string]any{"overseerr_url": upstream.URL, "overseerr_key": "synthetic-upstream-secret"}}, 200)
+	h.call("PUT", "/plugins/media", s.token, map[string]any{"enabled": true, "settings": map[string]any{"overseerr_url": upstream.URL, "overseerr_key": "synthetic-upstream-secret", "radarr_url": upstream.URL, "radarr_key": "synthetic-upstream-secret"}}, 200)
 	if h.features(token)["discover"] != true || h.features(token)["requests"] != false {
 		t.Fatal("configured capability policy incorrect")
 	}

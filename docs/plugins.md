@@ -24,7 +24,7 @@ Fill in any of them; each needs a URL and an API key.
 | Tautulli | Settings → Web Interface → API |
 | Overseerr | Settings → General |
 
-Read-only: it never grabs, requests, changes or deletes anything.
+Media discovery and dashboard views are read-only. Explicit Dusk requests can submit to Overseerr only with device permission and an administrator-selected request policy.
 
 ## Uploads
 
@@ -151,3 +151,12 @@ replayed: inspect it upstream before taking any other action. There is no automa
 receipt deletion or reset button. Back up the private data directory.
 
 The [versioned TV protocol](dusk/protocol-v1.md) includes synthetic examples.
+
+Dusk request destination choices use Overseerr's server list and read quality
+profiles/root folders directly from the matching Media Sonarr/Radarr connection.
+Configure those Media connections with the same URL (including base path) and API
+key as the selected Overseerr destination. Only exact normalized URL and key
+matches appear; credentials from Overseerr never authorize new destinations.
+The integration never invokes Overseerr's connection-test POST. Requests use
+`X-API-User` to act as the selected requester and verify current request and
+approval permissions before submitting.

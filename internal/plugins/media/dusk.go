@@ -58,6 +58,12 @@ type duskMetadata struct {
 			Seasons []struct{ SeasonNumber, Status int }
 		}
 	}
+	Year       int
+	HasFile    *bool
+	Statistics *struct {
+		EpisodeFileCount *int
+		EpisodeCount     *int
+	}
 	Images []struct{ CoverType, RemoteURL string }
 }
 
@@ -98,6 +104,7 @@ func (m *Media) tvTitle(r duskMetadata, kind string) mediadata.Title {
 	}
 	if duskDate.MatchString(date) {
 		t.Year = date[:4]
+		t.ReleasedAt = date
 	}
 	if duskPoster.MatchString(r.PosterPath) {
 		t.Poster = "https://image.tmdb.org/t/p/w300_and_h450_face" + r.PosterPath
@@ -182,6 +189,14 @@ func (m *Media) tvPage(ctx context.Context, s service, path string, q url.Values
 	out := []mediadata.Title{}
 	seen := map[string]bool{}
 	for _, r := range p.Results {
+		if r.MediaType == "" {
+			if strings.HasPrefix(path, "/api/v1/movie/") {
+				r.MediaType = "movie"
+			}
+			if strings.HasPrefix(path, "/api/v1/tv/") {
+				r.MediaType = "tv"
+			}
+		}
 		if !validTVTitle(r.MediaType, r.ID) {
 			continue
 		}
@@ -219,7 +234,7 @@ func (m *Media) TVRead(ctx context.Context, operation, kind string, id int, quer
 			return nil, errors.New("invalid title")
 		}
 		var r duskMetadata
-		if err := m.get(ctx, s, "/api/v1/"+kind+"/"+strconv.Itoa(id), nil, &r, true); err != nil {
+		if err := m.get(ctx, s, "/api/v1/"+kind+"/"+strconv.Itoa(id), nil, &r, false); err != nil {
 			return nil, err
 		}
 		if r.ID != id {
@@ -249,7 +264,13 @@ func (m *Media) TVRead(ctx context.Context, operation, kind string, id int, quer
 		if len(titles) == 0 {
 			status = "empty"
 		}
-		return mediadata.Discovery{Status: status, CheckedAt: m.host.Now().UTC().Format(time.RFC3339), LibraryStatus: "unavailable", Partial: true, Titles: titles, Seeds: []mediadata.Seed{}, Recent: []mediadata.Title{}, Watchlist: []mediadata.Title{}, Hidden: []string{}}, nil
+		recent := []mediadata.Title{}
+		for _, t := range titles {
+			if at, e := time.Parse("2006-01-02", t.ReleasedAt); e == nil && !at.Before(m.host.Now().AddDate(-1, 0, 0)) && !at.After(m.host.Now()) {
+				recent = append(recent, t)
+			}
+		}
+		return mediadata.Discovery{Status: status, CheckedAt: m.host.Now().UTC().Format(time.RFC3339), LibraryStatus: "unavailable", Partial: true, Titles: titles, Seeds: []mediadata.Seed{}, Recent: recent, Watchlist: []mediadata.Title{}, Hidden: []string{}}, nil
 	}
 	return nil, errors.New("unknown media operation")
 }
@@ -278,6 +299,40 @@ func (m *Media) tvBrowse(ctx context.Context) (mediadata.Titles, error) {
 				r.Name = r.Title
 			}
 			t := m.tvTitle(r, kind)
+			t.State, t.Availability, t.CanRequest = "unknown", "unknown", false
+			if r.Year > 1800 && r.Year < 3000 {
+				t.Year = strconv.Itoa(r.Year)
+			}
+			if kind == "movie" && r.HasFile != nil {
+				if *r.HasFile {
+					t.State, t.Availability = "available", "available"
+				} else {
+					t.State, t.Availability = "not_requested", "not_in_plex"
+				}
+			}
+			if kind == "tv" && r.Statistics != nil && r.Statistics.EpisodeFileCount != nil {
+				if *r.Statistics.EpisodeFileCount > 0 {
+					t.State, t.Availability = "partial", "partial"
+					if r.Statistics.EpisodeCount != nil && *r.Statistics.EpisodeCount > 0 && *r.Statistics.EpisodeFileCount >= *r.Statistics.EpisodeCount {
+						t.State, t.Availability = "available", "available"
+					}
+				} else {
+					t.State, t.Availability = "not_requested", "not_in_plex"
+				}
+			}
+			for _, image := range r.Images {
+				if image.CoverType != "poster" {
+					continue
+				}
+				u, e := url.Parse(image.RemoteURL)
+				if e == nil && u.Scheme == "https" && u.Host == "image.tmdb.org" && u.User == nil && u.RawQuery == "" && u.Fragment == "" && strings.HasPrefix(u.Path, "/t/p/") {
+					parts := strings.Split(u.Path, "/")
+					filename := "/" + parts[len(parts)-1]
+					if duskPoster.MatchString(filename) {
+						t.Poster = "https://image.tmdb.org/t/p/w300_and_h450_face" + filename
+					}
+				}
+			}
 			out.Titles = append(out.Titles, t)
 			if len(out.Titles) >= 100 {
 				return out, nil

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 )
 
 func TestDuskValidatePolicyFreshPermissionsAndSelections(t *testing.T) {
+	port := ""
 	var permissions atomic.Int32
 	var missing atomic.Bool
 	var posts atomic.Int32
@@ -32,25 +34,41 @@ func TestDuskValidatePolicyFreshPermissionsAndSelections(t *testing.T) {
 				fmt.Fprintf(w, `{"id":12,"permissions":%d}`, permissions.Load())
 			}
 		case "/api/v1/settings/radarr", "/api/v1/settings/sonarr":
-			fmt.Fprint(w, `[{"id":4,"name":"Synthetic server"}]`)
-		case "/api/v1/settings/radarr/4", "/api/v1/settings/sonarr/4":
-			fmt.Fprint(w, `{"profiles":[{"id":6,"name":"Standard"}],"rootFolders":[{"path":"/synthetic/library"}]}`)
+			fmt.Fprintf(w, `[{"id":4,"name":"Synthetic server","hostname":"127.0.0.1","port":%s,"apiKey":"synthetic-secret"}]`, port)
+		case "/api/v3/qualityprofile":
+			fmt.Fprint(w, `[{"id":6,"name":"Standard"}]`)
+		case "/api/v3/rootfolder":
+			fmt.Fprint(w, `[{"path":"/synthetic/library"}]`)
 		default:
 			http.NotFound(w, r)
 		}
 	}))
 	defer upstream.Close()
+	u, _ := url.Parse(upstream.URL)
+	port = u.Port()
 	m := New(&testHost{now: time.Now(), client: upstream.Client()}).(*Media)
-	if err := m.Configure(plugin.Config{"overseerr_url": upstream.URL, "overseerr_key": "synthetic-secret"}); err != nil {
+	if err := m.Configure(plugin.Config{"overseerr_url": upstream.URL, "overseerr_key": "synthetic-secret", "radarr_url": upstream.URL, "radarr_key": "synthetic-secret", "sonarr_url": upstream.URL, "sonarr_key": "synthetic-secret"}); err != nil {
 		t.Fatal(err)
 	}
 	selection := mediadata.Selection{ServerID: 4, ProfileID: 6, Root: "/synthetic/library"}
 	policy := mediadata.RequestPolicy{RequesterID: 12, Approval: "manual", Movie: selection}
-	permissions.Store(8)
+	permissions.Store(32)
 	if err := m.TVValidatePolicy(context.Background(), policy); err != nil {
 		t.Fatal(err)
 	}
+	permissions.Store(48)
+	if err := m.TVValidatePolicy(context.Background(), policy); err == nil {
+		t.Fatal("manage requests would autoapprove manual policy")
+	}
+	permissions.Store(8)
+	if err := m.TVValidatePolicy(context.Background(), policy); err == nil {
+		t.Fatal("manage users does not grant requests")
+	}
 	permissions.Store(64)
+	if err := m.TVValidatePolicy(context.Background(), policy); err == nil {
+		t.Fatal("vote does not grant requests")
+	}
+	permissions.Store(32 | 256)
 	if err := m.TVValidatePolicy(context.Background(), policy); err == nil {
 		t.Fatal("fresh automatic permission accepted manual policy")
 	}
@@ -62,7 +80,7 @@ func TestDuskValidatePolicyFreshPermissionsAndSelections(t *testing.T) {
 	if err := m.TVValidatePolicy(context.Background(), policy); err == nil {
 		t.Fatal("movie-only approval accepted for selected TV destination")
 	}
-	permissions.Store(64 | 128)
+	permissions.Store(32 | 256 | 512)
 	if err := m.TVValidatePolicy(context.Background(), policy); err != nil {
 		t.Fatal(err)
 	}

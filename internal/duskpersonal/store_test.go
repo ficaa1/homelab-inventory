@@ -165,7 +165,7 @@ func TestFamiliarUsesHistoryAndAvailableLibrary(t *testing.T) {
 	s, _ := New(t.TempDir())
 	available := title(2, "Library")
 	available.State = "available"
-	r := mediadata.Discovery{Titles: []mediadata.Title{title(1, "Unknown"), available}, Recent: []mediadata.Title{title(3, "Watched")}, Watchlist: []mediadata.Title{title(4, "Want to see")}}
+	r := mediadata.Discovery{Titles: []mediadata.Title{title(1, "Unknown"), available}, History: []mediadata.Title{title(3, "Watched")}, Watchlist: []mediadata.Title{title(4, "Want to see")}}
 	got := s.Taste("p", "movie", r, true).(map[string]any)["titles"].([]mediadata.Title)
 	if len(got) != 2 || got[0].ID != 3 || got[1].ID != 2 {
 		t.Fatal(got)
@@ -236,7 +236,7 @@ func TestRecentHistorySeedsAndDislikeOverride(t *testing.T) {
 	if err := s.SetHidden("p", "movie", 3, true); err != nil {
 		t.Fatal(err)
 	}
-	r := mediadata.Discovery{Recent: history, Titles: []mediadata.Title{title(1, "Recent"), title(10, "New")}}
+	r := mediadata.Discovery{History: history, Titles: []mediadata.Title{title(1, "Recent"), title(10, "New")}}
 	calls := []int{}
 	out, err := s.Apply(context.Background(), "p", r, func(_ context.Context, _ string, id int) (mediadata.Discovery, error) {
 		calls = append(calls, id)
@@ -256,7 +256,7 @@ func TestRecentHistorySeedsAndDislikeOverride(t *testing.T) {
 			t.Fatal("history recommended again")
 		}
 	}
-	if len(out.Recent) != 3 {
+	if len(out.History) != 4 {
 		t.Fatal("recent history lost", out.Recent)
 	}
 	s.mu.Lock()
@@ -269,7 +269,7 @@ func TestRecentHistorySeedsAndDislikeOverride(t *testing.T) {
 func TestExplicitTastePrecedesHistoryWithThreeSeedBound(t *testing.T) {
 	s, _ := New(t.TempDir())
 	_ = s.Verdict("p", "movie", 99, "loved", "Favorite", "2020")
-	r := mediadata.Discovery{Recent: []mediadata.Title{title(1, "One"), title(2, "Two"), title(3, "Three")}}
+	r := mediadata.Discovery{History: []mediadata.Title{title(1, "One"), title(2, "Two"), title(3, "Three")}}
 	calls := []int{}
 	_, err := s.Apply(context.Background(), "p", r, func(_ context.Context, _ string, id int) (mediadata.Discovery, error) {
 		calls = append(calls, id)
@@ -298,7 +298,7 @@ func TestImportedWatchlistSurvivesOutsideTrending(t *testing.T) {
 	available.Poster = "/poster.jpg"
 	available.Availability = "available"
 	out, err := s.Apply(context.Background(), "p", mediadata.Discovery{Titles: []mediadata.Title{available}, Watchlist: []mediadata.Title{available, available}}, nil)
-	if err != nil || len(out.Watchlist) != 2 {
+	if err != nil || len(out.Watchlist) != 3 {
 		t.Fatal(out, err)
 	}
 	if out.Watchlist[0].ID != 3 || out.Watchlist[0].Poster != "/poster.jpg" || out.Watchlist[1].ID != 1 || out.Watchlist[1].Availability != "unknown" {
@@ -313,5 +313,22 @@ func TestSuccessfulSeedExpansionSetsEmptyStatus(t *testing.T) {
 	})
 	if err != nil || out.Status != "ok" {
 		t.Fatal(out, err)
+	}
+}
+
+func TestExplicitTitlesRetainHiddenAndJudged(t *testing.T) {
+	s, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.SetHidden("p", "movie", 1, true); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Verdict("p", "movie", 2, "liked", "Judged", ""); err != nil {
+		t.Fatal(err)
+	}
+	out := s.Explicit("p", mediadata.Titles{Titles: []mediadata.Title{title(1, "Hidden"), title(2, "Judged")}})
+	if len(out.Titles) != 2 || len(out.Hidden) != 1 || out.Hidden[0] != "movie:1" {
+		t.Fatal(out)
 	}
 }

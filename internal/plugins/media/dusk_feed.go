@@ -2,7 +2,9 @@ package media
 
 import (
 	"context"
+	"fmt"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -17,11 +19,14 @@ func (m *Media) tvMedia(ctx context.Context) any {
 		if s.id == "tautulli" {
 			px["status"] = "unavailable"
 			var a struct {
-				StreamCount number
-				Sessions    []struct{ TranscodeDecision string }
+				StreamCount *number `json:"stream_count"`
+				Sessions    []struct {
+					TranscodeDecision string `json:"transcode_decision"`
+				} `json:"sessions"`
 			}
-			if m.get(ctx, s, "/api/v2", url.Values{"cmd": {"get_activity"}}, &a, true) == nil {
+			if m.get(ctx, s, "/api/v2", url.Values{"cmd": {"get_activity"}}, &a, true) == nil && a.StreamCount != nil && a.Sessions != nil && int(*a.StreamCount) == len(a.Sessions) {
 				direct, stream, transcode := 0, 0, 0
+				valid := true
 				for _, v := range a.Sessions {
 					switch v.TranscodeDecision {
 					case "direct play":
@@ -30,10 +35,15 @@ func (m *Media) tvMedia(ctx context.Context) any {
 						stream++
 					case "transcode":
 						transcode++
+					default:
+						valid = false
 					}
 				}
+				if !valid {
+					continue
+				}
 				px["status"] = "ok"
-				px["streams"] = int(a.StreamCount)
+				px["streams"] = int(*a.StreamCount)
 				px["direct_play"] = direct
 				px["direct_stream"] = stream
 				px["transcode"] = transcode
@@ -47,22 +57,7 @@ func (m *Media) tvMedia(ctx context.Context) any {
 		rows, err := m.queue(ctx, s)
 		if err == nil {
 			dl[s.id] = "ok"
-			for _, r := range rows {
-				title, id := r.title()
-				percent := any(nil)
-				if r.Size > 0 {
-					percent = int(100 * (1 - max(0, min(r.Size, r.Sizeleft))/r.Size))
-				}
-				state := "downloading"
-				if r.warning() {
-					state = "attention"
-				}
-				var seconds any
-				if d := eta(r.Timeleft); d > 0 {
-					seconds = int64(d.Seconds())
-				}
-				titles = append(titles, map[string]any{"kind": s.id, "id": id, "title": m.text(title), "state": state, "percent": percent, "eta_seconds": seconds, "imported": nil, "total": nil})
-			}
+			titles = append(titles, m.tvQueueTitles(s.id, rows)...)
 		}
 		if s.id == "sonarr" {
 			upcoming["status"] = "unavailable"
@@ -97,4 +92,109 @@ func (m *Media) tvMedia(ctx context.Context) any {
 	dl["titles"] = titles
 	upcoming["episodes"] = events
 	return map[string]any{"checked_at": now, "downloads": dl, "plex": px, "upcoming": upcoming}
+}
+
+// Aggregate queue episodes into library titles, counting a shared season-pack
+// download once for byte progress. Preserve unavailable totals as null.
+func (m *Media) tvQueueTitles(kind string, rows []queueItem) []any {
+	type group struct {
+		title string
+		id    int
+		rows  []queueItem
+	}
+	groups := []*group{}
+	index := map[string]*group{}
+	for _, r := range rows {
+		title, id := r.title()
+		k := fmt.Sprint(id)
+		if id <= 0 {
+			k = fmt.Sprint("unknown-", r.ID)
+		}
+		g := index[k]
+		if g == nil {
+			g = &group{title: title, id: id}
+			index[k] = g
+			groups = append(groups, g)
+		}
+		g.rows = append(g.rows, r)
+	}
+	out := []any{}
+	for _, g := range groups {
+		row := tvQueueSummary(g.rows)
+		row["kind"] = kind
+		row["id"] = g.id
+		row["title"] = m.text(g.title)
+		seasons := []any{}
+		order := []int{}
+		bySeason := map[int][]queueItem{}
+		for _, r := range g.rows {
+			if r.Episode != nil && r.Episode.SeasonNumber > 0 {
+				n := r.Episode.SeasonNumber
+				if _, ok := bySeason[n]; !ok {
+					order = append(order, n)
+				}
+				bySeason[n] = append(bySeason[n], r)
+			}
+		}
+		for _, n := range order {
+			v := tvQueueSummary(bySeason[n])
+			v["season"] = n
+			seasons = append(seasons, v)
+		}
+		if len(seasons) > 0 {
+			row["seasons"] = seasons
+		}
+		out = append(out, row)
+	}
+	return out
+}
+func tvQueueSummary(rows []queueItem) map[string]any {
+	state := "queued"
+	rank := map[string]int{"queued": 0, "paused": 1, "waiting": 2, "importing": 3, "downloading": 4, "attention": 5, "failed": 6}
+	seen := map[string]bool{}
+	size, left := 0.0, 0.0
+	seconds := int64(0)
+	for _, r := range rows {
+		st := "downloading"
+		switch {
+		case strings.EqualFold(r.Status, "failed") || strings.EqualFold(r.TrackedDownloadState, "downloadFailed"):
+			st = "failed"
+		case r.warning():
+			st = "attention"
+		case strings.EqualFold(r.TrackedDownloadState, "importing"):
+			st = "importing"
+		case strings.EqualFold(r.Status, "completed") || strings.EqualFold(r.TrackedDownloadState, "importPending"):
+			st = "waiting"
+		case strings.EqualFold(r.Status, "paused"):
+			st = "paused"
+		case strings.EqualFold(r.Status, "queued") || strings.EqualFold(r.Status, "delay"):
+			st = "queued"
+		}
+		if rank[st] > rank[state] {
+			state = st
+		}
+		k := r.DownloadID
+		if k == "" {
+			k = fmt.Sprint(r.ID)
+		}
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		if r.Size > 0 {
+			size += r.Size
+			left += max(0, min(r.Size, r.Sizeleft))
+		}
+		if d := int64(eta(r.Timeleft).Seconds()); d > seconds {
+			seconds = d
+		}
+	}
+	var percent, secondsValue any
+	if size > 0 {
+		percent = int(100 * (1 - left/size))
+	}
+	if seconds > 0 {
+		secondsValue = seconds
+	}
+	return map[string]any{"state": state, "percent": percent, "eta_seconds": secondsValue, "imported": nil, "total": nil}
 }

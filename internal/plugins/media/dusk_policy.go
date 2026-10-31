@@ -76,10 +76,17 @@ func (m *Media) TVValidatePolicy(ctx context.Context, p mediadata.RequestPolicy)
 	}
 	permissions := *user.Permissions
 	for _, kind := range kinds {
-		automatic := permissions&2 != 0 || permissions&32 != 0 || kind == "movie" && permissions&64 != 0 || kind == "tv" && permissions&128 != 0
+		if !requestPermission(permissions, kind) {
+			return errors.New("requester lacks request permission")
+		}
+		automatic := permissions&2 != 0 || permissions&16 != 0 || permissions&128 != 0 || kind == "movie" && permissions&256 != 0 || kind == "tv" && permissions&512 != 0
 		if automatic != (p.Approval == "automatic") {
 			return errors.New("requester approval permissions do not match policy")
 		}
 	}
 	return nil
+}
+
+func requestPermission(p int, kind string) bool {
+	return p&2 != 0 || p&32 != 0 || kind == "movie" && p&262144 != 0 || kind == "tv" && p&524288 != 0
 }

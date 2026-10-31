@@ -425,13 +425,7 @@ func (s *server) duskTV(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if titles, ok := out.(mediadata.Titles); ok {
-		report, e := d.personal.Apply(ctx, dev.ProfileID, mediadata.Discovery{Titles: titles.Titles}, nil)
-		if e != nil {
-			writeError(w, 503, "Profile feedback unavailable")
-			return
-		}
-		titles.Titles = report.Titles
-		titles.Hidden = report.Hidden
+		titles = d.personal.Explicit(dev.ProfileID, titles)
 		out = titles
 	}
 	if detail, ok := out.(mediadata.Detail); ok {
@@ -464,7 +458,7 @@ func (s *server) personalize(ctx context.Context, d *duskState, profile string, 
 		if e != nil {
 			report.Partial = true
 		} else {
-			report.Recent = history
+			report.History = history
 		}
 	}
 	e := d.personal.Enrich(ctx, profile, func(ctx context.Context, q string) ([]mediadata.Title, error) {

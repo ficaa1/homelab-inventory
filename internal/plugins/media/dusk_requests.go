@@ -7,8 +7,10 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/ficaa1/homelab-inventory/internal/mediadata"
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
@@ -44,9 +46,14 @@ func (m *Media) TVOptions(ctx context.Context) (mediadata.Options, error) {
 			app = "sonarr"
 		}
 		var servers []struct {
-			ID   *int
-			Name string
-			Is4k bool
+			ID       *int
+			Name     string
+			Is4k     bool
+			Hostname string
+			Port     int
+			UseSsl   bool
+			BaseUrl  string
+			ApiKey   string
 		}
 		if err := m.get(ctx, s, "/api/v1/settings/"+app, nil, &servers, true); err != nil {
 			return out, err
@@ -55,23 +62,38 @@ func (m *Media) TVOptions(ctx context.Context) (mediadata.Options, error) {
 			if v.ID == nil || *v.ID < 0 || v.Is4k {
 				continue
 			}
-			var detail struct {
-				Profiles []struct {
-					ID   int
-					Name string
-				}
-				RootFolders []struct{ Path string }
+			// Read choices only from the administrator-configured Media Arr
+			// connection, after proving it is the selected Overseerr destination.
+			arr, configured := m.tvService(app)
+			scheme := "http"
+			if v.UseSsl {
+				scheme = "https"
 			}
-			if err := m.get(ctx, s, "/api/v1/settings/"+app+"/"+strconv.Itoa(*v.ID), nil, &detail, true); err != nil {
+			target := (&url.URL{Scheme: scheme, Host: v.Hostname + ":" + strconv.Itoa(v.Port), Path: "/" + strings.Trim(v.BaseUrl, "/")}).String()
+			if !configured || arr.key != v.ApiKey || !sameArrURL(arr.base, target) {
+				continue
+			}
+			var profiles []struct {
+				ID   int
+				Name string
+			}
+			var roots []struct{ Path string }
+			if err := m.get(ctx, arr, "/api/v3/qualityprofile", nil, &profiles, true); err != nil {
 				return out, err
 			}
+			if err := m.get(ctx, arr, "/api/v3/rootfolder", nil, &roots, true); err != nil {
+				return out, err
+			}
+			if profiles == nil || roots == nil {
+				return out, errors.New("request destination choices unavailable")
+			}
 			server := mediadata.Server{Choice: mediadata.Choice{ID: *v.ID, Name: m.text(v.Name)}, Kind: kind, Profiles: []mediadata.Choice{}, Roots: []string{}}
-			for _, p := range detail.Profiles {
+			for _, p := range profiles {
 				if p.ID > 0 {
 					server.Profiles = append(server.Profiles, mediadata.Choice{ID: p.ID, Name: m.text(p.Name)})
 				}
 			}
-			for _, r := range detail.RootFolders {
+			for _, r := range roots {
 				if r.Path != "" {
 					server.Roots = append(server.Roots, r.Path)
 				}
@@ -135,9 +157,12 @@ func (m *Media) TVRequest(ctx context.Context, p mediadata.RequestPolicy, r medi
 	if user.ID != p.RequesterID || user.Permissions == nil || *user.Permissions < 0 {
 		return result, errors.New("requester cannot be verified")
 	}
-	// Overseerr permissions: admin=2, auto approve=32, movie=64, tv=128.
+	// Permission values match Overseerr v1.34.0 server/lib/permissions.ts.
 	permissions := *user.Permissions
-	auto := permissions&2 != 0 || permissions&32 != 0 || r.Kind == "movie" && permissions&64 != 0 || r.Kind == "tv" && permissions&128 != 0
+	if !requestPermission(permissions, r.Kind) {
+		return result, errors.New("requester lacks request permission")
+	}
+	auto := permissions&2 != 0 || permissions&16 != 0 || permissions&128 != 0 || r.Kind == "movie" && permissions&256 != 0 || r.Kind == "tv" && permissions&512 != 0
 	if auto != (p.Approval == "automatic") {
 		return result, errors.New("requester approval permissions do not match policy")
 	}
@@ -162,7 +187,7 @@ func (m *Media) TVRequest(ctx context.Context, p mediadata.RequestPolicy, r medi
 		}
 		return result, nil
 	}
-	body := map[string]any{"mediaType": r.Kind, "mediaId": r.ID, "is4k": false, "serverId": selection.ServerID, "profileId": selection.ProfileID, "rootFolder": selection.Root, "userId": p.RequesterID}
+	body := map[string]any{"mediaType": r.Kind, "mediaId": r.ID, "is4k": false, "serverId": selection.ServerID, "profileId": selection.ProfileID, "rootFolder": selection.Root}
 	if r.Kind == "tv" {
 		body["seasons"] = []int{r.Season}
 	}
@@ -172,6 +197,7 @@ func (m *Media) TVRequest(ctx context.Context, p mediadata.RequestPolicy, r medi
 		return result, errors.New("invalid request")
 	}
 	req.Header.Set("X-Api-Key", s.key)
+	req.Header.Set("X-API-User", strconv.Itoa(p.RequesterID))
 	req.Header.Set("Content-Type", "application/json")
 	result.State = "unknown"
 	resp, err := m.host.HTTP().Do(req)
@@ -208,4 +234,25 @@ func (m *Media) TVRequest(ctx context.Context, p mediadata.RequestPolicy, r medi
 	m.cache = map[string]cached{}
 	m.cacheBytes = 0
 	return result, nil
+}
+
+// Compare normalized effective ports and path prefixes without accepting aliases.
+func sameArrURL(a, b string) bool {
+	normalize := func(raw string) string {
+		u, err := url.Parse(raw)
+		if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+			return ""
+		}
+		port := u.Port()
+		if port == "" {
+			if u.Scheme == "https" {
+				port = "443"
+			} else {
+				port = "80"
+			}
+		}
+		return strings.ToLower(u.Scheme+"://"+u.Hostname()) + ":" + port + strings.TrimRight(u.EscapedPath(), "/")
+	}
+	x := normalize(a)
+	return x != "" && x == normalize(b)
 }

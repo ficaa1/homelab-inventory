@@ -50,6 +50,7 @@ type Title struct {
 	ID           int      `json:"id"`
 	Kind         string   `json:"kind"`
 	Title        string   `json:"title"`
+	ReleasedAt   string   `json:"released_at,omitempty"`
 	Year         string   `json:"year"`
 	Overview     string   `json:"overview"`
 	Poster       string   `json:"poster"`
@@ -91,6 +92,7 @@ type Discovery struct {
 	Partial       bool     `json:"partial"`
 	LibraryStatus string   `json:"library_status"`
 	Titles        []Title  `json:"titles"`
+	History       []Title  `json:"-"`
 	Recent        []Title  `json:"recent"`
 	Watchlist     []Title  `json:"watchlist"`
 	Seeds         []Seed   `json:"seeds"`

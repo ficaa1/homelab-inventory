@@ -220,6 +220,7 @@ func positive(v string) bool { return v == "loved" || v == "liked" }
 func allTitles(r mediadata.Discovery) []mediadata.Title {
 	out := append([]mediadata.Title{}, r.Titles...)
 	out = append(out, r.Recent...)
+	out = append(out, r.History...)
 	return append(out, r.Watchlist...)
 }
 func resolve(v personal, r mediadata.Discovery) personal {
@@ -281,7 +282,7 @@ func (s *Store) Apply(ctx context.Context, profile string, report mediadata.Disc
 	for _, f := range seeds {
 		sources[key(f.Kind, f.ID)] = "taste"
 	}
-	for _, t := range report.Recent {
+	for _, t := range report.History {
 		if !valid(t.Kind, t.ID) {
 			continue
 		}
@@ -375,9 +376,11 @@ func (s *Store) Apply(ctx context.Context, profile string, report mediadata.Disc
 	}
 	report.Recent = filter(report.Recent)
 
-	report.Watchlist = filter(report.Watchlist)
 	// Imported watchlists remain useful even when their titles leave trending.
 	metadata := map[string]mediadata.Title{}
+	for _, t := range candidates {
+		metadata[key(t.Kind, t.ID)] = t
+	}
 	for _, t := range allTitles(report) {
 		metadata[key(t.Kind, t.ID)] = t
 	}
@@ -398,7 +401,7 @@ func (s *Store) Apply(ctx context.Context, profile string, report mediadata.Disc
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		if watchSeen[k] || v.Hidden[k] || len(watchlist) >= 100 {
+		if watchSeen[k] || len(watchlist) >= 100 {
 			continue
 		}
 		f := v.Feedback[k]
@@ -423,7 +426,7 @@ func (s *Store) Taste(profile, kind string, report mediadata.Discovery, familiar
 	seen := map[string]bool{}
 	source := report.Titles
 	if familiar {
-		source = append([]mediadata.Title{}, report.Recent...)
+		source = append([]mediadata.Title{}, report.History...)
 		for _, t := range report.Titles {
 			if t.State == "available" || t.Availability == "available" {
 				source = append(source, t)
@@ -512,4 +515,19 @@ func (s *Store) Enrich(ctx context.Context, profile string, search func(context.
 		}
 	}
 	return first
+}
+
+// Explicit returns discovery results without recommendation suppression.
+func (s *Store) Explicit(profile string, titles mediadata.Titles) mediadata.Titles {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v := s.snapshot(profile)
+	titles.Hidden = []string{}
+	for k, hidden := range v.Hidden {
+		if hidden {
+			titles.Hidden = append(titles.Hidden, k)
+		}
+	}
+	sort.Strings(titles.Hidden)
+	return titles
 }
