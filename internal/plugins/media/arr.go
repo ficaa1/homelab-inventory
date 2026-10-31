@@ -25,6 +25,9 @@ type mediaTitle struct {
 	}
 }
 type queueItem struct {
+	// Only the Overview summary checks this transient diagnostic for presence;
+	// its text is never returned to the dashboard.
+	ErrorMessage                                                    string
 	Episode                                                         *struct{ SeasonNumber int }
 	ID, SeriesID, MovieID                                           int
 	DownloadID, Status, TrackedDownloadStatus, TrackedDownloadState string

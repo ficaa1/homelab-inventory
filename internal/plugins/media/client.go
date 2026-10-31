@@ -61,7 +61,9 @@ func (m *Media) request(ctx context.Context, s service, path string, q url.Value
 }
 func (m *Media) get(ctx context.Context, s service, path string, q url.Values, out any, useCache bool) error {
 	cacheKey := s.id + path + "?" + q.Encode() // No API key is ever part of a cache key.
+	m.cacheMu.Lock()
 	c, found := m.cache[cacheKey]
+	m.cacheMu.Unlock()
 	if !useCache || !found || m.host.Now().Sub(c.at) >= cacheTTL {
 		c = cached{at: m.host.Now()}
 		resp, err := m.request(ctx, s, path, q)
@@ -76,6 +78,7 @@ func (m *Media) get(ctx context.Context, s service, path string, q url.Values, o
 			}
 		}
 		if useCache {
+			m.cacheMu.Lock()
 			if len(m.cache) >= 64 || m.cacheBytes+len(c.body) > maxCacheBytes {
 				m.cache = map[string]cached{}
 				m.cacheBytes = 0
@@ -83,6 +86,7 @@ func (m *Media) get(ctx context.Context, s service, path string, q url.Values, o
 			m.cacheBytes -= len(m.cache[cacheKey].body)
 			m.cache[cacheKey] = c
 			m.cacheBytes += len(c.body)
+			m.cacheMu.Unlock()
 		}
 	}
 	if c.err != nil {

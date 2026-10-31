@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
@@ -19,6 +20,7 @@ var services = []service{{id: "sonarr", name: "Sonarr"}, {id: "radarr", name: "R
 
 // The host serializes lifecycle, views, images and alert calls on each instance.
 type Media struct {
+	cacheMu    sync.Mutex
 	host       plugin.Host
 	services   []service
 	days       int
