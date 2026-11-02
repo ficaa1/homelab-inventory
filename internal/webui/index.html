@@ -4800,12 +4800,15 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     box.replaceChildren();
     (capabilities.plugins || []).forEach(function (p) {
       if (!p || !p.id || !PAGES[p.id] || typeof PAGES[p.id].admin !== "function") return;
-      // A page may name its section; a named one reads as a plain heading.
-      var title = str(PAGES[p.id].adminTitle);
-      var sec = h("section", { class: "setting plugin-admin", "data-plugin-admin": p.id }, [
-        h("h4", {}, title ? [title] : [iconNode((p.tab && p.tab.icon) || "puzzle", "sm"), str(p.name) || p.id])]);
       var body = h("div", { class: "plugin-admin-body" });
-      sec.appendChild(body); box.appendChild(sec);
+      // A page that draws its own card (Archive's scoring form) gets a bare slot.
+      if (PAGES[p.id].adminSection) {
+        body.setAttribute("data-plugin-admin", p.id);
+        box.appendChild(body);
+      } else {
+        box.appendChild(h("section", { class: "setting plugin-admin", "data-plugin-admin": p.id }, [
+          h("h4", {}, [iconNode((p.tab && p.tab.icon) || "puzzle", "sm"), str(p.name) || p.id]), body]));
+      }
       try { PAGES[p.id].admin(body, { id: p.id, name: p.name, first: true }); }
       catch (e) { body.appendChild(h("div", { class: "src", role: "alert", text: "Could not render this section." })); }
     });

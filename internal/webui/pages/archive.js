@@ -1270,7 +1270,7 @@
       poll.busy = false; poll.again = false;
       tick();
     },
-    adminTitle: "Archive scoring",
+    adminSection: true,
     admin: function (root) {
       HI = window.HI;
       st.gen++;

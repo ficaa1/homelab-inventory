@@ -36,7 +36,9 @@ while `HI.visible()` is false). `window.HI` is the kit:
 
 An enabled plugin page may also expose `admin(root, ctx)`. When Admin is open,
 the dashboard calls it for that plugin and renders the supplied section under
-the core settings. The hook is page-owned: it should use `HI.get`/`HI.send`,
+the core settings, in a card headed with the plugin's name. A page that draws
+its own card sets `adminSection: true` and gets a bare slot instead. The hook
+is page-owned: it should use `HI.get`/`HI.send`,
 build DOM with `h`, and leave no timers or event handlers behind after the
 plugin is disabled or the page is hidden.
 
