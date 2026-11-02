@@ -19,11 +19,10 @@
   // Page state survives switching between the page's own views; hide() ends
   // polling and drops in-flight answers.
   var st = { root: null, body: null, strip: null, tools: null, view: "status", params: null, gen: 0 };
-  var status = null, lastStatus = null, library = null, libraryActivity = null, seeding = null, selection = null;
+  var status = null, lastStatus = null, library = null, libraryActivity = null, seeding = null;
   var notice = {}, open = {}, request = 0, ownerBusy = false, ownerNotice = "";
   var libFilter = "all", libQuery = "", libExpanded = {}, libNotice = "", libLoading = false;
   var seedLoading = false;
-  var draft = null, preview = null, scBusy = false;
   var poll = { timer: null, last: 0, busy: false, again: false, fails: 0, ran: false };
   var liveText = null;
   var stripOpen = true, linger = {}, goTargets = {}, lingerTimer = null, pending = null;
@@ -34,7 +33,7 @@
   function $(id) { return document.getElementById(id); }
   function drawerOpen() { var d = $("drawer"); return d && !d.classList.contains("hidden"); }
   function sheet(html, label) { HI.openDrawer(html, label || "Archive"); }
-  function msg(id, text, bad) { var el = $(id); if (el) { el.textContent = text; el.classList.toggle("arc-bad", !!bad); } }
+  function msg(id, text, bad) { var el = $(id); if (el) { el.textContent = text; el.style.color = bad ? "var(--crit)" : ""; } }
   function row(k, v) { return "<dt>" + esc(k) + "</dt><dd>" + esc(v == null || v === "" ? "—" : v) + "</dd>"; }
   function real(iso) { return iso && new Date(iso).getFullYear() > 1; }
   function date(iso) { return real(iso) ? new Date(iso).toLocaleString() : "—"; }
@@ -550,7 +549,7 @@
       if (gen === st.gen) render();
     }).catch(function (err) {
       if (fail(err) || gen !== st.gen || st.view !== "library") return;
-      morph(st.body, '<div class="empty" data-key="err"><div class="big">Could not load the library</div>' + esc(err.message) + '<div class="actions arc-center"><button class="btn" type="button" data-library-refresh>Try again</button></div></div>');
+      morph(st.body, '<div class="empty" data-key="err"><div class="big">Could not load the library</div>' + esc(err.message) + '<div class="actions" style="justify-content:center;margin-top:var(--s3)"><button class="btn" type="button" data-library-refresh>Try again</button></div></div>');
     }).then(function () { libLoading = false; });
   }
 
@@ -820,103 +819,122 @@
 
   // ------------------------------------------------------------ selection view
 
-  function copy(v) { return JSON.parse(JSON.stringify(v)); }
-  function num(id, label, value, min, max) {
-    return '<div><label for="' + id + '">' + label + '</label><input id="' + id + '" type="number" inputmode="decimal" step="any" min="' + min + '"' + (max == null ? "" : ' max="' + max + '"') + ' value="' + esc(value) + '"></div>';
-  }
-  function groups(kind, label) {
-    return '<fieldset><legend>' + label + '</legend><div class="arc-chips">' +
-      draft[kind].map(function (g, i) { return '<button class="btn arc-chip" type="button" data-sc-group="' + kind + '" data-sc-index="' + i + '" aria-label="Remove ' + esc(g) + '">' + esc(g) + " ×</button>"; }).join("") +
-      '</div><div class="arc-add"><input id="arc-sc-' + kind + '" aria-label="' + label + ' group" placeholder="Group" autocomplete="off"><button class="btn" type="button" data-sc-add="' + kind + '">Add</button></div></fieldset>';
-  }
-  function previewHTML() {
-    if (!preview) return "";
-    var pick = function (c) { return c ? esc(c.group || "Unlisted") + " · " + Number((c.score || {}).total || 0).toFixed(1) : "No pick"; };
-    var full = function (c) { return c ? esc(c.title) : "No pick"; };
-    return '<div class="arc-sc-preview"><b>Auto picks ' + esc(preview.currentAutoPicks) + " → " + esc(preview.autoPicks) + "</b>" +
-      ((preview.titles || []).length ? preview.titles.map(function (t) {
-        return '<details class="arc-sc-change"><summary>' + esc(t.target.title) + (t.target.season ? " S" + pad(t.target.season) : "") + '<div class="arc-sc-picks"><div><small>Current</small>' + pick(t.current) + "</div><div><small>New</small>" + pick(t.proposed) + "</div></div></summary>" +
-          '<div class="arc-sc-picks"><div>' + full(t.current) + "</div><div>" + full(t.proposed) + "</div></div></details>";
-      }).join("") : '<div class="arc-muted">No cached releases</div>') + "</div>";
-  }
-
   function loadSelection() {
     var gen = st.gen;
-    HI.get(ID, "selection").then(function (v) { selection = v; draft = null; preview = null; if (gen === st.gen) { if (st.view === "admin") renderSelection(); else render(); } }).catch(function (err) {
+    HI.get(ID, "selection").then(function (v) {
+      if (gen !== st.gen) return;
+      scoringSettings = v; scoringDraft = null; scoringPreview = null;
+      if (st.view === "admin") renderSelection(); else render();
+    }).catch(function (err) {
       if (fail(err) || gen !== st.gen || (st.view !== "selection" && st.view !== "admin")) return;
       morph(st.body, '<div class="empty" data-key="err"><div class="big">Scoring settings unavailable</div>' + esc(err.message) + "</div>");
     });
   }
 
   function renderSelection() {
-    if (!selection) { morph(st.body, '<div data-key="load">' + HI.skeleton(4) + "</div>"); loadSelection(); return; }
-    if (!draft) draft = copy(selection.effective);
-    var d = draft, off = scBusy ? " disabled" : "";
-    // A full replace keeps the form simple: typing never races a re-render
-    // because number inputs update the draft without re-rendering.
-    var inAdmin = st.view === "admin";
-    st.body.innerHTML = '<section class="arc-sc' + (inAdmin ? "" : " card") + '" id="arc-sc">' +
-      (inAdmin ? "" : '<p class="subtitle">How the service scores freeleech releases. Preview uses cached releases only; saving changes cached scores without starting a search or a grab.</p>') +
-      (selection.warning ? '<div class="arc-msg warn" role="status">Invalid overrides · File policy</div>' : "") +
-      '<div class="form">' + ["1080p", "2160p"].map(function (mode) {
-        return '<fieldset><legend>' + mode + ' · GB/h</legend><div class="arc-sc-fields">' + ["floor", "target", "cap"].map(function (k) {
-          return num("arc-sc-" + mode + "-" + k, k[0].toUpperCase() + k.slice(1), d.sizes[mode][k], 0.1, 100);
-        }).join("") + "</div></fieldset>";
-      }).join("") +
-      '<fieldset><legend>Codecs</legend><div class="arc-sc-fields">' + ["hevc", "avc", "av1"].map(function (k) { return num("arc-sc-" + k, k.toUpperCase(), d.codecFactors[k], 0.1, 10); }).join("") + "</div></fieldset>" +
-      groups("trustedGroups", "Trusted groups") + groups("deniedGroups", "Denied groups") +
-      '<label for="arc-sc-min">Min score</label><input class="arc-sc-min" id="arc-sc-min" type="number" inputmode="decimal" step="any" min="0" max="100" value="' + esc(d.minScore) + '">' +
-      '<div class="actions"><button class="btn" type="button" id="arc-sc-preview"' + off + '>Preview</button><button class="btn primary" type="button" id="arc-sc-save"' + (!preview || scBusy ? " disabled" : "") + '>Save</button><button class="btn" type="button" id="arc-sc-reset"' + off + ">Reset</button></div>" +
-      '<div class="arc-msg" id="arc-sc-msg" role="status"></div><div id="arc-sc-results">' + previewHTML() + "</div></div></section>";
+    if (!scoringSettings) { morph(st.body, '<div data-key="load">' + HI.skeleton(4) + "</div>"); loadSelection(); return; }
+    st.body.innerHTML = adminScoring();
+    wireScoring();
   }
 
-  // Only fields that differ from the file are sent, so the rest keep
-  // inheriting it.
-  function readSelection() {
-    var ok = true, d = draft;
-    ["1080p", "2160p"].forEach(function (mode) {
-      ["floor", "target", "cap"].forEach(function (k) {
-        var input = $("arc-sc-" + mode + "-" + k); if (!input.value || !input.checkValidity()) ok = false;
-        d.sizes[mode][k] = Number(input.value);
-      });
-      var b = d.sizes[mode]; if (!(b.floor > 0 && b.floor < b.target && b.target < b.cap)) ok = false;
-    });
-    ["hevc", "avc", "av1"].forEach(function (k) { var input = $("arc-sc-" + k); if (!input.value || !input.checkValidity() || Number(input.value) <= 0) ok = false; d.codecFactors[k] = Number(input.value); });
-    var input = $("arc-sc-min"); if (!input.value || !input.checkValidity()) ok = false; d.minScore = Number(input.value);
-    var file = selection.file, o = { sizes: {}, codecFactors: {} };
-    ["1080p", "2160p"].forEach(function (mode) { var b = {}; ["floor", "target", "cap"].forEach(function (k) { if (d.sizes[mode][k] !== file.sizes[mode][k]) b[k] = d.sizes[mode][k]; }); if (Object.keys(b).length) o.sizes[mode] = b; });
-    ["hevc", "avc", "av1"].forEach(function (k) { if (d.codecFactors[k] !== file.codecFactors[k]) o.codecFactors[k] = d.codecFactors[k]; });
-    ["trustedGroups", "deniedGroups"].forEach(function (k) { if (JSON.stringify(d[k]) !== JSON.stringify(file[k] || [])) o[k] = d[k]; });
-    if (d.minScore !== file.minScore) o.minScore = d.minScore;
-    if (!ok) { msg("arc-sc-msg", "Check the values: floor < target < cap, factors above zero, score 0–100", true); return null; }
-    return { overrides: o };
+  function adminMsg(id, text, bad) {
+    var el = $(id);
+    if (!el) return;
+    el.textContent = text;
+    el.style.color = bad ? "var(--warning)" : "var(--muted)";
   }
-  function selectionChanged() {
-    preview = null;
-    var save = $("arc-sc-save"); if (save) save.disabled = true;
-    var res = $("arc-sc-results"); if (res) res.textContent = "";
-    msg("arc-sc-msg", "Changed · preview before saving");
+
+  var scoringSettings = null, scoringDraft = null, scoringPreview = null, scoringBusy = false;
+  function scoringCopy(value) { return JSON.parse(JSON.stringify(value)); }
+  function scoringNumber(id, label, value, min, max) {
+    return '<div><label for="' + id + '">' + label + '</label><input id="' + id + '" type="number" inputmode="decimal" step="any" min="' + min + '"' + (max == null ? '' : ' max="' + max + '"') + ' value="' + esc(value) + '"></div>';
   }
-  function addGroup(kind) {
-    var input = $("arc-sc-" + kind), values = input.value.split(",").map(function (g) { return g.trim(); }).filter(Boolean);
-    if (!values.length) return;
-    values.forEach(function (g) { if (!draft[kind].some(function (x) { return x.toLowerCase() === g.toLowerCase(); })) draft[kind].push(g); });
-    preview = null; renderSelection(); msg("arc-sc-msg", "Changed · preview before saving");
-    var again = $("arc-sc-" + kind); if (again) again.focus();
+  function scoringGroups(kind, label) {
+    return '<fieldset><legend>' + label + '</legend><div class="scoring-chips" id="sc-' + kind + '-chips">' +
+      scoringDraft[kind].map(function(g,i) { return '<button class="btn scoring-chip" type="button" data-sc-group="' + kind + '" data-sc-index="' + i + '" aria-label="Remove ' + esc(g) + '">' + esc(g) + ' ×</button>'; }).join('') +
+      '</div><div class="scoring-add"><input id="sc-' + kind + '-input" aria-label="' + label + ' group" placeholder="Group" autocomplete="off"><button class="btn" type="button" data-sc-add="' + kind + '">Add</button></div></fieldset>';
   }
-  function selectionWrite(reset) {
-    var body = reset ? { reset: true } : readSelection(); if (!body) return;
-    scBusy = true; renderSelection(); msg("arc-sc-msg", reset ? "Resetting" : "Saving");
-    HI.send(ID, "selection", "PUT", body).then(function (r) {
-      selection = r; draft = null; preview = null; scBusy = false; renderSelection(); msg("arc-sc-msg", reset ? "Reset" : "Saved");
-    }, function (err) { scBusy = false; renderSelection(); if (!fail(err)) msg("arc-sc-msg", "Failed: " + err.message, true); });
+  function adminScoring() {
+    if (!scoringSettings) return '<section class="setting scoring-section"><h4>Archive scoring</h4><div class="src">Unavailable</div></section>';
+    if (!scoringDraft) scoringDraft = scoringCopy(scoringSettings.effective);
+    var d = scoringDraft, bands = ['1080p','2160p'].map(function(mode) {
+      return '<fieldset><legend>' + mode + ' · GB/h</legend><div class="scoring-fields">' + ['floor','target','cap'].map(function(k) {
+        return scoringNumber('sc-' + mode + '-' + k, k[0].toUpperCase() + k.slice(1), d.sizes[mode][k], 0.1, 100);
+      }).join('') + '</div></fieldset>';
+    }).join('');
+    return '<section class="setting scoring-section" id="archive-scoring"><h4>Archive scoring</h4>' + (scoringSettings.warning ? '<div class="src" role="status">Invalid overrides · File policy</div>' : '') + '<div class="form">' + bands +
+      '<fieldset><legend>Codecs</legend><div class="scoring-fields">' + ['hevc','avc','av1'].map(function(k) { return scoringNumber('sc-' + k, k.toUpperCase(), d.codecFactors[k], 0.1, 10); }).join('') + '</div></fieldset>' +
+      scoringGroups('trustedGroups','Trusted groups') + scoringGroups('deniedGroups','Denied groups') +
+      '<label for="sc-min">Min score</label><input class="scoring-min" id="sc-min" type="number" inputmode="decimal" step="any" min="0" max="100" value="' + d.minScore + '">' +
+      '<div class="actions"><button class="btn" type="button" id="sc-preview">Preview</button><button class="btn primary" type="button" id="sc-save"' + (!scoringPreview ? ' disabled' : '') + '>Save</button><button class="btn" type="button" id="sc-reset">Reset</button></div>' +
+      '<div class="src" id="sc-msg" role="status"></div><div id="sc-results">' + scoringPreviewHTML() + '</div></div></section>';
   }
-  function selectionPreview() {
-    var body = readSelection(); if (!body) return;
-    scBusy = true; renderSelection(); msg("arc-sc-msg", "Checking");
-    HI.send(ID, "selection/preview", "POST", body).then(function (r) {
-      preview = r; scBusy = false; renderSelection(); msg("arc-sc-msg", "Ready");
-    }, function (err) { scBusy = false; renderSelection(); if (!fail(err)) msg("arc-sc-msg", "Failed: " + err.message, true); });
+  function scoringPreviewHTML() {
+    if (!scoringPreview) return '';
+    var pick = function(c) { return c ? esc(c.group || 'Unlisted') + ' · ' + Number(c.score.total).toFixed(1) : 'No pick'; };
+    var full = function(c) { return c ? esc(c.title) : 'No pick'; };
+    return '<div class="scoring-preview"><b>Auto picks ' + scoringPreview.currentAutoPicks + ' → ' + scoringPreview.autoPicks + '</b>' +
+      (scoringPreview.titles.length ? scoringPreview.titles.map(function(t) {
+        return '<details class="scoring-change"><summary>' + esc(t.target.title) + (t.target.season ? ' S' + String(t.target.season).padStart(2,'0') : '') + '<div class="scoring-picks"><div><small>Current</small>' + pick(t.current) + '</div><div><small>New</small>' + pick(t.proposed) + '</div></div></summary>' +
+          '<div class="scoring-picks"><div>' + full(t.current) + '</div><div>' + full(t.proposed) + '</div></div></details>';
+      }).join('') : '<div class="src">No cached releases</div>') + '</div>';
+  }
+  function scoringRead() {
+    var valid = true, d = scoringDraft;
+    ['1080p','2160p'].forEach(function(mode) { ['floor','target','cap'].forEach(function(k) {
+      var input = $('sc-' + mode + '-' + k); if (!input.value || !input.checkValidity()) valid = false;
+      d.sizes[mode][k] = Number(input.value);
+    }); var b=d.sizes[mode]; if (!(b.floor>0 && b.floor<b.target && b.target<b.cap)) valid=false; });
+    ['hevc','avc','av1'].forEach(function(k) { var input=$('sc-' + k); if (!input.value || !input.checkValidity() || Number(input.value)<=0) valid=false; d.codecFactors[k]=Number(input.value); });
+    var input=$('sc-min'); if (!input.value || !input.checkValidity()) valid=false; d.minScore=Number(input.value);
+    // Include only fields that differ from the file, preserving inheritance.
+    var file=scoringSettings.file, o={sizes:{},codecFactors:{}};
+    ['1080p','2160p'].forEach(function(mode) { var b={}; ['floor','target','cap'].forEach(function(k) { if (d.sizes[mode][k] !== file.sizes[mode][k]) b[k]=d.sizes[mode][k]; }); if (Object.keys(b).length) o.sizes[mode]=b; });
+    ['hevc','avc','av1'].forEach(function(k) { if (d.codecFactors[k] !== file.codecFactors[k]) o.codecFactors[k]=d.codecFactors[k]; });
+    ['trustedGroups','deniedGroups'].forEach(function(k) { if (JSON.stringify(d[k]) !== JSON.stringify(file[k] || [])) o[k]=d[k]; });
+    if (d.minScore !== file.minScore) o.minScore=d.minScore;
+    if (!valid) { adminMsg('sc-msg','Invalid',true); return null; }
+    return {overrides:o};
+  }
+  function scoringChanged() {
+    scoringPreview=null;
+    $('sc-save').disabled=true;
+    $('sc-results').innerHTML='';
+    adminMsg('sc-msg','Changed');
+  }
+  function scoringDisable() {
+    document.querySelectorAll('#archive-scoring button,#archive-scoring input').forEach(function(b) { b.disabled=scoringBusy || (b.id==='sc-save' && !scoringPreview); });
+  }
+  function wireScoring() {
+    if (!$('sc-preview')) return;
+    scoringDisable();
+    document.querySelectorAll('#archive-scoring input[type=number]').forEach(function(input) { input.oninput=function() { scoringRead(); scoringChanged(); }; });
+    var add = function(kind) {
+      var input=$('sc-' + kind + '-input'), values=input.value.split(',').map(function(g) {return g.trim();}).filter(Boolean);
+      if (!values.length) return;
+      values.forEach(function(g) { if (!scoringDraft[kind].some(function(existing) {return existing.toLowerCase()===g.toLowerCase();})) scoringDraft[kind].push(g); });
+      scoringChanged();renderSelection();adminMsg('sc-msg','Changed');
+    };
+    document.querySelectorAll('[data-sc-add]').forEach(function(button) { var kind=button.dataset.scAdd;button.onclick=function() { add(kind); };$('sc-' + kind + '-input').onkeydown=function(e) { if (e.key==='Enter') { e.preventDefault();add(kind); } }; });
+    document.querySelectorAll('[data-sc-group]').forEach(function(button) { button.onclick=function() { scoringDraft[button.dataset.scGroup].splice(Number(button.dataset.scIndex),1);scoringChanged();renderSelection();adminMsg('sc-msg','Changed'); }; });
+    $('sc-preview').onclick=function() {
+      var body=scoringRead();if (!body) return;
+      var gen=st.gen;
+      scoringBusy=true;scoringDisable();adminMsg('sc-msg','Checking');
+      HI.send(ID,'selection/preview','POST',body).then(function(result) { if (gen!==st.gen) return;scoringPreview=result;$('sc-results').innerHTML=scoringPreviewHTML();adminMsg('sc-msg','Ready'); }).catch(function(err) { if (gen===st.gen) adminMsg('sc-msg','Failed',true); }).finally(function() { if (gen===st.gen) { scoringBusy=false;scoringDisable(); } });
+    };
+    var save=function(reset) {
+      var body=reset ? {reset:true} : scoringRead();if (!body) return;
+      var gen=st.gen;
+      scoringBusy=true;scoringDisable();adminMsg('sc-msg',reset ? 'Resetting' : 'Saving');
+      HI.send(ID,'selection','PUT',body).then(function(result) {
+        if (gen!==st.gen) return;
+        scoringSettings=result;scoringDraft=null;scoringPreview=null;renderSelection();adminMsg('sc-msg',reset ? 'Reset' : 'Saved');
+        status=null;
+      }).catch(function(err) { if (gen===st.gen) adminMsg('sc-msg','Failed',true); }).finally(function() { if (gen===st.gen) { scoringBusy=false;scoringDisable(); } });
+    };
+    $('sc-save').onclick=function() { if (scoringPreview) save(false); };
+    $('sc-reset').onclick=function() { save(true); };
   }
 
   // ------------------------------------------------------------ activity strip
@@ -1207,20 +1225,10 @@
     else if (b.hasAttribute("data-seed-queue-cancel")) confirmCancelQueue();
     else if (b.hasAttribute("data-arc-toggle")) { stripOpen = !stripOpen; renderStrip(); }
     else if (a("data-arc-go")) { var t = goTargets[a("data-arc-go")]; if (t) openTarget(t); }
-    else if (a("data-sc-add")) addGroup(a("data-sc-add"));
-    else if (a("data-sc-group")) { draft[a("data-sc-group")].splice(Number(a("data-sc-index")), 1); preview = null; renderSelection(); msg("arc-sc-msg", "Changed · preview before saving"); }
-    else if (b.id === "arc-sc-preview") selectionPreview();
-    else if (b.id === "arc-sc-save") { if (preview) selectionWrite(false); }
-    else if (b.id === "arc-sc-reset") selectionWrite(true);
   }
   function onInput(e) {
     var t = e.target;
     if (t.id === "library-search") { libQuery = t.value; renderLibrary(); }
-    else if ((st.view === "selection" || st.view === "admin") && t.type === "number" && /^arc-sc-/.test(t.id)) { readSelection(); selectionChanged(); }
-  }
-  function onKey(e) {
-    var t = e.target;
-    if (e.key === "Enter" && /^arc-sc-(trusted|denied)Groups$/.test(t.id || "")) { e.preventDefault(); addGroup(t.id.slice(7)); }
   }
   // Titles render their releases only when opened.
   function onToggle(e) {
@@ -1241,7 +1249,6 @@
       document.addEventListener("visibilitychange", onVisibility);
       root.addEventListener("click", onClick);
       root.addEventListener("input", onInput);
-      root.addEventListener("keydown", onKey);
       root.addEventListener("toggle", onToggle, true);
       st.root = root;
       root.textContent = "";
@@ -1258,7 +1265,7 @@
       if (t && !pending) pending = { view: st.view, title: ctx.params.get("title"), hash: ctx.params.get("hash") };
       if (st.view === "seeding") { seeding = seeding || null; loadSeeding(); }
       if (st.view === "library") { loadLibrary(false); loadLibraryActivity(); }
-      if (st.view === "selection") { selection = null; draft = null; preview = null; }
+      if (st.view === "selection") { scoringSettings = null; scoringDraft = null; scoringPreview = null; }
       render();
       poll.busy = false; poll.again = false;
       tick();
@@ -1275,10 +1282,8 @@
       root.className = "arc-admin";
       root.addEventListener("click", onClick);
       root.addEventListener("input", onInput);
-      root.addEventListener("keydown", onKey);
-      selection = null; draft = null; preview = null; scBusy = false;
+      scoringSettings = null; scoringDraft = null; scoringPreview = null; scoringBusy = false;
       renderSelection();
-      loadSelection();
     },
     hide: function () {
       st.gen++;
@@ -1288,7 +1293,6 @@
       if (st.root) {
         st.root.removeEventListener("click", onClick);
         st.root.removeEventListener("input", onInput);
-        st.root.removeEventListener("keydown", onKey);
         st.root.removeEventListener("toggle", onToggle, true);
         st.root.className = "";
       }
