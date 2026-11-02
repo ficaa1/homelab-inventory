@@ -46,3 +46,15 @@ func TestPageAPIStartAndFreshness(t *testing.T) {
 		t.Fatalf("failed collector or old sample read as current: %+v", r)
 	}
 }
+
+func TestSummaryDNSCounts(t *testing.T) {
+	n := New(extraHost{}).(*Network)
+	if err := n.Configure(plugin.Config{}); err != nil {
+		t.Fatal(err)
+	}
+	n.answers = map[string]answer{"routes": {at: n.host.Now(), value: routesAnswer{Status: "ok", CloudflareDNS: "ok", Routes: []route{{}}, DNS: []plugin.DNSRecord{{Name: "example.org"}}}}}
+	out := n.summary(context.Background())
+	if out.Routes.DNSTotal != 1 || out.Routes.Total != 1 || out.Routes.CloudflareDNS != "ok" {
+		t.Fatal(out.Routes)
+	}
+}

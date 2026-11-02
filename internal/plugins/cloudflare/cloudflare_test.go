@@ -19,6 +19,10 @@ func (testHost) Now() time.Time       { return time.Date(2026, 10, 31, 12, 0, 0,
 func TestAnalyticsRealShapeAndGraphQLErrors(t *testing.T) {
 	bad := false
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/zones/0123456789abcdef0123456789abcdef" {
+			w.Write([]byte(`{"success":true,"result":{"id":"0123456789abcdef0123456789abcdef","name":"example.org","status":"active","plan":{"name":"Free"}}}`))
+			return
+		}
 		if r.Method != "POST" || r.URL.Path != "/graphql" || r.Header.Get("Authorization") != "Bearer fixture" {
 			t.Error("unexpected request")
 		}
@@ -48,8 +52,23 @@ func TestAnalyticsRealShapeAndGraphQLErrors(t *testing.T) {
 	if _, e = plugin.ValidateView(v, p.Manifest()); e != nil {
 		t.Fatal(e)
 	}
+
+	for _, route := range []string{"zone", "analytics"} {
+		out, err := p.API(context.Background(), plugin.APIRequest{Method: "GET", Path: route})
+		var body map[string]any
+		if err != nil || out.Status != 200 || json.Unmarshal(out.Body, &body) != nil {
+			t.Fatal(route, err, string(out.Body))
+		}
+		if route == "zone" && body["name"] != "example.org" || route == "analytics" && (body["uniques"] != float64(3) || body["uncached"] != float64(3) || body["cache_ratio"] != 0.7) {
+			t.Fatal(body)
+		}
+	}
 	bad = true
 	if _, e = p.View(context.Background(), "analytics", nil); e == nil {
 		t.Fatal("GraphQL failure became empty success")
+	}
+	out, err := p.API(context.Background(), plugin.APIRequest{Method: "GET", Path: "analytics"})
+	if err != nil || out.Status != 503 {
+		t.Fatal("GraphQL API failure became success", err, out.Status)
 	}
 }

@@ -19,6 +19,7 @@ import (
 type Integration struct {
 	host              plugin.Host
 	base, token, zone string
+	zoneLabel         string
 }
 
 func New(h plugin.Host) plugin.Plugin { return &Integration{host: h} }
@@ -42,6 +43,7 @@ func (p *Integration) Configure(c plugin.Config) error {
 	p.base = strings.TrimRight(base, "/")
 	p.token = token
 	p.zone = zone
+	p.zoneLabel = zone
 	return nil
 }
 func (p *Integration) Close() error { p.token = ""; p.base = ""; return nil }
@@ -240,4 +242,29 @@ func (p *Integration) resolveZone(ctx context.Context) error {
 		}
 	}
 	return errors.New("configured zone not found")
+}
+
+func (p *Integration) API(ctx context.Context, req plugin.APIRequest) (plugin.APIResponse, error) {
+	if req.Method != "GET" || req.Path != "zone" && req.Path != "analytics" {
+		return plugin.APIResponse{}, plugin.ErrNotFound
+	}
+	var out any
+	var err error
+	if req.Path == "zone" {
+		out, err = p.zoneInfo(ctx)
+	} else {
+		hours, e := strconv.Atoi(req.Query.Get("hours"))
+		if e != nil || hours < 1 || hours > 168 {
+			hours = 24
+		}
+		until := p.host.Now()
+		out, err = p.analytics(ctx, until.Add(-time.Duration(hours)*time.Hour), until)
+	}
+	status := 200
+	if err != nil {
+		status = 503
+		out = map[string]string{"error": safe(err.Error(), p.token)}
+	}
+	body, err := json.Marshal(out)
+	return plugin.APIResponse{Status: status, Body: body}, err
 }

@@ -29,9 +29,9 @@ import (
 
 func (p *Integration) APITimeout(method, path string) time.Duration {
 	switch path {
-	case "batch/execute":
+	case "batch/execute", "shrink":
 		return 6 * time.Minute
-	case "batch/preview", "batch/candidates", "candidates":
+	case "batch/preview", "batch/candidates", "candidates", "shrink-candidates":
 		return 25 * time.Second
 	}
 	return 0
@@ -41,6 +41,20 @@ func (p *Integration) API(ctx context.Context, r plugin.APIRequest) (plugin.APIR
 	switch r.Method + " " + r.Path {
 	case "GET status":
 		return reply(200, p.reader.Status(ctx)), nil
+	case "GET shrink-candidates":
+		limit := 25
+		if raw := r.Query.Get("limit"); raw != "" {
+			n, err := strconv.Atoi(raw)
+			if err != nil || n < 1 {
+				return reply(400, map[string]string{"error": "limit must be a positive number"}), nil
+			}
+			limit = min(n, 500)
+		}
+		items, err := p.reader.ShrinkCandidates(ctx, limit)
+		if err != nil {
+			return reply(503, map[string]string{"error": p.safe(err.Error())}), nil
+		}
+		return reply(200, items), nil
 	case "GET candidates":
 		items, err := p.reader.ShrinkCandidates(ctx, 500)
 		if err != nil {
@@ -59,6 +73,8 @@ func (p *Integration) API(ctx context.Context, r plugin.APIRequest) (plugin.APIR
 			return p.failure(err, false), nil
 		}
 		return reply(200, out), nil
+	case "POST shrink":
+		return p.shrink(ctx, r.Body), nil
 	case "POST batch/execute":
 		var in engine.ExecuteRequest
 		if !decode(r.Body, &in) {
@@ -198,4 +214,70 @@ func decode(body []byte, out any) bool {
 	d := json.NewDecoder(strings.NewReader(string(body)))
 	d.DisallowUnknownFields()
 	return d.Decode(out) == nil && d.Decode(new(any)) == io.EOF
+}
+
+// shrink accepts direct paths; registry serialization also excludes reviewed batches.
+func (p *Integration) shrink(ctx context.Context, body []byte) plugin.APIResponse {
+	if p.str("sidecar_url") == "" || p.str("sidecar_key") == "" {
+		return reply(503, map[string]string{"error": "tdarr shrink sidecar is not configured"})
+	}
+	var in struct {
+		Paths  []string `json:"paths"`
+		WithPC bool     `json:"withPc"`
+	}
+	if !decode(body, &in) {
+		return reply(400, map[string]string{"error": "invalid request"})
+	}
+	for _, file := range in.Paths {
+		if p.blocked(engine.LibraryTitle{Path: file}) {
+			return p.failure(engine.ErrBlocked, false)
+		}
+	}
+	if len(in.Paths) == 0 {
+		return reply(400, map[string]string{"error": "paths is required"})
+	}
+	if len(in.Paths) > 16 {
+		return reply(400, map[string]string{"error": "maximum 16 paths"})
+	}
+	check, cancel := context.WithTimeout(ctx, 30*time.Second)
+	status, raw, err := p.sidecar(check, "/validate", map[string]any{"paths": in.Paths})
+	cancel()
+	if err != nil || status != 200 {
+		return p.failure(engine.ErrUnavailable, false)
+	}
+	var validated struct {
+		Paths []string `json:"paths"`
+	}
+	if len(raw) > 64<<10 || json.Unmarshal(raw, &validated) != nil || len(validated.Paths) == 0 || len(validated.Paths) > 16 {
+		return p.failure(engine.ErrUnavailable, false)
+	}
+	seen := map[string]bool{}
+	for _, file := range validated.Paths {
+		if p.blocked(engine.LibraryTitle{Path: file}) || p.blockedValidatedPath(file) {
+			return p.failure(engine.ErrBlocked, false)
+		}
+		if seen[file] || !p.validatedPath(file) {
+			return p.failure(engine.ErrUnavailable, false)
+		}
+		seen[file] = true
+	}
+	status, raw, err = p.sidecar(ctx, "/shrink", map[string]any{"paths": validated.Paths, "withPc": in.WithPC})
+	if err != nil {
+		return reply(502, map[string]string{"error": "sidecar unavailable; outcome may be unknown; inspect before retrying"})
+	}
+	return plugin.APIResponse{Status: status, Body: raw}
+}
+
+func (p *Integration) validatedPath(file string) bool {
+	return validMediaPath(file, p.str("tdarr_movie_root")) || validMediaPath(file, p.str("tdarr_series_root"))
+}
+
+func (p *Integration) blockedValidatedPath(file string) bool {
+	for _, roots := range [][2]string{{"radarr_root", "tdarr_movie_root"}, {"sonarr_root", "tdarr_series_root"}} {
+		source, target := p.str(roots[0]), p.str(roots[1])
+		if source != "" && target != "" && strings.HasPrefix(file, target+"/") && p.blocked(engine.LibraryTitle{Path: source + "/" + strings.TrimPrefix(file, target+"/")}) {
+			return true
+		}
+	}
+	return false
 }

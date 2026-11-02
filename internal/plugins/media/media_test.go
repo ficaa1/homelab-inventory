@@ -482,3 +482,96 @@ func TestConfigurationAndSecretSafeFailures(t *testing.T) {
 		t.Fatal("cannot re-enable after Close")
 	}
 }
+
+func TestDigestAPIRoutes(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Error("mutation attempted")
+		}
+		if r.URL.Path == "/api/v2" {
+			if r.URL.Query().Get("apikey") != "fixture-key" {
+				t.Error("missing Tautulli key")
+			}
+			data := any(nil)
+			switch r.URL.Query().Get("cmd") {
+			case "get_activity":
+				data = map[string]any{"stream_count": "1", "sessions": []any{map[string]any{"friendly_name": "Example viewer", "duration": "900", "view_offset": "100", "title": "Example film"}}}
+			case "get_history":
+				if r.URL.Query().Get("length") != "200" || r.URL.Query().Get("after") != fmt.Sprint(now.Add(-2*time.Hour).Unix()) {
+					t.Error("wrong history window")
+				}
+				data = map[string]any{"data": []any{map[string]any{"title": "Example film", "user": "Example viewer", "date": fmt.Sprint(now.Unix()), "play_duration": "42", "watched_status": 1}}}
+			case "get_library_names":
+				data = []any{map[string]any{"section_id": 1, "section_name": "Films", "section_type": "movie"}}
+			case "get_library_media_info":
+				data = map[string]any{"recordsTotal": "2", "total_file_size": "1234"}
+			default:
+				t.Error("unknown command")
+			}
+			json.NewEncoder(w).Encode(map[string]any{"response": map[string]any{"result": "success", "data": data}})
+			return
+		}
+		if r.Header.Get("X-Api-Key") != "fixture-key" {
+			t.Error("missing Arr key")
+		}
+		switch r.URL.Path {
+		case "/api/v3/system/status":
+			fmt.Fprint(w, `{"appName":"Arr","version":"1"}`)
+		case "/api/v3/wanted/missing":
+			fmt.Fprint(w, `{"totalRecords":2,"records":[]}`)
+		case "/api/v3/series", "/api/v3/movie":
+			json.NewEncoder(w).Encode([]any{map[string]any{"title": "Example title", "monitored": true, "added": now.Format(time.RFC3339)}})
+		case "/api/v3/queue":
+			fmt.Fprint(w, `{"totalRecords":1,"records":[{"title":"Example title","status":"completed","trackedDownloadState":"importBlocked","statusMessages":[{"title":"Warning","messages":["https://example.org/secret?apikey=hidden api_key=hidden fixture-key"]}]}]}`)
+		default:
+			t.Error("unknown route")
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+	m := New(&testHost{client: upstream.Client(), now: now}).(*Media)
+	cfg := plugin.Config{}
+	for _, id := range []string{"sonarr", "radarr", "tautulli"} {
+		cfg[id+"_url"], cfg[id+"_key"] = upstream.URL, "fixture-key"
+	}
+	if err := m.Configure(cfg); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		path, field string
+		value       any
+	}{
+		{"tautulli/activity", "stream_count", float64(1)},
+		{"tautulli/history", "total_duration", float64(42)},
+		{"tautulli/libraries", "total_bytes", float64(1234)},
+		{"sonarr/summary", "series_total", float64(1)},
+		{"radarr/summary", "movies_total", float64(1)},
+	} {
+		out, err := m.API(context.Background(), plugin.APIRequest{Method: "GET", Path: tc.path, Query: url.Values{"hours": {"2"}}})
+		if err != nil || out.Status != 200 {
+			t.Fatal(tc.path, out.Status, err)
+		}
+		var row map[string]any
+		if tc.path == "tautulli/libraries" {
+			var rows []map[string]any
+			if json.Unmarshal(out.Body, &rows) != nil || len(rows) != 1 {
+				t.Fatal(string(out.Body))
+			}
+			row = rows[0]
+		} else if json.Unmarshal(out.Body, &row) != nil {
+			t.Fatal(string(out.Body))
+		}
+		if row[tc.field] != tc.value {
+			t.Fatal(tc.path, string(out.Body))
+		}
+		if strings.Contains(string(out.Body), "fixture-key") || strings.Contains(string(out.Body), "hidden") {
+			t.Fatal("credential leaked")
+		}
+	}
+	m.services = nil
+	out, err := m.API(context.Background(), plugin.APIRequest{Method: "GET", Path: "sonarr/summary"})
+	if err != nil || out.Status != 503 {
+		t.Fatal(out.Status, err)
+	}
+}

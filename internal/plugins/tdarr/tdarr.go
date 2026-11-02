@@ -281,13 +281,18 @@ func (p *Integration) mapPath(file, kind string) (string, error) {
 	} else if kind != "radarr" {
 		return "", errors.New("invalid service kind")
 	}
-	ext := strings.ToLower(path.Ext(file))
-	allowed := map[string]bool{".mkv": true, ".mp4": true, ".avi": true, ".m4v": true, ".ts": true, ".mov": true, ".m2ts": true, ".mpg": true, ".mpeg": true, ".flv": true, ".webm": true, ".wmv": true, ".vob": true, ".evo": true, ".iso": true}
-	if source == "" || target == "" || path.Clean(file) != file || !strings.HasPrefix(file, source+"/") || !allowed[ext] || strings.ContainsAny(file, "\x00\\") || len(file) > 1024 {
+	if target == "" || !validMediaPath(file, source) {
 		return "", errors.New("outside configured media roots")
 	}
 	return target + "/" + strings.TrimPrefix(file, source+"/"), nil
 }
+
+func validMediaPath(file, root string) bool {
+	ext := strings.ToLower(path.Ext(file))
+	allowed := map[string]bool{".mkv": true, ".mp4": true, ".avi": true, ".m4v": true, ".ts": true, ".mov": true, ".m2ts": true, ".mpg": true, ".mpeg": true, ".flv": true, ".webm": true, ".wmv": true, ".vob": true, ".evo": true, ".iso": true}
+	return root != "" && path.Clean(file) == file && strings.HasPrefix(file, root+"/") && allowed[ext] && !strings.ContainsAny(file, "\x00\\") && len(file) <= 1024
+}
+
 func (p *Integration) safe(s string) string {
 	for k, v := range p.c {
 		if strings.HasSuffix(k, "_key") {
@@ -445,4 +450,29 @@ func (p *Integration) Action(ctx context.Context, id string, c plugin.Config) (p
 		return plugin.View{Title: "Tdarr batch", UpdatedAt: p.host.Now(), Blocks: []plugin.Block{{Type: "notice", Tone: tone, Text: message}}}, nil
 	}
 	return plugin.View{}, plugin.ErrNotFound
+}
+
+func (p *Integration) sidecar(ctx context.Context, endpoint string, body any) (int, []byte, error) {
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return 0, nil, engine.ErrUnavailable
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.str("sidecar_url")+endpoint, bytes.NewReader(raw))
+	if err != nil {
+		return 0, nil, engine.ErrUnavailable
+	}
+	req.Header.Set("Authorization", "Bearer "+p.str("sidecar_key"))
+	req.Header.Set("Content-Type", "application/json")
+	client := *plugin.LongActionHTTP(plugin.WithoutRedirects(p.host.HTTP()))
+	client.Timeout = 6 * time.Minute
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, nil, engine.ErrUnavailable
+	}
+	defer resp.Body.Close()
+	raw, err = io.ReadAll(io.LimitReader(resp.Body, plugin.MaxAPIResponseBytes+1))
+	if err != nil || len(raw) > plugin.MaxAPIResponseBytes || !json.Valid(raw) {
+		return 0, nil, engine.ErrUnavailable
+	}
+	return resp.StatusCode, raw, nil
 }
