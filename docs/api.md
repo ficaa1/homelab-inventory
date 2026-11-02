@@ -215,7 +215,7 @@ is optional and must be a safe name. A Compose restart derives the configured
 project name from that file. Container restarts retain the latest target-host
 inventory and live exact-name checks. Image references are validated, must differ,
 and the old reference must occur exactly once. Replacement is atomic and preserves
-file permissions; mount a writable parent directory to permit atomic rename.
+file permissions (and the owner, when running as root); mount a writable parent directory to permit atomic rename.
 An upgrade uses set-image, pull, then up as separate requests.
 
 Execution shares the restart lock and `actions-audit.jsonl`: intent must persist

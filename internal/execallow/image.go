@@ -5,9 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
-// composeSetImage replaces one unambiguous image reference atomically.
+// composeSetImage replaces one unambiguous image reference atomically, keeping
+// the file's mode and owner: the API often runs as root on someone else's file.
 func (r *Runner) composeSetImage(file, oldImage, newImage string) Result {
 	result := Result{Command: "compose-set-image " + file, ExitCode: -1}
 	content, err := os.ReadFile(file)
@@ -30,7 +32,11 @@ func (r *Runner) composeSetImage(file, oldImage, newImage string) Result {
 		return result
 	}
 	defer os.Remove(tmp.Name())
-	if err = tmp.Chmod(info.Mode().Perm()); err == nil {
+	err = tmp.Chmod(info.Mode().Perm())
+	if owner, ok := info.Sys().(*syscall.Stat_t); ok && err == nil && os.Geteuid() == 0 {
+		err = tmp.Chown(int(owner.Uid), int(owner.Gid))
+	}
+	if err == nil {
 		_, err = tmp.WriteString(strings.Replace(string(content), oldImage, newImage, 1))
 	}
 	if err == nil {
