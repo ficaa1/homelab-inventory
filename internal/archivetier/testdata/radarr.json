@@ -1,0 +1,105 @@
+[
+  {
+    "guid": "fixture-radarr-39",
+    "indexerId": 11,
+    "title": "Example.Film.1080p.BluRay.REMUX.AVC.TrueHD.7.1-group",
+    "size": 28000000000,
+    "seeders": 100,
+    "indexerFlags": [
+      "G_Freeleech"
+    ],
+    "quality": {
+      "quality": {
+        "id": 15,
+        "name": "WEBRip-1080p",
+        "source": "webRip",
+        "resolution": 1080
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "languages": [
+      {
+        "id": 1,
+        "name": "English"
+      }
+    ],
+    "rejections": [
+      "Existing file meets cutoff: SDTV"
+    ],
+    "fullSeason": false,
+    "seasonNumber": 0,
+    "protocol": "torrent"
+  },
+  {
+    "guid": "fixture-radarr-41",
+    "indexerId": 11,
+    "title": "Example.Film.Black.And.Chrome.1080p.BluRay.REMUX.AVC.TrueHD.7.1-group",
+    "size": 28000000000,
+    "seeders": 4,
+    "indexerFlags": [
+      "G_Freeleech"
+    ],
+    "quality": {
+      "quality": {
+        "id": 15,
+        "name": "WEBRip-1080p",
+        "source": "webRip",
+        "resolution": 1080
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "languages": [
+      {
+        "id": 1,
+        "name": "English"
+      }
+    ],
+    "rejections": [
+      "Existing file meets cutoff: SDTV"
+    ],
+    "fullSeason": false,
+    "seasonNumber": 0,
+    "protocol": "torrent"
+  },
+  {
+    "guid": "fixture-radarr-44",
+    "indexerId": 11,
+    "title": "Example.Film.Extras.1080p.Remux.AVC.DD2.0-group",
+    "size": 9000000000,
+    "seeders": 100,
+    "indexerFlags": [],
+    "quality": {
+      "quality": {
+        "id": 15,
+        "name": "WEBRip-1080p",
+        "source": "webRip",
+        "resolution": 1080
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "languages": [
+      {
+        "id": 1,
+        "name": "English"
+      }
+    ],
+    "rejections": [
+      "Existing file meets cutoff: SDTV"
+    ],
+    "fullSeason": false,
+    "seasonNumber": 0,
+    "protocol": "torrent"
+  }
+]

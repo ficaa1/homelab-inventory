@@ -1,0 +1,101 @@
+[
+  {
+    "guid": "fixture-sonarr-39",
+    "indexerId": 10,
+    "title": "Example.Series.S03.1080p.WEBRip.x265.DDP5.1-group",
+    "size": 9000000000,
+    "seeders": 100,
+    "indexerFlags": 1,
+    "quality": {
+      "quality": {
+        "id": 15,
+        "name": "WEBRip-1080p",
+        "source": "webRip",
+        "resolution": 1080
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "languages": [
+      {
+        "id": 1,
+        "name": "English"
+      }
+    ],
+    "rejections": [
+      "Existing file meets cutoff: SDTV"
+    ],
+    "fullSeason": true,
+    "seasonNumber": 3,
+    "protocol": "torrent"
+  },
+  {
+    "guid": "fixture-sonarr-40",
+    "indexerId": 10,
+    "title": "Example.Series.S03.1080p.WEB-DL.x264.DDP5.1-group",
+    "size": 44000000000,
+    "seeders": 100,
+    "indexerFlags": 1,
+    "quality": {
+      "quality": {
+        "id": 15,
+        "name": "WEBRip-1080p",
+        "source": "webRip",
+        "resolution": 1080
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "languages": [
+      {
+        "id": 1,
+        "name": "English"
+      }
+    ],
+    "rejections": [
+      "Existing file meets cutoff: SDTV"
+    ],
+    "fullSeason": true,
+    "seasonNumber": 3,
+    "protocol": "torrent"
+  },
+  {
+    "guid": "fixture-sonarr-44",
+    "indexerId": 10,
+    "title": "Example.Series.S03.1080p.WEBRip.x265.DDP5.1-compact",
+    "size": 4800000000,
+    "seeders": 70,
+    "indexerFlags": 1,
+    "quality": {
+      "quality": {
+        "id": 15,
+        "name": "WEBRip-1080p",
+        "source": "webRip",
+        "resolution": 1080
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "languages": [
+      {
+        "id": 1,
+        "name": "English"
+      }
+    ],
+    "rejections": [
+      "Existing file meets cutoff: SDTV"
+    ],
+    "fullSeason": true,
+    "seasonNumber": 3,
+    "protocol": "torrent"
+  }
+]

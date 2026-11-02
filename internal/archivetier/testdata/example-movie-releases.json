@@ -1,0 +1,101 @@
+[
+  {
+    "guid": "movie-hdr",
+    "indexerId": 11,
+    "title": "Example.Movie.2160p.BluRay.DDP5.1.Atmos.HDR.x265-balanced",
+    "size": 16000000000,
+    "seeders": 100,
+    "indexerFlags": 1,
+    "quality": {
+      "quality": {
+        "id": 15,
+        "name": "WEBRip-1080p",
+        "source": "webRip",
+        "resolution": 2160
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "languages": [
+      {
+        "id": 1,
+        "name": "English"
+      }
+    ],
+    "rejections": [
+      "Existing file meets cutoff: SDTV"
+    ],
+    "fullSeason": false,
+    "seasonNumber": 0,
+    "protocol": "torrent"
+  },
+  {
+    "guid": "movie-sdr",
+    "indexerId": 11,
+    "title": "Example.Movie.2160p.BluRay.DDP5.1.x265-group",
+    "size": 16000000000,
+    "seeders": 100,
+    "indexerFlags": 1,
+    "quality": {
+      "quality": {
+        "id": 15,
+        "name": "WEBRip-1080p",
+        "source": "webRip",
+        "resolution": 2160
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "languages": [
+      {
+        "id": 1,
+        "name": "English"
+      }
+    ],
+    "rejections": [
+      "Existing file meets cutoff: SDTV"
+    ],
+    "fullSeason": false,
+    "seasonNumber": 0,
+    "protocol": "torrent"
+  },
+  {
+    "guid": "movie-remux",
+    "indexerId": 11,
+    "title": "Example.Movie.1080p.BluRay.REMUX.TrueHD7.1.AVC-group",
+    "size": 25000000000,
+    "seeders": 100,
+    "indexerFlags": 1,
+    "quality": {
+      "quality": {
+        "id": 15,
+        "name": "WEBRip-1080p",
+        "source": "webRip",
+        "resolution": 1080
+      },
+      "revision": {
+        "version": 1,
+        "real": 0,
+        "isRepack": false
+      }
+    },
+    "languages": [
+      {
+        "id": 1,
+        "name": "English"
+      }
+    ],
+    "rejections": [
+      "Existing file meets cutoff: SDTV"
+    ],
+    "fullSeason": false,
+    "seasonNumber": 0,
+    "protocol": "torrent"
+  }
+]
