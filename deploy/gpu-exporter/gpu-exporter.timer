@@ -1,0 +1,11 @@
+[Unit]
+Description=Sample NVIDIA GPU use every 15 seconds
+
+[Timer]
+OnBootSec=15s
+OnUnitActiveSec=15s
+AccuracySec=1s
+Unit=gpu-exporter.service
+
+[Install]
+WantedBy=timers.target
