@@ -1,10 +1,10 @@
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
-COMMANDS := discover api alerts portmap mcpbridge agentupdate agentsign
+COMMANDS := discover api alerts portmap mcpbridge agentupdate agentsign mediapolicy
 AGENT_PLATFORMS ?= linux/amd64,linux/arm64
 export AGENT_PLATFORMS
 
-.PHONY: all vet test build dist agent-dist docker api ports alerts release keygen hold promote auto clean fmt api-linux release-artifacts test-install-server
+.PHONY: all vet test build dist agent-dist docker api ports alerts release keygen hold promote auto clean fmt api-linux mediapolicy-linux release-artifacts test-install-server
 all: vet test build
 vet:
 	go vet ./...
@@ -27,6 +27,8 @@ dist: build
 agent-dist: dist
 api-linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/api-linux-amd64 ./cmd/api
+mediapolicy-linux:
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/mediapolicy-linux-amd64 ./cmd/mediapolicy
 docker:
 	docker build -f deploy/api/Dockerfile -t homelab-inventory:local .
 # Explicit open mode is only a local development convenience.

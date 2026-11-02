@@ -1,0 +1,25 @@
+services:
+  mediapolicy:
+    build:
+      context: ../..
+      dockerfile: deploy/mediapolicy/Dockerfile
+    user: "${MEDIA_UID:-1000}:${MEDIA_GID:-1000}"
+    command: ["-config", "/config/policy.json", "-state-dir", "/state", "-listen", ":8792"]
+    env_file: .env
+    ports:
+      - "127.0.0.1:8792:8792"
+    volumes:
+      - ./policy.json:/config/policy.json:ro
+      - ./state:/state
+      - /data/media:/inspection/media:ro
+      - /data/downloads:/inspection/downloads:ro
+      # Enable only the writable views needed by your policy settings.
+      # - /data/media:/writable/media
+      # - /data/downloads:/writable/downloads
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true

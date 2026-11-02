@@ -1,0 +1,21 @@
+{
+  "streams": [
+    {
+      "codec_type": "video",
+      "codec_name": "hevc",
+      "profile": "Main 10",
+      "color_transfer": "bt709",
+      "disposition": {
+        "attached_pic": 0
+      }
+    },
+    {
+      "codec_type": "audio",
+      "codec_name": "eac3",
+      "channels": 6,
+      "disposition": {
+        "attached_pic": 0
+      }
+    }
+  ]
+}

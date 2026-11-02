@@ -10,6 +10,7 @@
 *.json
 !testdata/**/*.json
 !**/testdata/*.json
+!/deploy/mediapolicy/policy.example.json
 
 *.out
 .DS_Store

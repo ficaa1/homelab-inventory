@@ -176,12 +176,12 @@ when the operator confirms replacement.
 
 | Integration | Active functionality | External state |
 | --- | --- | --- |
-| Archive | Policy status, paginated library/seeding, cached-release approvals, policy tags/scoring, queue controls, reviewed restore/purge | Existing media-policy service owns workers, leases, jobs and media |
+| Archive | Policy status, paginated library/seeding, cached-release approvals, policy tags/scoring, queue controls, reviewed restore/purge | The [included media-policy service](../deploy/mediapolicy/README.md) owns workers, leases, jobs and media |
 | Media | Per-title and per-season download/import progress, including import-history joins | Existing Arr services |
 | Network | Optional Prometheus metrics/probes, route-provider routes, inventory VPN facts, seeding-only qBittorrent reads, native bounded speed measurements/history | Existing exporters, route provider and qBittorrent |
 | Cloudflare | Zone identity/plan, paginated DNS and complete UTC day/week hourly analytics | Cloudflare zone (read permissions only) |
 | Security | Fake bearer/path canaries, durable deduplicated trip history and transition alerts | Local plugin cache; no credential values in trip history |
-| Tdarr | Status, compression candidates, exact library-file preview and guarded batch execution | Existing Tdarr, media-policy, Arr, Tautulli and shrink sidecar |
+| Tdarr | Status, compression candidates, exact library-file preview and guarded batch execution | Tdarr, the [included media-policy service](../deploy/mediapolicy/README.md), Arr, Tautulli and shrink sidecar |
 | Uploads | Mounted folder (including a Copyparty-served folder), Calibre-Web, Paperless API token or legacy username/password login | Existing destination files and service databases |
 
 Plugin action IDs and fields are compiled into the binary. The browser renders

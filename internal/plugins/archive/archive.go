@@ -1,4 +1,4 @@
-// Package archive connects to an existing media-policy service. Workers and
+// Package archive connects to the media-policy service. Workers and
 // library files remain owned by that service; the dashboard never runs them.
 package archive
 
@@ -45,7 +45,7 @@ func actions() []plugin.ActionSpec {
 	}...)
 }
 func (*Integration) Manifest() plugin.Manifest {
-	return plugin.Manifest{ID: "archive", Name: "Archive", Description: "Control an existing media-policy service with explicit operator confirmation.", Version: "1", Actions: actions(), Settings: []plugin.Field{{Key: "policy_url", Label: "Media-policy URL", Type: plugin.URL, Required: true}, {Key: "policy_token", Label: "Bearer token", Type: plugin.Secret}}, Tab: &plugin.Tab{Title: "Archive", Icon: "archive", Group: "media", Views: []plugin.ViewRef{{Name: "status", Title: "Status"}, {Name: "library", Title: "Library"}, {Name: "seeding", Title: "Seeding"}}}}
+	return plugin.Manifest{ID: "archive", Name: "Archive", Description: "Control the media-policy service with explicit operator confirmation.", Version: "1", Actions: actions(), Settings: []plugin.Field{{Key: "policy_url", Label: "Media-policy URL", Type: plugin.URL, Required: true}, {Key: "policy_token", Label: "Bearer token", Type: plugin.Secret}}, Tab: &plugin.Tab{Title: "Archive", Icon: "archive", Group: "media", Views: []plugin.ViewRef{{Name: "status", Title: "Status"}, {Name: "library", Title: "Library"}, {Name: "seeding", Title: "Seeding"}}}}
 }
 func (p *Integration) Configure(c plugin.Config) error {
 	base, _ := c["policy_url"].(string)
@@ -130,7 +130,7 @@ func (p *Integration) render(title string, data any) plugin.View {
 		}
 	}
 	walk("", data)
-	return plugin.View{Title: title, UpdatedAt: p.host.Now(), Actions: actions(), Blocks: []plugin.Block{{Type: "notice", Tone: "info", Text: "External media-policy service owns policy execution and durable state. Writes are never automatically retried."}, {Type: "table", Title: title, Columns: []plugin.Column{{Key: "field", Label: "Field"}, {Key: "value", Label: "Value"}}, Rows: rows}}}
+	return plugin.View{Title: title, UpdatedAt: p.host.Now(), Actions: actions(), Blocks: []plugin.Block{{Type: "notice", Tone: "info", Text: "The media-policy service owns policy execution and durable state. Writes are never automatically retried."}, {Type: "table", Title: title, Columns: []plugin.Column{{Key: "field", Label: "Field"}, {Key: "value", Label: "Value"}}, Rows: rows}}}
 }
 func (p *Integration) View(ctx context.Context, name string, q url.Values) (plugin.View, error) {
 	paths := map[string]string{"status": "/status", "library": "/library", "seeding": "/seeding", "selection": "/archive/selection"}

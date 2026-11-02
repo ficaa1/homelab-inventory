@@ -73,7 +73,7 @@ func TestFixedActionRefusesRedirectReplay(t *testing.T) {
 }
 
 // The page API maps each route to one fixed upstream path, sets the actor
-// itself, refuses shapes the private routes refused, and strips the recycle
+// itself, validates action shapes, and strips the recycle
 // baseline from status.
 func TestPageAPIFixedPathsAndBarriers(t *testing.T) {
 	var got []string

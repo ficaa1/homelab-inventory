@@ -81,7 +81,7 @@ func (p *Integration) API(ctx context.Context, req plugin.APIRequest) (plugin.AP
 	return plugin.APIResponse{}, plugin.ErrNotFound
 }
 
-// APITimeout keeps the private dashboard's budgets: a cycle can hold an action
+// APITimeout allows a cycle to hold an action
 // for up to 20 seconds, and a seeding preview reads every file of a torrent.
 func (*Integration) APITimeout(method, path string) time.Duration {
 	switch {
@@ -224,7 +224,7 @@ func (p *Integration) status(ctx context.Context) (plugin.APIResponse, error) {
 }
 
 // strict decodes one JSON object with no unknown fields. An empty body reads
-// as {} where the private routes allowed that.
+// as {} for actions with an optional body.
 func strict(body []byte, max int, allowEmpty bool, v any) bool {
 	if len(body) > max {
 		return false
@@ -247,7 +247,7 @@ type approvalRequest struct {
 	Clear     bool   `json:"clear,omitempty"`
 }
 
-// actionBody mirrors the private API: restore and purge without apply return
+// actionBody validates action payloads: restore and purge without apply return
 // the service's plan; with apply they need its hash (and, for purge, the
 // typed phrase), which the service checks.
 func actionBody(action string, body []byte, by string) ([]byte, error) {

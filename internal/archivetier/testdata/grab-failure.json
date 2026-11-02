@@ -1,0 +1,175 @@
+{
+  "version": 1,
+  "archive": {
+    "job": {
+      "target": {
+        "kind": "sonarr",
+        "id": 66,
+        "title": "Example Series",
+        "season": 3,
+        "files": [
+          {
+            "id": 1,
+            "path": "/data/media/series/Example/video.mkv",
+            "size": 10,
+            "quality": {
+              "quality": {
+                "id": 15,
+                "name": "WEBRip-1080p",
+                "source": "webRip",
+                "resolution": 2160
+              },
+              "revision": {
+                "version": 1,
+                "real": 0,
+                "isRepack": false
+              }
+            }
+          }
+        ]
+      },
+      "release": {
+        "indexerId": 10,
+        "title": "Example.Series.S03.1080p.x265.DDP5.1-group",
+        "guid": "",
+        "size": 5
+      },
+      "phase": "failed",
+      "started": "2026-01-01T12:00:00Z",
+      "message": "ambiguous write intent after restart; operator reconciliation required; recovery evidence unavailable: inspect stopped state"
+    },
+    "error": "ambiguous write intent after restart; operator reconciliation required; recovery evidence unavailable: inspect stopped state"
+  },
+  "leases": {
+    "sonarr:66": {
+      "owner": "archive",
+      "since": "2026-01-01T12:00:00Z"
+    }
+  },
+  "error": "ambiguous write intent after restart; operator reconciliation required; recovery evidence unavailable: inspect stopped state",
+  "audit": [
+    {
+      "action": "grab_intent",
+      "job": {
+        "target": {
+          "kind": "sonarr",
+          "id": 66,
+          "title": "Example Series",
+          "season": 3,
+          "files": [
+            {
+              "id": 1,
+              "path": "/data/media/series/Example/video.mkv",
+              "size": 10,
+              "quality": {
+                "quality": {
+                  "id": 15,
+                  "name": "WEBRip-1080p",
+                  "source": "webRip",
+                  "resolution": 2160
+                },
+                "revision": {
+                  "version": 1,
+                  "real": 0,
+                  "isRepack": false
+                }
+              }
+            }
+          ]
+        },
+        "release": {
+          "indexerId": 10,
+          "title": "Example.Series.S03.1080p.x265.DDP5.1-group",
+          "guid": "",
+          "size": 5
+        },
+        "phase": "failed",
+        "started": "2026-01-01T12:00:00Z",
+        "message": "ambiguous write intent after restart; operator reconciliation required; recovery evidence unavailable: inspect stopped state"
+      }
+    },
+    {
+      "action": "grab_result",
+      "job": {
+        "target": {
+          "kind": "sonarr",
+          "id": 66,
+          "title": "Example Series",
+          "season": 3,
+          "files": [
+            {
+              "id": 1,
+              "path": "/data/media/series/Example/video.mkv",
+              "size": 10,
+              "quality": {
+                "quality": {
+                  "id": 15,
+                  "name": "WEBRip-1080p",
+                  "source": "webRip",
+                  "resolution": 2160
+                },
+                "revision": {
+                  "version": 1,
+                  "real": 0,
+                  "isRepack": false
+                }
+              }
+            }
+          ]
+        },
+        "release": {
+          "indexerId": 10,
+          "title": "Example.Series.S03.1080p.x265.DDP5.1-group",
+          "guid": "",
+          "size": 5
+        },
+        "phase": "failed",
+        "started": "2026-01-01T12:00:00Z",
+        "message": "ambiguous write intent after restart; operator reconciliation required; recovery evidence unavailable: inspect stopped state"
+      },
+      "detail": {
+        "result": "sonarr HTTP 404"
+      }
+    },
+    {
+      "action": "failed",
+      "job": {
+        "target": {
+          "kind": "sonarr",
+          "id": 66,
+          "title": "Example Series",
+          "season": 3,
+          "files": [
+            {
+              "id": 1,
+              "path": "/data/media/series/Example/video.mkv",
+              "size": 10,
+              "quality": {
+                "quality": {
+                  "id": 15,
+                  "name": "WEBRip-1080p",
+                  "source": "webRip",
+                  "resolution": 2160
+                },
+                "revision": {
+                  "version": 1,
+                  "real": 0,
+                  "isRepack": false
+                }
+              }
+            }
+          ]
+        },
+        "release": {
+          "indexerId": 10,
+          "title": "Example.Series.S03.1080p.x265.DDP5.1-group",
+          "guid": "",
+          "size": 5
+        },
+        "phase": "failed",
+        "started": "2026-01-01T12:00:00Z",
+        "message": "ambiguous write intent after restart; operator reconciliation required; recovery evidence unavailable: inspect stopped state"
+      }
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+All fixtures are synthetic. They exercise release selection, paged import and grab history, manual import resources, failure recovery, and ffprobe stream shapes. No service captures or credentials are included.

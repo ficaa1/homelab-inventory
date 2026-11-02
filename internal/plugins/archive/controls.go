@@ -22,7 +22,7 @@ func extraActions() []plugin.ActionSpec {
 		action("approve", "Approve a cached release", kind(), number("id", "Service title ID", true), number("season", "Season (0 for movie)", true), text("release_id", "Worker-cached release ID"), number("indexer_id", "Indexer ID", true)),
 		action("tag", "Set library policy tags", kind(), number("id", "Service title ID", true), boolean("archive", "Archive eligible"), boolean("four_k", "Keep 4K"), plugin.Field{Key: "seasons", Label: "Eligible seasons (comma separated)", Type: plugin.Text}),
 		action("purge-all", "Purge all reviewed originals", text("hash", "Reviewed plan hash"), text("confirm", "Service confirmation phrase")),
-		action("clear", "Clear current policy report"),
+		action("clear", "Clear failed job", text("id", "Job ID")),
 		action("seed-queue", "Queue reviewed seeding plans", text("items", "One torrent-hash:reviewed-plan-hash per line"), boolean("allow_move", "Allow storage move")),
 		action("seed-cancel", "Cancel seeding queue"),
 		action("selection-reset", "Reset selection overrides"),
@@ -96,6 +96,11 @@ func extraPayload(id string, c plugin.Config) (string, string, any, error) {
 	case "purge-all":
 		return "/archive/purge-all", "POST", plugin.Config{"apply": true, "hash": c["hash"], "confirm": c["confirm"]}, nil
 	case "clear":
+		job, _ := c["id"].(string)
+		if job == "" || len(job) > 256 {
+			return "", "", nil, errors.New("job ID required")
+		}
+		body["id"] = job
 		return "/archive/clear", "POST", body, nil
 	case "seed-cancel":
 		return "/seeding/queue/cancel", "POST", body, nil

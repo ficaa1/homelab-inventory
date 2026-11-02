@@ -738,7 +738,7 @@
       (seeding.items.length ? seeding.items.map(function(p) {
         var k = pos[p.hash], sub = p.hash === moving ? phaseLabel(j.phase) : k ? 'Queued ' + k : p.refusal || 'Frees '+size(p.nvmeBytesFreed);
         return '<button class="seed-row" data-seed-hash="'+esc(p.hash)+'"'+(p.refusal||k?' disabled':'')+'><span class="seed-name"><b>'+esc(p.name)+'</b><span class="sub">'+esc(sub)+'</span></span><span class="seed-size">'+(p.mode?pill(p.mode==='link'?'Link':'Move',p.mode==='link'?'good':'info'):'')+'<span class="sub">'+esc(size(p.size))+'</span></span></button>';
-      }).join(''):'<div class="empty">No torrents on NVMe</div>'));
+      }).join(''):'<div class="empty">No torrents on the download disk</div>'));
     focusPending();
   }
   function seedErrorText(j) {
@@ -781,7 +781,7 @@
     var label = allowMove ? "Move" : "Link", list = seeding.items.filter(allowMove ? eligible : linkable).slice(0, SEED_QUEUE_MAX);
     if (!list.length) return;
     var freed = list.reduce(function (n, p) { return n + p.nvmeBytesFreed; }, 0), cost = list.reduce(function (n, p) { return n + (p.nasBytesCost || 0); }, 0);
-    seedSheet("<h3>" + label + ' all</h3><div class="seed-metrics"><div><span class="sub">Frees NVMe</span><strong>' + esc(size(freed)) + '</strong></div><div><span class="sub">NAS cost</span><strong>' + esc(size(cost)) + "</strong></div></div>" +
+    seedSheet("<h3>" + label + ' all</h3><div class="seed-metrics"><div><span class="sub">Frees download disk</span><strong>' + esc(size(freed)) + '</strong></div><div><span class="sub">NAS cost</span><strong>' + esc(size(cost)) + "</strong></div></div>" +
       '<ul class="seed-files">' + list.map(function (p) { return "<li><b>" + esc(p.name) + "</b>" + pill(p.mode === "move" ? "Move" : "Link", p.mode === "move" ? "info" : "good") + '<span class="sub">' + esc(size(p.size)) + "</span></li>"; }).join("") + "</ul>",
       "One at a time", "Cancel", label + " " + list.length,
       function () {
@@ -808,7 +808,7 @@
       if (req !== request || !drawerOpen()) return;
       var moves = (p.libraryMoves || []).map(function (m) { return "<li>" + esc(m.from) + " → " + esc(m.to) + "</li>"; }).join("");
       seedSheet('<h3 class="seed-title">' + esc(p.name) + "</h3>" + pill(p.mode === "link" ? "Link" : "Move", p.mode === "link" ? "good" : "info") +
-        '<div class="seed-metrics"><div><span class="sub">Frees NVMe</span><strong>' + esc(size(p.nvmeBytesFreed)) + '</strong></div><div><span class="sub">Costs NAS</span><strong>' + esc(size(p.nasBytesCost)) + "</strong></div></div>" +
+        '<div class="seed-metrics"><div><span class="sub">Frees download disk</span><strong>' + esc(size(p.nvmeBytesFreed)) + '</strong></div><div><span class="sub">Costs NAS</span><strong>' + esc(size(p.nasBytesCost)) + "</strong></div></div>" +
         (moves ? '<h4>Move library first</h4><ul class="seed-files">' + moves + "</ul>" : "") +
         (p.originalDownloadPath ? '<div class="note" title="Left empty after completion or rollback">Download path cleared</div>' : "") +
         '<ul class="seed-files">' + (p.files || []).map(function (f) { return "<li><b>" + esc(f.relative) + '</b><span class="sub">' + esc(size(f.size)) + " · " + (f.match ? "Library match" : "Copy") + "</span></li>"; }).join("") + "</ul>",

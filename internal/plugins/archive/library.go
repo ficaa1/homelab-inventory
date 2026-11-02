@@ -32,14 +32,18 @@ func (p *Integration) collection(name string, data any, q url.Values) plugin.Vie
 	columns := []plugin.Column{}
 	keys := []string{"kind", "id", "title", "year", "sizeBytes", "quality", "videoCodec", "archiveStatus", "tags"}
 	if name == "seeding" {
-		keys = []string{"name", "hash", "mode", "size", "NVMeBytesFreed", "NASBytesCost", "refusal", "planHash"}
+		keys = []string{"name", "hash", "mode", "size", "nvmeBytesFreed", "nasBytesCost", "refusal", "planHash"}
 	}
 	for _, key := range keys {
 		format := ""
-		if key == "sizeBytes" || key == "size" || key == "NVMeBytesFreed" || key == "NASBytesCost" {
+		if key == "sizeBytes" || key == "size" || key == "nvmeBytesFreed" || key == "nasBytesCost" {
 			format = "bytes"
 		}
-		columns = append(columns, plugin.Column{Key: key, Label: key, Format: format})
+		label := key
+		if key == "nvmeBytesFreed" {
+			label = "Download disk bytes freed"
+		}
+		columns = append(columns, plugin.Column{Key: key, Label: label, Format: format})
 	}
 	rows := []map[string]any{}
 	for _, raw := range items[start:end] {
