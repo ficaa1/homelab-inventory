@@ -245,6 +245,12 @@ func TestHostEnforcesCurrentAllowlistRedirectsBodyCapAndSafeErrors(t *testing.T)
 			w.WriteHeader(302)
 		case "/large":
 			io.Copy(w, io.LimitReader(zeroReader{}, MaxHTTPBody+1))
+		case "/slow":
+			time.Sleep(200 * time.Millisecond)
+		case "/drip":
+			w.Write([]byte("o"))
+			w.(http.Flusher).Flush()
+			time.Sleep(200 * time.Millisecond)
 		default:
 			w.Write([]byte("ok"))
 		}
@@ -296,6 +302,20 @@ func TestHostEnforcesCurrentAllowlistRedirectsBodyCapAndSafeErrors(t *testing.T)
 	resp.Body.Close()
 	if err == nil || len(data) > MaxHTTPBody {
 		t.Fatal("body cap was not enforced")
+	}
+	// Expiry before the headers and during the body stays recognisable.
+	for _, path := range []string{"/slow", "/drip"} {
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, allowed.URL+path+"?key=private-value", nil)
+		resp, err := h.HTTP().Do(req)
+		if err == nil {
+			_, err = io.ReadAll(resp.Body)
+			resp.Body.Close()
+		}
+		cancel()
+		if !errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "private-value") {
+			t.Fatalf("expired %s: %v", path, err)
+		}
 	}
 	h.Logf("request %s %s", "http://example.org/?key=hidden", "private-value")
 	if strings.Contains(logs.String(), "hidden") || strings.Contains(logs.String(), "private-value") {
