@@ -137,3 +137,58 @@ func (s *server) handleActionStacks(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, actions.Stacks(inv))
 }
+
+func (s *server) handleExec(w http.ResponseWriter, r *http.Request) {
+	actor, authorized := s.agentSession(r)
+	if !authorized {
+		writeError(w, 403, "operator token required or route disabled")
+		return
+	}
+	if media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || media != "application/json" {
+		writeError(w, 415, "application/json required")
+		return
+	}
+	if s.exec == nil || s.actions == nil {
+		writeError(w, 503, "remote execution is not available")
+		return
+	}
+	var in struct {
+		Command     string `json:"command"`
+		ComposeFile string `json:"compose_file"`
+		Service     string `json:"service"`
+		Container   string `json:"container"`
+		OldImage    string `json:"old_image"`
+		NewImage    string `json:"new_image"`
+	}
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
+	dec.DisallowUnknownFields()
+	if dec.Decode(&in) != nil || dec.Decode(new(any)) != io.EOF {
+		writeError(w, 400, "invalid execution JSON")
+		return
+	}
+	if in.Command == "" {
+		writeError(w, 400, "command is required")
+		return
+	}
+	args := map[string]string{"compose_file": in.ComposeFile, "service": in.Service, "container": in.Container, "old_image": in.OldImage, "new_image": in.NewImage}
+	if in.Command == "compose-restart" {
+		for project, file := range s.actionPolicy.ComposeFiles {
+			if file == in.ComposeFile {
+				args["project"] = project
+				break
+			}
+		}
+	}
+	result, err := s.actions.Exec(r.Context(), in.Command, args, actor)
+	if err != nil {
+		writeError(w, 503, err.Error())
+		return
+	}
+	status := http.StatusOK
+	if result.Error != "" && result.ExitCode < 0 {
+		status = 400
+	} else if result.ExitCode != 0 {
+		status = 500
+	}
+	writeJSON(w, status, result)
+}

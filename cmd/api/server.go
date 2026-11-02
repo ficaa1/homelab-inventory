@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -145,12 +147,14 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("PUT /settings", s.auth(s.handlePutSettings))
 	mux.HandleFunc("POST /settings/reset", s.auth(s.handleResetSettings))
 	mux.HandleFunc("POST /notify/test", s.auth(s.handleNotifyTest))
+	mux.HandleFunc("POST /digest/send", s.auth(s.handleDigestSend))
 	mux.HandleFunc("GET /silences", s.auth(s.handleListSilences))
 	mux.HandleFunc("POST /silences", s.auth(s.handleAddSilence))
 	mux.HandleFunc("DELETE /silences/{id}", s.auth(s.handleRemoveSilence))
 	mux.HandleFunc("GET /capabilities", s.auth(s.handleCapabilities))
 	mux.HandleFunc("POST /actions/preview", s.auth(s.handleActionPreview))
 	mux.HandleFunc("POST /actions/execute", s.handleActionExecute)
+	mux.HandleFunc("POST /exec", s.handleExec)
 	mux.HandleFunc("GET /actions/log", s.auth(s.handleActionLog))
 	mux.HandleFunc("GET /actions/stacks", s.auth(s.handleActionStacks))
 	mux.HandleFunc("GET /storage", s.auth(s.handleStorage))
@@ -1342,4 +1346,48 @@ func (sw *statusWriter) Unwrap() http.ResponseWriter { return sw.ResponseWriter 
 func (sw *statusWriter) WriteHeader(status int) {
 	sw.status = status
 	sw.ResponseWriter.WriteHeader(status)
+}
+
+// handleDigestSend delivers composed text without advancing the scheduled digest clock.
+func (s *server) handleDigestSend(w http.ResponseWriter, r *http.Request) {
+	if s.notifier == nil {
+		writeError(w, 503, "notifications are not available")
+		return
+	}
+	if !s.effective().Sending() {
+		writeError(w, 503, "no notification endpoint is configured")
+		return
+	}
+	var in struct {
+		Title string `json:"title"`
+		Body  string `json:"body"`
+	}
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+	if dec.Decode(&in) != nil || dec.Decode(new(any)) != io.EOF {
+		writeError(w, 400, "bad JSON")
+		return
+	}
+	if strings.TrimSpace(in.Body) == "" {
+		writeError(w, 400, "body is required")
+		return
+	}
+	if in.Title == "" {
+		in.Title = "homelab digest"
+	}
+	sender := s.notifier.DigestSender
+	if sender == nil {
+		sender = s.notifier.Sender
+	}
+	if sender == nil {
+		writeError(w, 503, "notifications are not available")
+		return
+	}
+	now := time.Now()
+	err := sender.Send(r.Context(), notify.Message{Title: in.Title, Body: in.Body, Type: "info"})
+	s.notifier.Recorder.Record(notify.Delivery{At: now, Title: in.Title, Type: "info", Kind: "digest", OK: err == nil, Error: errText(err)})
+	if err != nil {
+		writeError(w, 502, err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]any{"sent": true})
 }

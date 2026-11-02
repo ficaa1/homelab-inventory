@@ -191,3 +191,33 @@ func TestPluginAlertsMergeBeforeAgeSilenceAndTransitions(t *testing.T) {
 		t.Fatal("disable did not resolve plugin alerts")
 	}
 }
+
+func TestDisabledPluginToolRoutes(t *testing.T) {
+	s := testServer(t, "test-token")
+	var err error
+	s.plugins, err = openPlugins(s.store.Dir(), s.log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.plugins.Close()
+	h := s.routes()
+	for _, path := range []string{
+		"/plugins/media/api/tautulli/activity", "/plugins/media/api/tautulli/history", "/plugins/media/api/tautulli/libraries",
+		"/plugins/media/api/sonarr/summary", "/plugins/media/api/radarr/summary",
+		"/plugins/cloudflare/api/zone", "/plugins/cloudflare/api/analytics", "/plugins/network/api/summary",
+		"/plugins/tdarr/api/shrink-candidates", "/plugins/tdarr/api/shrink",
+	} {
+		method := "GET"
+		if strings.HasSuffix(path, "/shrink") {
+			method = "POST"
+		}
+		req := httptest.NewRequest(method, path, strings.NewReader(`{}`))
+		req.Header.Set("Authorization", "Bearer test-token")
+		req.Header.Set("Content-Type", "application/json")
+		out := httptest.NewRecorder()
+		h.ServeHTTP(out, req)
+		if out.Code != 404 {
+			t.Fatal(path, out.Code, out.Body.String())
+		}
+	}
+}

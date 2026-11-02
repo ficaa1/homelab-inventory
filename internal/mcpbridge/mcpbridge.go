@@ -1,4 +1,5 @@
-// Package mcpbridge exposes generic inventory API reads as typed MCP tools.
+// Package mcpbridge exposes inventory API reads as typed MCP tools.
+// Its deliberate POSTs are exec, send_digest and tdarr_shrink.
 // Requests use fixed paths and escaped host names. Redirects are refused to
 // keep bearer credentials scoped to the configured API. Transport is stdio.
 package mcpbridge
@@ -30,7 +31,7 @@ type Option struct {
 	Notes string
 }
 
-// Tool is one read-only API endpoint exposed over MCP.
+// Tool is one fixed API endpoint exposed over MCP.
 type Tool struct {
 	Name        string
 	Description string
@@ -119,14 +120,15 @@ func (t Tool) InputSchema() map[string]any {
 	}
 }
 
-// Server is an MCP stdio server proxying read-only GET endpoints of the
-// dashboard API.
+// Server is an MCP stdio server proxying fixed dashboard API endpoints.
 type Server struct {
-	baseURL string
-	token   string
-	client  *http.Client
-	in      io.Reader
-	out     io.Writer
+	// OperatorToken authorizes exec separately from ordinary API requests.
+	OperatorToken string
+	baseURL       string
+	token         string
+	client        *http.Client
+	in            io.Reader
+	out           io.Writer
 	// Tools is the catalog served by tools/list. It is a field so tests can
 	// substitute a fake; production uses DefaultTools.
 	Tools []Tool
@@ -151,11 +153,9 @@ func New(baseURL, token string, in io.Reader, out io.Writer) *Server {
 	}
 }
 
-// DefaultTools is the catalog of API endpoints this server exposes. Every
-// entry is a GET; adding a mutating endpoint here would violate the package
-// contract and the repository's read-only discovery invariant.
+// DefaultTools is the catalog of fixed API endpoints this server exposes.
 func DefaultTools() []Tool {
-	return []Tool{
+	return append([]Tool{
 		pluginsListTool(), pluginViewTool(),
 		NewTool("hosts", "List every host the dashboard has collected an inventory for.", "/hosts"),
 		NewTool("host",
@@ -225,7 +225,7 @@ func DefaultTools() []Tool {
 		NewTool("storage",
 			"Fleet capacity snapshot: every PVE storage, ZFS pool and real filesystem across all hosts, with used/available/percent and the delta against the previous run. The 'space left' answer.",
 			"/storage"),
-	}
+	}, compatibilityTools()...)
 }
 
 const maxResponse = 2 << 20 // 2 MiB: a whole inventory fits, a runaway does not
@@ -372,7 +372,23 @@ func (s *Server) call(ctx context.Context, id json.RawMessage, name string, args
 	if len(query) > 0 {
 		u += "?" + query.Encode()
 	}
-	body, status, err := s.fetch(ctx, u)
+	var body []byte
+	var status int
+	if tool.Method == http.MethodPost {
+		payload := map[string]any{}
+		for key, value := range args {
+			if key != "name" {
+				payload[key] = value
+			}
+		}
+		token := s.token
+		if tool.Name == "exec" && s.OperatorToken != "" {
+			token = s.OperatorToken
+		}
+		body, status, err = s.post(ctx, u, payload, token, tool.Name == "tdarr_shrink")
+	} else {
+		body, status, err = s.fetch(ctx, u)
+	}
 	if err != nil {
 		return rpcError{JSONRPC: "2.0", ID: id, Error: rpcErrorBody{Code: -32603, Message: "fetch failed: " + err.Error()}}
 	}
@@ -426,17 +442,29 @@ func truncate(b []byte) string {
 	return string(b[:maxResponse]) + "\n… (truncated at 2 MiB)"
 }
 
-// EnvToken reads the bearer token from API_TOKEN, or from the file named
-// by API_TOKEN_FILE (mode 0600). The file path exists so the token never
-// has to appear in an argv or process list.
+// EnvToken reads a bearer token or a private token file. MCP-prefixed variables
+// take precedence; API_TOKEN and API_TOKEN_FILE remain supported.
 func EnvToken() (string, error) {
-	if t := os.Getenv("API_TOKEN"); t != "" {
-		return t, nil
+	for _, name := range []string{"MCP_API_TOKEN", "API_TOKEN"} {
+		token, err := envCredential(name)
+		if err != nil || token != "" {
+			return token, err
+		}
 	}
-	if f := os.Getenv("API_TOKEN_FILE"); f != "" {
-		token, err := agentupdate.ReadToken(f)
+	return "", nil
+}
+
+// EnvOperatorToken reads exec's separate operator credential.
+func EnvOperatorToken() (string, error) { return envCredential("OPERATOR_TOKEN") }
+
+func envCredential(name string) (string, error) {
+	if token := os.Getenv(name); token != "" {
+		return token, nil
+	}
+	if file := os.Getenv(name + "_FILE"); file != "" {
+		token, err := agentupdate.ReadToken(file)
 		if err != nil {
-			return "", fmt.Errorf("API_TOKEN_FILE: %w", err)
+			return "", fmt.Errorf("%s_FILE: %w", name, err)
 		}
 		return token, nil
 	}

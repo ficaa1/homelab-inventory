@@ -11,7 +11,7 @@ environment (the Compose `.env` file, or the systemd unit) and need a restart.
 | --- | --- |
 | `API_TOKEN` | Use the dashboard, the API and the MCP bridge. Created by the setup wizard. |
 | `AGENT_TOKEN` | Only send reports and download agent updates. Also created by the wizard. |
-| `OPERATOR_TOKEN` | Only promote agent updates and restart containers. Optional; unset turns both off. |
+| `OPERATOR_TOKEN` | Promote agent updates and run allowlisted Docker operations. Optional; unset turns both off. |
 
 Each must be at least 32 characters, and all three must be different. Without an
 `AGENT_TOKEN`, agents use the `API_TOKEN` and the log warns you about it.
@@ -97,6 +97,8 @@ dashboard, but cannot post reports, promote updates or restart containers.
 | `SIGNER_INPUT` | release script | Build folder, default `bin` |
 | `MCP_API_URL` | MCP bridge | API address (required) |
 | `API_TOKEN`, `API_TOKEN_FILE` | MCP bridge | Token, or a mode-0600 file containing it |
+| `MCP_API_TOKEN`, `MCP_API_TOKEN_FILE` | MCP bridge | API bearer aliases; take precedence over the variables above |
+| `OPERATOR_TOKEN`, `OPERATOR_TOKEN_FILE` | MCP bridge | Separate credential for the `exec` tool |
 
 **Files.** Tokens made by the wizard are kept in `<data>/state-auth.json`; the
 sign-in key in `<data>/state-session-key`. Both are private; include them in

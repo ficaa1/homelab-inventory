@@ -155,3 +155,61 @@ func TestActionExecuteChangedPreviewAndPartialResponse(t *testing.T) {
 		t.Fatalf("results: %+v", result.Results)
 	}
 }
+
+func TestExecRoute(t *testing.T) {
+	s := testServer(t, "test-token")
+	s.operatorToken = strings.Repeat("o", 32)
+	s.actionPolicy = execallow.Policy{Host: "host-a", ComposeFiles: map[string]string{"app": "/srv/app/compose.yml"}}
+	calls := 0
+	s.exec = &execallow.Runner{Policy: s.actionPolicy, Execute: func(_ context.Context, command string, _ map[string]string) execallow.Result {
+		calls++
+		code := 0
+		if command == "compose-up" {
+			code = 1
+		}
+		return execallow.Result{Command: command, ExitCode: code}
+	}}
+	var err error
+	s.actions, err = actions.Open(s.store.Dir(), s.exec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := s.routes()
+	for _, tc := range []struct {
+		token, ct, body string
+		status          int
+	}{
+		{s.token, "application/json", `{"command":"image-prune"}`, 403},
+		{s.operatorToken, "text/plain", `{}`, 415},
+		{s.operatorToken, "application/json", `{"command":"compose-pull","compose_file":"/srv/other.yml"}`, 400},
+		{s.operatorToken, "application/json", `{"command":"compose-pull","compose_file":"/srv/app/compose.yml"}`, 200},
+		{s.operatorToken, "application/json", `{"command":"compose-up","compose_file":"/srv/app/compose.yml"}`, 500},
+		{s.operatorToken, "application/json", `{"command":"image-prune"} {}`, 400},
+	} {
+		req := httptest.NewRequest("POST", "/exec", strings.NewReader(tc.body))
+		req.Header.Set("Authorization", "Bearer "+tc.token)
+		req.Header.Set("Content-Type", tc.ct)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != tc.status {
+			t.Fatalf("got %d want %d: %s", rec.Code, tc.status, rec.Body)
+		}
+	}
+	audit, err := actions.Open(s.store.Dir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := audit.Log(100)
+	if calls != 2 || len(rows) != 2 || rows[0].Actor != "operator" || rows[0].Result != "failed" || rows[1].Result != "ok" {
+		t.Fatalf("calls=%d audit=%+v", calls, rows)
+	}
+	s.exec, s.actions = nil, nil
+	req := httptest.NewRequest("POST", "/exec", strings.NewReader(`{"command":"image-prune"}`))
+	req.Header.Set("Authorization", "Bearer "+s.operatorToken)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 503 || calls != 2 {
+		t.Fatal(rec.Code, calls)
+	}
+}

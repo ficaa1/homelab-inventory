@@ -105,9 +105,11 @@ type qbitHealth struct {
 	DHT        *int64  `json:"dhtNodes"`
 }
 type routeCounts struct {
-	Status string `json:"status"`
-	Stale  bool   `json:"stale"`
-	Total  int    `json:"total"`
+	Status        string `json:"status"`
+	Stale         bool   `json:"stale"`
+	Total         int    `json:"total"`
+	DNSTotal      int    `json:"dnsTotal"`
+	CloudflareDNS string `json:"cloudflareDns"`
 }
 type summaryAnswer struct {
 	GeneratedAt time.Time   `json:"generatedAt"`
@@ -139,7 +141,7 @@ func (n *Network) summary(ctx context.Context) summaryAnswer {
 	m.Panels = panels
 	out.Metrics = m
 	routes := n.remember(ctx, "routes", func() any { return n.routesAnswer(ctx) }).(routesAnswer)
-	out.Routes = routeCounts{Status: routes.Status, Stale: routes.Stale, Total: len(routes.Routes)}
+	out.Routes = routeCounts{Status: routes.Status, Stale: routes.Stale, Total: len(routes.Routes), DNSTotal: len(routes.DNS), CloudflareDNS: routes.CloudflareDNS}
 	out.Qbit = n.remember(ctx, "qbit", func() any { return n.qbitHealth(ctx) }).(qbitHealth)
 	return out
 }

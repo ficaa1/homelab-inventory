@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -313,4 +314,51 @@ func (c *countingSender) Send(ctx context.Context, m notify.Message) error {
 	}
 	c.n++
 	return nil
+}
+
+type digestCapture struct {
+	messages []notify.Message
+	err      error
+}
+
+func (c *digestCapture) Send(_ context.Context, m notify.Message) error {
+	c.messages = append(c.messages, m)
+	return c.err
+}
+
+func TestDigestSendRoute(t *testing.T) {
+	s := settingsServer(t)
+	s.token = "test-token"
+	primary, digest := &digestCapture{}, &digestCapture{}
+	s.notifier.Sender, s.notifier.DigestSender = primary, digest
+	h := s.routes()
+	for _, tc := range []struct {
+		token, body string
+		status      int
+	}{
+		{"", `{"body":"hello"}`, 401},
+		{s.token, `{"body":"  "}`, 400},
+		{s.token, `{"title":"  Report  ","body":"  **hello**\n"}`, 200},
+	} {
+		req := httptest.NewRequest("POST", "/digest/send", strings.NewReader(tc.body))
+		req.Header.Set("Authorization", "Bearer "+tc.token)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != tc.status {
+			t.Fatalf("%d: %s", rec.Code, rec.Body)
+		}
+	}
+	if len(primary.messages) != 0 || len(digest.messages) != 1 || digest.messages[0].Title != "  Report  " || digest.messages[0].Body != "  **hello**\n" {
+		t.Fatal(digest.messages)
+	}
+	s.notifier.DigestSender = nil
+	primary.err = errors.New("delivery failed")
+	req := httptest.NewRequest("POST", "/digest/send", strings.NewReader(`{"body":"fallback"}`))
+	req.Header.Set("Authorization", "Bearer "+s.token)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	rows := s.notifier.Recorder.Read().Deliveries
+	if rec.Code != 502 || len(primary.messages) != 1 || primary.messages[0].Title != "homelab digest" || len(rows) != 2 || rows[0].OK || !rows[1].OK || rows[0].Kind != "digest" {
+		t.Fatal(rec.Code, rows)
+	}
 }

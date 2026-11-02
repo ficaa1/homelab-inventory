@@ -71,8 +71,11 @@ func (m *Media) libraryActivity(ctx context.Context) plugin.View {
 // API exposes the same derived activity used by the declarative view so the
 // Archive Library can place progress beside the matching title and season.
 func (m *Media) API(ctx context.Context, req plugin.APIRequest) (plugin.APIResponse, error) {
-	if req.Method != "GET" || req.Path != "activity" {
+	if req.Method != "GET" {
 		return plugin.APIResponse{}, plugin.ErrNotFound
+	}
+	if req.Path != "activity" {
+		return m.digestAPI(ctx, req)
 	}
 	a, _ := m.collectLibraryActivity(ctx)
 	b, err := json.Marshal(a)
@@ -87,4 +90,20 @@ func (m *Media) APITimeout(method, path string) time.Duration {
 		return 20 * time.Second
 	}
 	return 0
+}
+
+func (m *Media) digestAPI(ctx context.Context, req plugin.APIRequest) (plugin.APIResponse, error) {
+	switch req.Path {
+	case "tautulli/activity", "tautulli/history", "tautulli/libraries", "sonarr/summary", "radarr/summary":
+	default:
+		return plugin.APIResponse{}, plugin.ErrNotFound
+	}
+	out, err := m.digestRead(ctx, req.Path, req.Query)
+	status := 200
+	if err != nil {
+		status = 503
+		out = map[string]string{"error": m.text(err.Error())}
+	}
+	body, err := json.Marshal(out)
+	return plugin.APIResponse{Status: status, Body: body}, err
 }

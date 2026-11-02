@@ -10,7 +10,7 @@ Send credentials as `Authorization: Bearer <token>`; never in URLs.
 The updater does not need `/agent/status`; that route requires `API_TOKEN`.
 If `AGENT_TOKEN` is unset, agents use `API_TOKEN` and hold an admin credential;
 the API logs a warning. `OPERATOR_TOKEN` authorizes only release offers and
-restart execution; unset disables those routes. Neither API nor agent tokens
+restart/allowlisted execution; unset disables those routes. Neither API nor agent tokens
 can authorize operator routes. Wrong/missing operator credentials return 403;
 other authentication failures return 401. GET routes also accept HEAD, including
 the agent download routes. JSON errors use `{"error":"..."}`. Only a successful first claim returns the API/agent tokens; code redemption
@@ -83,11 +83,13 @@ even when the browser also carries a session cookie.
 | `PUT /settings` | Update settings | API token |
 | `POST /settings/reset` | Reset settings | API token |
 | `POST /notify/test` | Send test notification | API token |
+| `POST /digest/send` | Deliver a composed digest | API token or session + CSRF |
 | `GET /silences` | List silences | API token |
 | `POST /silences` | Create silence | API token |
 | `DELETE /silences/{id}` | Delete silence | API token |
 | `POST /actions/preview` | Preview restart | API token |
 | `POST /actions/execute` | Execute restart | Operator token |
+| `POST /exec` | Run one allowlisted Docker command | Same authority as restart execution |
 | `GET /actions/log` | Read action log | API token |
 | `GET /actions/stacks` | List restartable stacks | API token |
 | `GET /storage` | Storage summary | API token |
@@ -163,7 +165,7 @@ authority; `actions_host` is the sole target. The dashboard reads these at load,
 hides rollout controls when offers are disabled, and shows restart controls only
 on the matching enabled host. A capability flag does not grant authorization.
 
-Both operator POST routes require `Content-Type: application/json`, one bounded
+The release-offer and restart-execution POST routes require `Content-Type: application/json`, one bounded
 JSON object, and `confirm:true`. Unknown fields or invalid JSON return 400;
 non-JSON Content-Type returns 415.
 
@@ -193,6 +195,44 @@ The dashboard prompts for the operator token and keeps it only in sessionStorage
 under `homelab-inventory.operator-token`. A 403 clears it. Offer 403s show
 “Promotion is disabled — set OPERATOR_TOKEN or use the signer CLI”; restart
 403/404/503 responses disable controls for that page session.
+
+## Allowlisted execution and composed digests
+
+`POST /exec` is enabled with restart execution: `ACTIONS_ENABLED=1`,
+`ACTIONS_HOST` and `OPERATOR_TOKEN`. It uses the same authorization as
+`POST /actions/execute`. There is no caller-selected host or shell.
+The request is one JSON object (at most 16 KiB), with `command` and optional
+`compose_file`, `service`, `container`, `old_image`, `new_image`:
+
+```json
+{"command":"compose-set-image","compose_file":"/srv/app/compose.yml","old_image":"example/app:1","new_image":"example/app:2"}
+```
+
+Commands are `compose-set-image`, `compose-pull`, `compose-up` (`up -d`),
+`compose-restart`, `container-restart` and `image-prune` (dangling images only).
+Compose commands require an exact file from `ACTIONS_COMPOSE_FILES`; `service`
+is optional and must be a safe name. A Compose restart derives the configured
+project name from that file. Container restarts retain the latest target-host
+inventory and live exact-name checks. Image references are validated, must differ,
+and the old reference must occur exactly once. Replacement is atomic and preserves
+file permissions (and the owner, when running as root); mount a writable parent directory to permit atomic rename.
+An upgrade uses set-image, pull, then up as separate requests.
+
+Execution shares the restart lock and `actions-audit.jsonl`: intent must persist
+before execution, followed by its outcome. The response has `command`, `stdout`,
+`stderr`, `exit_code` and optional `error`. Success is 200; rejected commands are
+400; a nonzero command exit is 500; disabled execution or an unavailable audit is
+503. Inspect a `running` audit row before retrying an interrupted request.
+
+`POST /digest/send` has the same authorization as `POST /notify/test` and accepts
+`{"title":"Daily report","body":"**Everything is healthy.**"}` (at most 1 MiB).
+Body must contain non-whitespace text; an omitted or empty title becomes
+`homelab digest`. Both fields are sent verbatim, with no template rendering,
+through the digest sender, falling back to the alert sender. Notifications must
+be enabled and the notification endpoint configured. Success returns
+`{"sent":true}`; invalid JSON/body is 400, disabled/unconfigured sending is 503,
+and delivery failure is 502. Every send attempt records a `kind:"digest"`
+delivery without advancing the scheduled digest clock.
 
 ## Plugins
 
@@ -228,10 +268,81 @@ returns only `image/*`, caps bytes at 4 MiB, and sets
 `Cache-Control: private, max-age=3600` and `X-Content-Type-Options: nosniff`.
 
 `GET /capabilities` includes `plugins:[{"id":"sample","name":"Sample","tab":{...}}]`
-for enabled plugins with tabs. The MCP bridge adds two GET tools:
+for enabled plugins with tabs. The MCP bridge retains two generic GET tools:
 `plugins_list` reads `/plugins` and removes settings and their schemas before
 returning the list; `plugin_view` takes `plugin`, `view` and optional string-valued
 `params`, reading the corresponding view route. Neither can change settings.
+
+### Service JSON routes
+
+Plugin JSON routes use `/plugins/{id}/api/{path}` with normal API authentication
+(or a browser session, with CSRF for writes). They share the plugin lifecycle lock.
+Disabled or unknown plugins return 404; unavailable configured services return an
+error rather than invented zero totals. These additional read routes return data
+objects, separate from declarative views:
+
+| GET route | Response |
+| --- | --- |
+| `/plugins/media/api/tautulli/activity` | Stream counts, bandwidth and `sessions` with user, title and playback/transcode fields |
+| `/plugins/media/api/tautulli/history?hours=24` | `total_plays`, `total_duration`, `distinct_users`, `truncated`, `plays` (maximum 200) |
+| `/plugins/media/api/tautulli/libraries` | Array of section IDs, names, types, counts and `total_bytes` |
+| `/plugins/media/api/sonarr/summary` | `status`, `series_total`, `series_monitored`, `missing`, `missing_soon`, `recent_adds`, `queue` |
+| `/plugins/media/api/radarr/summary` | `status`, `movies_total`, `missing`, `missing_soon`, `recent_adds`, `queue` |
+| `/plugins/cloudflare/api/zone` | `id`, `name`, `status`, `plan` |
+| `/plugins/cloudflare/api/analytics?hours=24` | Zone/window, requests, bytes, threats, cached/uncached, uniques, `cache_ratio`, hourly buckets |
+| `/plugins/network/api/summary` | `generatedAt`, VPN inventory, metrics, route/DNS counts and optional download-client health |
+| `/plugins/tdarr/api/shrink-candidates?limit=25` | Array of eligible file paths, sizes, codecs, classes and estimated savings |
+
+History and analytics accept `hours` from 1 to 168, defaulting to 24 for absent
+or invalid values. Cloudflare uses UTC date bounds for hourly analytics.
+Candidate `limit` must be positive and is capped at 500. The existing
+`GET /plugins/tdarr/api/candidates` keeps its page-oriented object response.
+
+`POST /plugins/tdarr/api/shrink` accepts
+`{"paths":["/worker/movies/Example/movie.mkv"],"withPc":false}`.
+It accepts one bounded JSON object (64 KiB), refuses unknown fields, empty lists,
+more than 16 paths and configured protected paths. The configured authenticated
+sidecar must resolve symlinks and expand folders through `/validate` before
+`/shrink` receives anything. Resolved paths must be unique media files within
+configured Tdarr roots, and protections are checked again, including mapped
+source roots. `withPc` opts into the secondary worker.
+
+The call is serialized with other Tdarr operations, has a six-minute deadline,
+and relays the sidecar's JSON and HTTP status. Refusals are 400, protected paths
+403, unavailable validation/configuration 503, and an uncertain sidecar submission
+502. Inspect the sidecar before retrying an uncertain result. Reviewed
+`batch/preview` and `batch/execute` routes remain available.
+
+## MCP bridge
+
+The stdio bridge uses `MCP_API_URL`. `MCP_API_TOKEN` or a mode-0600
+`MCP_API_TOKEN_FILE` supplies the API bearer; these take precedence over the
+existing `API_TOKEN`/`API_TOKEN_FILE` variables. Set a separate `OPERATOR_TOKEN`
+or mode-0600 `OPERATOR_TOKEN_FILE` for `exec`; the API bearer alone cannot
+execute Docker commands. The bridge refuses redirects and never retries writes.
+An API error is returned as an MCP result with `isError:true`, including when a
+required plugin is disabled.
+
+Inventory tools and `plugins_list`/`plugin_view` remain available. The service
+and mutation tools map as follows:
+
+| Tool | HTTP endpoint | Options |
+| --- | --- | --- |
+| `exec` | POST `/exec` | `command`, `compose_file`, `service`, `container`, `old_image`, `new_image` |
+| `send_digest` | POST `/digest/send` | `title`, `body` |
+| `tdarr_shrink` | POST `/plugins/tdarr/api/shrink` | `paths` (string array), `withPc` (boolean) |
+| `tdarr_candidates` | GET `/plugins/tdarr/api/shrink-candidates` | `limit` |
+| `cloudflare_zone` | GET `/plugins/cloudflare/api/zone` | — |
+| `cloudflare_analytics` | GET `/plugins/cloudflare/api/analytics` | `hours` |
+| `tautulli_activity` | GET `/plugins/media/api/tautulli/activity` | — |
+| `tautulli_history` | GET `/plugins/media/api/tautulli/history` | `hours` |
+| `tautulli_libraries` | GET `/plugins/media/api/tautulli/libraries` | — |
+| `sonarr_summary` | GET `/plugins/media/api/sonarr/summary` | — |
+| `radarr_summary` | GET `/plugins/media/api/radarr/summary` | — |
+| `network` | GET `/plugins/network/api/summary` | — |
+
+`exec`, `send_digest` and `tdarr_shrink` are the bridge's deliberate POSTs.
+Their options are JSON body fields; read options become query parameters.
 
 ## Browser sign-in
 
