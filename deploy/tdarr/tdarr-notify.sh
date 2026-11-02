@@ -61,7 +61,8 @@ if [ "${review}" -gt 0 ]; then
   body="Tdarr batch done — ${review} files need review"
 fi
 if [ -z "${APPRISE_NOTIFY:-}" ]; then
-  log 'APPRISE_NOTIFY is unset; workers parked, notification pending'
+  printf 'idle\n' >"${STATE_FILE}"
+  log "batch drained (${type}); APPRISE_NOTIFY is unset, so nothing was sent"
   exit 0
 fi
 code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -X POST "${APPRISE_NOTIFY}" \

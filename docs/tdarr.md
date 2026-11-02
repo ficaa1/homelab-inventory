@@ -104,7 +104,7 @@ apply when a value is omitted. Empty required values refuse execution.
 | `RADARR_API_KEY` | Empty; Radarr key, takes precedence over config XML |
 | `RADARR_CONFIG` | Empty; optional host path to Radarr `config.xml`, reading `ApiKey` |
 | `TDARR_PROTECTED_RADARR_IDS` | Empty; comma-separated positive Radarr movie IDs; refuses folders, symlink aliases and hard links |
-| `APPRISE_NOTIFY` | Empty; Apprise HTTP API notification URL; unset leaves notification pending after parking |
+| `APPRISE_NOTIFY` | Empty; Apprise HTTP API notification URL; unset parks the workers and logs the drain without sending anything |
 | `TDARR_STATE_DIR` | `/var/lib/tdarr-shrink`; root-owned lock and busy/idle state |
 | `TDARR_LOG_FILE` | `/var/log/tdarr-shrink.log`; poller transition/delivery log |
 
