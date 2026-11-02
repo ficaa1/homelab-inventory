@@ -4,10 +4,12 @@
 import hmac
 import json
 import os
+import shlex
 import subprocess
 import sys
-import shlex
 from http.server import BaseHTTPRequestHandler, HTTPServer
+
+
 def load_config():
     try:
         with open("/etc/default/tdarr-shrink") as f:
