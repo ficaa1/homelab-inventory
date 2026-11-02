@@ -1,0 +1,16 @@
+[Unit]
+Description=Read-only NVIDIA GPU textfile metrics
+
+[Service]
+Type=oneshot
+User=gpu-exporter
+Group=gpu-exporter
+ExecStart=/usr/bin/python3 /usr/local/libexec/gpu-exporter.py
+TimeoutStartSec=5
+UMask=0022
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/gpu-exporter
+# NVIDIA device access is required; do not enable PrivateDevices.
