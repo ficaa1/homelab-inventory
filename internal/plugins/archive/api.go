@@ -135,7 +135,11 @@ func (p *Integration) call(ctx context.Context, method, path string, body []byte
 	if body != nil {
 		r.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := plugin.WithoutRedirects(p.host.HTTP()).Do(r)
+	// The registry's per-route deadline (APITimeout) bounds the call, not the
+	// host client's 10 seconds: listing seeding plans reads every torrent's files.
+	client := *plugin.LongActionHTTP(plugin.WithoutRedirects(p.host.HTTP()))
+	client.Timeout = 0
+	resp, err := client.Do(r)
 	if err != nil {
 		if method == "GET" {
 			return 0, nil, errors.New("media policy did not answer")
