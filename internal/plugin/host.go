@@ -171,13 +171,18 @@ func (t hostTransport) RoundTrip(req *http.Request) (resp *http.Response, err er
 		if resp != nil {
 			resp.Body.Close()
 		}
+		// A cancelled or expired context carries no URL, and callers that end
+		// requests on purpose (a speed test's window) must still recognise it.
+		if ctxErr := req.Context().Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
 		return nil, errors.New("plugin HTTP request failed")
 	}
 	limit := int64(MaxHTTPBody)
 	if value, ok := req.Context().Value(responseLimitKey{}).(int64); ok && value > 0 && value <= 128<<20 {
 		limit = value
 	}
-	resp.Body = &cappedBody{body: resp.Body, left: limit}
+	resp.Body = &cappedBody{body: resp.Body, left: limit, ctx: req.Context()}
 	return resp, nil
 }
 
@@ -201,6 +206,7 @@ func (t guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 type cappedBody struct {
 	body io.ReadCloser
 	left int64
+	ctx  context.Context
 }
 
 func (b *cappedBody) Close() error { return b.body.Close() }
@@ -222,6 +228,9 @@ func (b *cappedBody) Read(p []byte) (int, error) {
 	n, err := b.body.Read(p)
 	b.left -= int64(n)
 	if err != nil && err != io.EOF {
+		if ctxErr := b.ctx.Err(); ctxErr != nil {
+			return n, ctxErr
+		}
 		return n, errors.New("reading plugin HTTP body failed")
 	}
 	return n, err
