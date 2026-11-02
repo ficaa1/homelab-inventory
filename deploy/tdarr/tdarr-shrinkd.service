@@ -1,0 +1,18 @@
+[Unit]
+Description=Tdarr shrink HTTP sidecar
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tdarr-shrink
+Group=tdarr-shrink
+EnvironmentFile=/etc/default/tdarr-shrink
+ExecStart=/usr/bin/python3 /usr/local/bin/tdarr-shrinkd.py
+Restart=on-failure
+RestartSec=5
+PrivateTmp=yes
+# The fixed host CLI is invoked through sudo; do not set NoNewPrivileges.
+
+[Install]
+WantedBy=multi-user.target

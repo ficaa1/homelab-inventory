@@ -1,0 +1,397 @@
+#!/bin/bash
+# Queue only named media files and arm one GPU worker per selected node.
+# The drain poller parks workers and sends a transition notification.
+set -euo pipefail
+
+# This root-owned file is shared with the sidecar and poller.
+set -a
+# shellcheck disable=SC1091
+[ ! -f /etc/default/tdarr-shrink ] || . /etc/default/tdarr-shrink
+set +a
+TDARR_API="${TDARR_API:-http://127.0.0.1:8266}"
+CURL_AUTH=()
+[ -z "${TDARR_API_KEY:-}" ] || CURL_AUTH=(-H "x-api-key: ${TDARR_API_KEY}")
+STATE_DIR="${TDARR_STATE_DIR:-/var/lib/tdarr-shrink}"
+STATE_FILE="${STATE_DIR}/state"
+export TDARR_MOVIE_ROOT="${TDARR_MOVIE_ROOT:-/media/movies}"
+export TDARR_SERIES_ROOT="${TDARR_SERIES_ROOT:-/media/series}"
+if [ -z "${TDARR_PATH_MAP:-}" ]; then TDARR_PATH_MAP='{}'; fi
+export TDARR_PATH_MAP
+export TDARR_PROTECTED_RADARR_IDS="${TDARR_PROTECTED_RADARR_IDS:-}"
+mkdir -p "${STATE_DIR}"
+exec 9>"${STATE_DIR}/lock"
+flock -n 9 || { echo 'tdarr-shrink: another helper operation is running' >&2; exit 1; }
+
+
+die() { printf 'tdarr-shrink: %s\n' "$*" >&2; exit 1; }
+
+api() {
+  # api METHOD PATH [JSON-body]
+  local method="$1" path="$2" body="${3:-}"
+  if [ -n "${body}" ]; then
+    curl -fsS "${CURL_AUTH[@]}" --max-time 30 -X "${method}" "${TDARR_API}${path}" \
+      -H 'Content-Type: application/json' -d "${body}"
+  else
+    curl -fsS "${CURL_AUTH[@]}" --max-time 30 -X "${method}" "${TDARR_API}${path}" \
+      -H 'Content-Type: application/json'
+  fi
+}
+
+[ "$#" -ge 1 ] || die "usage: tdarr-shrink [--with-pc] <container-path> [<container-path>...]"
+
+# Flags come off the front; everything else is a path. Arrays are fine in
+# bash 3.2 (only mapfile and associative arrays are not).
+WITH_PC=0
+ARGS=()
+for a in "$@"; do
+  case "${a}" in
+    --with-pc) WITH_PC=1 ;;
+    *) ARGS+=("${a}") ;;
+  esac
+done
+[ "${#ARGS[@]}" -ge 1 ] || die "no paths given (only --with-pc seen)"
+
+# Validate on the host before ANY Tdarr request or mutation. The API uses the
+# same read-only operation through the sidecar; execution repeats it afresh.
+VALIDATE_ONLY=0
+if [ "${ARGS[0]}" = "--validate-only" ]; then
+  VALIDATE_ONLY=1
+  ARGS=("${ARGS[@]:1}")
+fi
+VALIDATED=$(python3 - "${ARGS[@]}" <<'PY_VALIDATE'
+import json, os, stat, sys, urllib.request, xml.etree.ElementTree as ET
+
+EXTS = {"mkv", "mp4", "mov", "m4v", "mpg", "mpeg", "avi", "flv", "webm", "wmv", "vob", "evo", "iso", "m2ts", "ts"}
+MAPPING = json.loads(os.environ["TDARR_PATH_MAP"])
+LIBRARIES = (os.environ["TDARR_MOVIE_ROOT"], os.environ["TDARR_SERIES_ROOT"])
+if not isinstance(MAPPING, dict) or not MAPPING:
+    sys.exit("tdarr-shrink: configure TDARR_PATH_MAP")
+for source, target in MAPPING.items():
+    if not source.startswith("/") or not isinstance(target, str) or not target.startswith("/") or source == "/" or target == "/":
+        sys.exit("tdarr-shrink: invalid path mapping")
+    if os.path.normpath(source) != source or os.path.normpath(target) != target:
+        sys.exit("tdarr-shrink: path mapping must use clean absolute roots")
+ROOTS = {source: os.path.realpath(target, strict=True) for source, target in MAPPING.items()}
+for library in LIBRARIES:
+    if library == "/" or os.path.normpath(library) != library:
+        sys.exit("tdarr-shrink: invalid library root")
+if (LIBRARIES[0] == LIBRARIES[1] or any(a.startswith(b + "/") for a, b in (LIBRARIES, LIBRARIES[::-1]))):
+    sys.exit("tdarr-shrink: overlapping library roots")
+for library in LIBRARIES:
+    if library not in ROOTS:
+        sys.exit("tdarr-shrink: map both library roots")
+
+def mapped(p):
+    if not isinstance(p, str) or not p or len(p) > 512 or any(c in p for c in "\x00\n\r"):
+        raise ValueError("invalid media path")
+    for prefix, root in sorted(ROOTS.items(), key=lambda item: -len(item[0])):
+        for candidate in (prefix, root):
+            if p.startswith(candidate + "/") or p == candidate:
+                target = os.path.realpath(root + p[len(candidate):], strict=True)
+                if os.path.commonpath([root, target]) != root:
+                    raise ValueError("path outside media root")
+                return target
+    raise ValueError("outside allowed library prefixes")
+
+def container_path(p):
+    for library in LIBRARIES:
+        root = ROOTS[library]
+        if p.startswith(root + os.sep):
+            return library + "/" + os.path.relpath(p, root)
+    raise ValueError("outside allowed library roots")
+
+def media_files(p, visited=None):
+    visited = set() if visited is None else visited
+    p = mapped(p)
+    st = os.stat(p)
+    identity = (st.st_dev, st.st_ino)
+    if stat.S_ISDIR(st.st_mode):
+        if identity in visited:
+            return
+        visited.add(identity)
+        for child in sorted(os.listdir(p)):
+            yield from media_files(os.path.join(p, child), visited)
+    elif stat.S_ISREG(st.st_mode) and p.rsplit(".", 1)[-1].lower() in EXTS:
+        yield p
+
+def main():
+    # Configured protections fail closed if identity or filesystem evidence is unavailable.
+    url = os.environ.get("RADARR_URL", "http://127.0.0.1:7878").rstrip("/")
+    movie_ids = [int(i.strip()) for i in os.environ["TDARR_PROTECTED_RADARR_IDS"].split(",") if i.strip()]
+    if any(i <= 0 for i in movie_ids):
+        raise ValueError("invalid protected identity")
+    key = os.environ.get("RADARR_API_KEY")
+    if movie_ids and not key and os.environ.get("RADARR_CONFIG"):
+        key = ET.parse(os.environ["RADARR_CONFIG"]).findtext("ApiKey")
+    if movie_ids and not key:
+        raise ValueError("Radarr not configured")
+    roots, identities = [], set()
+    for movie_id in movie_ids:
+        req = urllib.request.Request(url + "/api/v3/movie/" + str(movie_id), headers={"X-Api-Key": key})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            movie = json.load(resp)
+        if movie.get("id") != movie_id or not movie.get("path"):
+            raise ValueError("Radarr protected identity unavailable")
+        folder = mapped(movie["path"])
+        if not os.path.isdir(folder):
+            raise ValueError("protected movie folder unavailable")
+        roots.append(folder.casefold())
+        protected = list(media_files(folder))
+        file_path = (movie.get("movieFile") or {}).get("path")
+        if file_path:
+            protected.append(mapped(file_path))
+        for f in protected:
+            st = os.stat(f)
+            identities.add((st.st_dev, st.st_ino))
+    files = set()
+    for arg in sys.argv[1:]:
+        for f in media_files(mapped(arg)):
+            # Repeat mapping for symlinks encountered during folder expansion.
+            f = mapped(f)
+            container = container_path(f)
+            if len(container) > 512 or any(c in container for c in "\x00\n\r"):
+                raise ValueError("invalid expanded media path")
+            lower = f.casefold()
+            st = os.stat(f)
+            if (any(lower == r or lower.startswith(r + os.sep) for r in roots)
+                or (st.st_dev, st.st_ino) in identities):
+                raise PermissionError("protected title")
+            files.add(container)
+            if len(files) > 16:
+                raise ValueError("maximum 16 expanded media files")
+    if not files:
+        raise ValueError("no media files found")
+    print(json.dumps({"paths": sorted(files)}))
+
+try:
+    main()
+except PermissionError:
+    sys.exit("tdarr-shrink: blocked or unreadable protected media; batch refused")
+except Exception:
+    # Never expose HTTP requests, credentials, or config contents in errors.
+    sys.exit("tdarr-shrink: validation failed (Radarr/filesystem unavailable, invalid path, or more than 16 files); batch refused")
+PY_VALIDATE
+) || die "media safety validation failed; batch refused"
+if [ "${VALIDATE_ONLY}" = 1 ]; then
+  printf '%s\n' "${VALIDATED}"
+  exit 0
+fi
+
+[ -n "${TDARR_NODE_NAME:-}" ] || die "configure TDARR_NODE_NAME"
+[ -n "${TDARR_FLOW_ID:-}" ] || die "configure TDARR_FLOW_ID"
+
+NODES=$(api GET /api/v2/get-nodes)
+NODE_NAME="${TDARR_NODE_NAME}"
+printf '%s' "${NODES}" | jq -e 'type == "object" and length > 0' >/dev/null || die "invalid node response"
+NODE_ID=$(printf '%s' "${NODES}" | jq -r --arg n "${NODE_NAME}" 'to_entries[] | select(.value.nodeName == $n) | .key' | head -n 1)
+[ -n "${NODE_ID}" ] || die "Tdarr node '${NODE_NAME}' not found"
+
+# --- Busy check: refuse if any worker is mid-item. ---
+if printf '%s' "${NODES}" | jq -e '[.. | objects | select(.idle? == false)] | length > 0' >/dev/null; then
+  die "a batch is already running; wait for the done notification"
+fi
+
+# --- Libraries, looked up by source folder. ---
+LIBS=$(api POST /api/v2/cruddb '{"data":{"collection":"LibrarySettingsJSONDB","mode":"getAll"}}')
+lib_id() {
+  printf '%s' "${LIBS}" | jq -r --arg f "$1" '.[] | select(.folder == $f) | ._id'
+}
+MOVIES_ID=$(lib_id "${TDARR_MOVIE_ROOT}")
+TV_ID=$(lib_id "${TDARR_SERIES_ROOT}")
+[ -n "${MOVIES_ID}" ] && [ "${MOVIES_ID}" != "null" ] || die "configured movie library not found"
+[ -n "${TV_ID}" ] && [ "${TV_ID}" != "null" ] || die "configured series library not found"
+
+set_process_library() {
+  local val="$1" lib
+  for lib in "${MOVIES_ID}" "${TV_ID}"; do
+    api POST /api/v2/cruddb \
+      "{\"data\":{\"collection\":\"LibrarySettingsJSONDB\",\"mode\":\"update\",\"docID\":\"${lib}\",\"obj\":{\"processLibrary\":${val},\"processTranscodes\":${val}}}}" >/dev/null
+  done
+}
+
+park() {
+  # Workers to 0 on EVERY node — a leftover armed remote node would keep
+  # pulling from the queue after this script returned — plus processLibrary
+  # false on both libraries. Idempotent.
+  local id cur
+  for id in $(printf '%s' "${NODES}" | jq -r 'keys[]'); do
+    cur=$(api GET /api/v2/get-nodes | jq -r --arg id "${id}" '.[$id].workerLimits.transcodegpu // 0')
+    while [ "${cur}" -gt 0 ]; do
+      api POST /api/v2/alter-worker-limit \
+        "{\"data\":{\"nodeID\":\"${id}\",\"process\":\"decrease\",\"workerType\":\"transcodegpu\"}}" >/dev/null
+      cur=$((cur - 1))
+    done
+  done
+  set_process_library false
+}
+# arm_node: raise one node's transcodegpu limit to at least $2. Idempotent.
+arm_node() {
+  local id="$1" want="$2" cur
+  cur=$(api GET /api/v2/get-nodes | jq -r --arg id "${id}" '.[$id].workerLimits.transcodegpu // 0')
+  case "${cur}" in ''|*[!0-9]*) cur=0 ;; esac
+  while [ "${cur}" -lt "${want}" ]; do
+    api POST /api/v2/alter-worker-limit \
+      "{\"data\":{\"nodeID\":\"${id}\",\"process\":\"increase\",\"workerType\":\"transcodegpu\"}}" >/dev/null
+    cur=$((cur + 1))
+  done
+}
+
+node_id_by_name() {
+  api GET /api/v2/get-nodes \
+    | jq -r --arg n "$1" 'to_entries[] | select(.value.nodeName == $n) | .key' \
+    | head -n 1
+}
+
+arm_pc() {
+  local pc_name pc_id
+  pc_name="${TDARR_PC_NODE:-}"
+  if [ -z "${pc_name}" ]; then
+    printf 'note: no secondary node configured; running on %s only\n' "${NODE_NAME}" >&2
+    return 0
+  fi
+  pc_id=$(node_id_by_name "${pc_name}")
+  if [ -z "${pc_id}" ]; then
+    printf 'note: %s is offline or not registered; running on %s only\n' "${pc_name}" "${NODE_NAME}" >&2
+    return 0
+  fi
+  arm_node "${pc_id}" 1
+  printf 'armed %s alongside %s\n' "${pc_name}" "${NODE_NAME}" >&2
+}
+
+read_db() {
+  api POST /api/v2/cruddb '{"data":{"collection":"FileJSONDB","mode":"getAll"}}'
+}
+
+# --- Use only the resolved, expanded and capped files. ---
+TMP=$(mktemp)
+MISS_M=$(mktemp)
+MISS_T=$(mktemp)
+PIDS=$(mktemp)
+trap 'rm -f "${TMP}" "${MISS_M}" "${MISS_T}" "${PIDS}"' EXIT
+printf '%s' "${VALIDATED}" | jq -r '.paths[]' >"${TMP}"
+COUNT=$(wc -l < "${TMP}" | tr -d ' ')
+[ "${COUNT}" -le 16 ] || die "maximum 16 expanded media files"
+
+# --- Park only after safety validation succeeds. ---
+park
+
+# The operator selects the imported Flow in Tdarr; refuse a different Flow.
+for lib in "${MOVIES_ID}" "${TV_ID}"; do
+  printf '%s' "${LIBS}" | jq -e --arg lib "${lib}" --arg flow "${TDARR_FLOW_ID}" \
+    '.[] | select(._id == $lib) | (.flowIdSelected // .flowId // .flowID) == $flow and .flowEnabled == true' >/dev/null \
+    || die "select the configured Flow and enable Flows on both libraries"
+done
+
+# --- Sweep: every file in both libraries -> Not required (chunked). ---
+FILES_DB=$(read_db)
+printf '%s' "${FILES_DB}" | jq -e 'type == "array" and all(.[]; has("_id") and has("TranscodeDecisionMaker"))' >/dev/null || die "invalid file database response"
+ALL_IDS=$(printf '%s' "${FILES_DB}" | jq -c '[.[]._id]')
+TOTAL=$(printf '%s' "${ALL_IDS}" | jq 'length')
+CHUNK=500
+i=0
+while [ "${i}" -lt "${TOTAL}" ]; do
+  c=$(printf '%s' "${ALL_IDS}" | jq -c ".[${i}:$((i+CHUNK))]")
+  api POST /api/v2/bulk-update-files \
+    "{\"data\":{\"fileIds\":${c},\"updatedObj\":{\"TranscodeDecisionMaker\":\"Not required\",\"HealthCheck\":\"Not required\"}}}" >/dev/null
+  i=$((i + CHUNK))
+done
+
+# Clear stale staged entries only for the selected files.
+while IFS= read -r f; do
+  [ -z "${f}" ] && continue
+  api POST /api/v2/cruddb "$(jq -nc --arg f "${f}" '{data:{collection:"StagedJSONDB",mode:"removeOne",docID:$f}}')" >/dev/null
+
+done <"${TMP}"
+
+# --- Map pointed files to libraries; collect any missing from the DB. ---
+while IFS= read -r f; do
+  [ -z "${f}" ] && continue
+  case "${f}" in
+    "${TDARR_MOVIE_ROOT}/"*)     tag=M ;;
+    "${TDARR_SERIES_ROOT}/"*)   tag=T ;;
+    *) die "${f}: outside configured library roots" ;;
+  esac
+  fid=$(printf '%s' "${FILES_DB}" | jq -r --arg p "${f}" '.[] | select(.file == $p) | ._id')
+  if [ -z "${fid}" ] || [ "${fid}" = "null" ]; then
+    if [ "${tag}" = "M" ]; then printf '%s\n' "${f}" >>"${MISS_M}"; else printf '%s\n' "${f}" >>"${MISS_T}"; fi
+  fi
+done <"${TMP}"
+
+# --- Scan files missing from the DB, per library, then re-read. ---
+scan_missing() {
+  local lib="$1" file="$2" arr
+  [ -s "${file}" ] || return 0
+  arr=$(jq -R -s -c 'split("\n") | map(select(length>0))' <"${file}")
+  api POST /api/v2/scan-files \
+    "{\"data\":{\"scanConfig\":{\"dbID\":\"${lib}\",\"mode\":\"scanFolderWatcher\",\"arrayOrPath\":${arr}}}}" >/dev/null
+}
+scan_missing "${MOVIES_ID}" "${MISS_M}"
+scan_missing "${TV_ID}" "${MISS_T}"
+FILES_DB=$(read_db)
+
+# --- Resolve every pointed file's id, then queue exactly those. ---
+while IFS= read -r f; do
+  [ -z "${f}" ] && continue
+  fid=$(printf '%s' "${FILES_DB}" | jq -r --arg p "${f}" '.[] | select(.file == $p) | ._id')
+  if [ -z "${fid}" ] || [ "${fid}" = "null" ]; then
+    die "${f}: scan did not register the file in the library DB"
+  fi
+  printf '%s\n' "${fid}" >>"${PIDS}"
+done <"${TMP}"
+
+PIDS_JSON=$(jq -R -s -c 'split("\n") | map(select(length>0))' <"${PIDS}")
+api POST /api/v2/bulk-update-files \
+  "{\"data\":{\"fileIds\":${PIDS_JSON},\"updatedObj\":{\"TranscodeDecisionMaker\":\"Queued\",\"HealthCheck\":\"Not required\",\"holdUntil\":0}}}" >/dev/null
+
+# --- Safety assert: only the pointed files may be Queued. ---
+FILES_DB=$(read_db)
+printf '%s' "${FILES_DB}" | jq -e 'type == "array" and all(.[]; has("_id") and has("TranscodeDecisionMaker"))' >/dev/null || die "invalid file database response"
+QUEUED=$(printf '%s' "${FILES_DB}" | jq -c '[.[] | select(.TranscodeDecisionMaker=="Queued") | ._id]')
+EXTRA=$(printf '%s' "${QUEUED}" | jq -c --argjson p "${PIDS_JSON}" '. - $p')
+if [ "$(printf '%s' "${EXTRA}" | jq 'length')" -gt 0 ]; then
+  die "safety check failed; non-pointed files are Queued: $(printf '%s' "${EXTRA}" | jq -r 'join(", ")')"
+fi
+
+# --- Arm the libraries (processLibrary + processTranscodes true). ---
+set_process_library true
+
+# Require a live queue before enabling workers.
+QL=0
+for qid in $(printf '%s' "${NODES}" | jq -r 'keys[]'); do
+  q=$(api POST /api/v2/poll-worker-limits "{\"data\":{\"nodeID\":\"${qid}\"}}" | jq -r '.queueLengths.transcodegpu // 0')
+  case "${q}" in ''|*[!0-9]*) q=0 ;; esac
+  [ "${q}" -gt "${QL}" ] && QL="${q}"
+done
+[ "${QL}" -gt 0 ] || die "queue is empty after arming (queueLengths.transcodegpu=0 on every node); a gate is still closed (schedule/processLibrary/staged)"
+
+# --- Enable one GPU transcode worker on the local node. ---
+arm_node "${NODE_ID}" 1
+
+# --- Opt-in: arm the PC node too. ---
+if [ "${WITH_PC}" = "1" ]; then
+  [ -z "${TDARR_CACHE_NOTE:-}" ] || printf 'cache: %s\n' "${TDARR_CACHE_NOTE}" >&2
+  arm_pc
+fi
+
+# Observe worker startup before recording the busy transition.
+seen=false
+for _ in $(seq 1 20); do
+  sleep 2
+  if api GET /api/v2/get-nodes | jq -e '[.. | objects | select(.idle? == false)] | length > 0' >/dev/null; then seen=true; break; fi
+done
+printf 'busy\n' >"${STATE_FILE}"
+if [ "${seen}" = "false" ]; then
+  printf 'note: worker activity not observed in ~40s; the batch may be an instant no-op\n' >&2
+fi
+
+# --- Report. ---
+printf 'queued %s files; you will get one notification when the batch drains\n' "${COUNT}"
+while IFS= read -r f; do
+  [ -z "${f}" ] && continue
+  # Tdarr stores file_size in MiB; convert to GiB (matches `du -h`).
+  size=$(printf '%s' "${FILES_DB}" | jq -r --arg p "${f}" '.[] | select(.file == $p) | ((.file_size // 0) / 1024 * 10 | round) / 10')
+  codec=$(printf '%s' "${FILES_DB}" | jq -r --arg p "${f}" '.[] | select(.file == $p) | .video_codec_name // "?"')
+  marker=""
+  case "${codec}" in hevc|h265) marker="  [HEVC - flow will skip unless bloat class]";; esac
+  printf '  %sGB  %-6s  %s%s\n' "${size}" "${codec}" "${f}" "${marker}"
+done <"${TMP}"
