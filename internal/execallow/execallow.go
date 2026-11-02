@@ -25,9 +25,10 @@ import (
 
 // safeName matches names safe for use as a service/container identifier.
 // Shell metacharacters and argument-injection sequences are rejected.
-var safeImage = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._/@:-]*$`)
-
 var safeName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
+
+// safeImage accepts image names, tags and digest references.
+var safeImage = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._/@:-]*$`)
 
 const (
 	// DefaultTimeout bounds a restart against a hung daemon.

@@ -58,9 +58,19 @@ Remove `ACTIONS_ENABLED`, remove the socket mount, and recreate the container.
 - A failure stops the sequence; the log shows what restarted, failed or was skipped.
 - Restarting the API's own container can cut the response short. The log then
   says `running`; check Docker before trying again.
-- There is no way to run other commands.
+- The separate `POST /exec` route shares this enablement, operator authorization
+  and audit. It allows image-pin changes, Compose pulls/up and dangling-image
+  pruning; see [API](api.md#allowlisted-execution-and-composed-digests).
 
 API: `POST /actions/preview` with `{"kind":"stack_restart","target":"app"}` (or
 `container_restart` and a container name) using the API token. Then
 `POST /actions/execute` with the same fields, `"confirm":true` and the preview's
 `container_set_hash`, using the operator token. `GET /actions/log` lists the history.
+
+## Compose upgrades through the API
+
+The `exec` MCP tool and `POST /exec` accept only the documented Docker operations.
+Compose files still need exact mappings in `ACTIONS_COMPOSE_FILES`. Atomic image
+replacement needs a writable parent-directory mount rather than a read-only file
+mount. `compose-pull` and `compose-up` also need the Docker socket and any files
+referenced by Compose. Discovery itself stays read-only.

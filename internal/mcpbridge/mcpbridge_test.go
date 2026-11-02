@@ -21,6 +21,7 @@ func call(t *testing.T, srv *Server, req map[string]any) map[string]any {
 	_ = json.NewEncoder(in).Encode(req)
 	ss := New(srv.baseURL, srv.token, in, out)
 	ss.Tools = srv.Tools
+	ss.OperatorToken = srv.OperatorToken
 	if err := ss.Run(context.Background()); err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -164,6 +165,8 @@ func TestToolCallRequiresSafeName(t *testing.T) {
 }
 
 func TestTokenFileMustBePrivateAndReadable(t *testing.T) {
+	t.Setenv("MCP_API_TOKEN", "")
+	t.Setenv("MCP_API_TOKEN_FILE", "")
 	t.Setenv("API_TOKEN", "")
 	file := filepath.Join(t.TempDir(), "token")
 	t.Setenv("API_TOKEN_FILE", file)
@@ -183,6 +186,21 @@ func TestTokenFileMustBePrivateAndReadable(t *testing.T) {
 			t.Fatal("bad token read")
 		}
 	}
+	t.Setenv("MCP_API_TOKEN_FILE", file)
+	t.Setenv("API_TOKEN", "fallback-fixture")
+	if token, err := EnvToken(); err != nil || token != "obviously-fake-test-token" {
+		t.Fatal("MCP file precedence failed", err)
+	}
+	t.Setenv("MCP_API_TOKEN", "preferred-fixture")
+	if token, err := EnvToken(); err != nil || token != "preferred-fixture" {
+		t.Fatal("MCP token precedence failed", err)
+	}
+	t.Setenv("OPERATOR_TOKEN", "")
+	t.Setenv("OPERATOR_TOKEN_FILE", file)
+	if token, err := EnvOperatorToken(); err != nil || token != "obviously-fake-test-token" {
+		t.Fatal("operator file failed", err)
+	}
+
 }
 
 func TestAPIErrorBecomesIsError(t *testing.T) {
@@ -287,6 +305,76 @@ func TestPluginToolsReadOnlyProjectionAndQueryEscaping(t *testing.T) {
 	for _, args := range []map[string]any{{"plugin": "../sample", "view": "main"}, {"plugin": "sample", "view": "../main"}, {"plugin": "sample", "view": "main", "params": map[string]any{"q": true}}} {
 		if _, _, err := tool.Path(args); err == nil {
 			t.Fatal("invalid plugin arguments accepted")
+		}
+	}
+}
+
+func TestCompatibilityTools(t *testing.T) {
+	var method, path, token string
+	var payload map[string]any
+	disabled := false
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method, path, token = r.Method, r.URL.RequestURI(), r.Header.Get("Authorization")
+		payload = nil
+		if r.Method == "POST" {
+			if r.Header.Get("Content-Type") != "application/json" {
+				t.Error("missing JSON content type")
+			}
+			if json.NewDecoder(r.Body).Decode(&payload) != nil {
+				t.Error("bad JSON body")
+			}
+		}
+		if disabled {
+			w.WriteHeader(404)
+			w.Write([]byte(`{"error":"plugin not found"}`))
+			return
+		}
+		w.Write([]byte(`{"ok":true}`))
+	}))
+	defer api.Close()
+	srv := New(api.URL, "api-fixture", nil, nil)
+	srv.OperatorToken = "operator-fixture"
+	for _, tc := range []struct {
+		tool, method, path string
+		args               map[string]any
+	}{
+		{"tautulli_activity", "GET", "/plugins/media/api/tautulli/activity", nil},
+		{"tautulli_history", "GET", "/plugins/media/api/tautulli/history?hours=48", map[string]any{"hours": 48}},
+		{"tautulli_libraries", "GET", "/plugins/media/api/tautulli/libraries", nil},
+		{"sonarr_summary", "GET", "/plugins/media/api/sonarr/summary", nil},
+		{"radarr_summary", "GET", "/plugins/media/api/radarr/summary", nil},
+		{"cloudflare_zone", "GET", "/plugins/cloudflare/api/zone", nil},
+		{"cloudflare_analytics", "GET", "/plugins/cloudflare/api/analytics?hours=48", map[string]any{"hours": 48}},
+		{"network", "GET", "/plugins/network/api/summary", nil},
+		{"tdarr_candidates", "GET", "/plugins/tdarr/api/shrink-candidates?limit=3", map[string]any{"limit": 3}},
+		{"send_digest", "POST", "/digest/send", map[string]any{"title": "Report", "body": "**hello**\n"}},
+		{"exec", "POST", "/exec", map[string]any{"command": "compose-up", "compose_file": "/srv/app/compose.yml", "service": "app"}},
+		{"tdarr_shrink", "POST", "/plugins/tdarr/api/shrink", map[string]any{"paths": []string{"/worker/movies/Example"}, "withPc": true}},
+	} {
+		resp := call(t, srv, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{"name": tc.tool, "arguments": tc.args}})
+		expectedToken := "Bearer api-fixture"
+		if tc.tool == "exec" {
+			expectedToken = "Bearer operator-fixture"
+		}
+		if resp["error"] != nil || method != tc.method || path != tc.path || token != expectedToken {
+			t.Fatal(tc.tool, resp, method, path, token)
+		}
+		if tc.method == "POST" {
+			want, _ := json.Marshal(tc.args)
+			got, _ := json.Marshal(payload)
+			if !bytes.Equal(want, got) {
+				t.Fatal(tc.tool, string(got))
+			}
+		}
+	}
+	disabled = true
+	resp := call(t, srv, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{"name": "tdarr_candidates"}})
+	if resp["result"].(map[string]any)["isError"] != true {
+		t.Fatal(resp)
+	}
+	for _, tool := range srv.Tools {
+		if tool.Name == "season_gate" {
+			t.Fatal("unexpected tool")
 		}
 	}
 }

@@ -1,6 +1,6 @@
-// Command mcpbridge serves generic inventory GET tools over MCP stdio.
-// MCP_API_URL is required. API_TOKEN or API_TOKEN_FILE supplies the
-// bearer token without putting credentials in argv.
+// Command mcpbridge serves fixed inventory tools over MCP stdio.
+// MCP_API_URL is required. API or MCP-prefixed token variables supply the
+// bearer; OPERATOR_TOKEN authorizes exec separately. Tokens may use private files.
 package main
 
 import (
@@ -23,7 +23,12 @@ func main() {
 	if err != nil {
 		log.Fatal("mcpbridge: ", err)
 	}
+	operator, err := mcpbridge.EnvOperatorToken()
+	if err != nil {
+		log.Fatal("mcpbridge: ", err)
+	}
 	srv := mcpbridge.New(baseURL, token, os.Stdin, os.Stdout)
+	srv.OperatorToken = operator
 	if err := srv.Run(context.Background()); err != nil {
 		log.Fatalf("mcpbridge: %v", err)
 	}
