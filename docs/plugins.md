@@ -181,7 +181,7 @@ when the operator confirms replacement.
 | Network | Optional Prometheus metrics/probes, route-provider routes, inventory VPN facts, seeding-only qBittorrent reads, native bounded speed measurements/history | Existing exporters, route provider and qBittorrent |
 | Cloudflare | Zone identity/plan, paginated DNS and complete UTC day/week hourly analytics | Cloudflare zone (read permissions only) |
 | Security | Fake bearer/path canaries, durable deduplicated trip history and transition alerts | Local plugin cache; no credential values in trip history |
-| Tdarr | Status, compression candidates, exact library-file preview and guarded batch execution | Tdarr, the [included media-policy service](../deploy/mediapolicy/README.md), Arr, Tautulli and shrink sidecar |
+| [Tdarr](tdarr.md) | Status, compression candidates, exact library-file preview and guarded batch execution | Tdarr, the [included media-policy service](../deploy/mediapolicy/README.md), Arr, Tautulli and the [included shrink sidecar](tdarr.md) |
 | Uploads | Mounted folder (including a Copyparty-served folder), Calibre-Web, Paperless API token or legacy username/password login | Existing destination files and service databases |
 
 Plugin action IDs and fields are compiled into the binary. The browser renders

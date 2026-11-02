@@ -1,0 +1,528 @@
+{
+  "name": "Shrink",
+  "priority": 0,
+  "flowPlugins": [
+    {
+      "name": "Input File",
+      "sourceRepo": "Community",
+      "pluginName": "inputFile",
+      "version": "1.0.0",
+      "fpEnabled": true,
+      "id": "inp0001",
+      "position": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "Audio: drop lossless if EAC3 exists, else EAC3 640k",
+      "sourceRepo": "Community",
+      "pluginName": "runClassicTranscodePlugin",
+      "version": "1.0.0",
+      "inputsDB": {
+        "pluginSourceId": "Local:Tdarr_Plugin_hlb1_FFMPEG_Lossless_Audio_Drop_Or_Transcode",
+        "lossless_codecs": "truehd,dts",
+        "kept_codec": "eac3",
+        "transcode_bitrate": "640k",
+        "commentary_regex": "commentary"
+      },
+      "fpEnabled": true,
+      "id": "aud0001",
+      "position": {
+        "x": 0,
+        "y": 156
+      }
+    },
+    {
+      "name": "Check HDR Video",
+      "sourceRepo": "Community",
+      "pluginName": "checkHdr",
+      "version": "1.0.0",
+      "fpEnabled": true,
+      "id": "hdr0001",
+      "position": {
+        "x": 0,
+        "y": 320
+      }
+    },
+    {
+      "name": "Check Video Codec",
+      "sourceRepo": "Community",
+      "pluginName": "checkVideoCodec",
+      "version": "1.0.0",
+      "inputsDB": {
+        "codec": "hevc"
+      },
+      "fpEnabled": true,
+      "id": "cod0001",
+      "position": {
+        "x": 0,
+        "y": 480
+      }
+    },
+    {
+      "name": "Bloat class: video > 30 Mbps",
+      "sourceRepo": "Community",
+      "pluginName": "checkVideoBitrate",
+      "version": "1.0.0",
+      "inputsDB": {
+        "unit": "kbps",
+        "greaterThan": "30000",
+        "lessThan": "10000000"
+      },
+      "fpEnabled": true,
+      "id": "bit0001",
+      "position": {
+        "x": 0,
+        "y": 640
+      }
+    },
+    {
+      "name": "Check Video Resolution",
+      "sourceRepo": "Community",
+      "pluginName": "checkVideoResolution",
+      "version": "1.0.0",
+      "fpEnabled": true,
+      "id": "res0001",
+      "position": {
+        "x": 0,
+        "y": 800
+      }
+    },
+    {
+      "name": "Video: vdka NVENC CQ21",
+      "sourceRepo": "Community",
+      "pluginName": "runClassicTranscodePlugin",
+      "version": "1.0.0",
+      "inputsDB": {
+        "pluginSourceId": "Community:Tdarr_Plugin_vdka_Tiered_NVENC_CQV_BASED_CONFIGURABLE",
+        "sdCQV": "21",
+        "hdCQV": "21",
+        "fullhdCQV": "21",
+        "uhdCQV": "23",
+        "bframe": "0",
+        "ffmpeg_preset": "slow"
+      },
+      "fpEnabled": true,
+      "id": "vdk0001",
+      "position": {
+        "x": 400,
+        "y": 480
+      }
+    },
+    {
+      "name": "Begin Command (4K bloat)",
+      "sourceRepo": "Community",
+      "pluginName": "ffmpegCommandStart",
+      "version": "1.0.0",
+      "fpEnabled": true,
+      "id": "beg4k01",
+      "position": {
+        "x": 400,
+        "y": 800
+      }
+    },
+    {
+      "name": "Set Video Encoder (4K)",
+      "sourceRepo": "Community",
+      "pluginName": "ffmpegCommandSetVideoEncoder",
+      "version": "1.0.0",
+      "inputsDB": {
+        "outputCodec": "hevc",
+        "hardwareEncoding": true,
+        "hardwareType": "nvenc",
+        "hardwareDecoding": true,
+        "forceEncoding": true,
+        "ffmpegPresetEnabled": true,
+        "ffmpegPreset": "slow",
+        "ffmpegQualityEnabled": false
+      },
+      "fpEnabled": true,
+      "id": "enc4k01",
+      "position": {
+        "x": 400,
+        "y": 920
+      }
+    },
+    {
+      "name": "Custom Arguments (4K CQ23)",
+      "sourceRepo": "Community",
+      "pluginName": "ffmpegCommandCustomArguments",
+      "version": "1.0.0",
+      "inputsDB": {
+        "inputArguments": "",
+        "outputArguments": "-b:v 0 -cq:v 23 -rc-lookahead 32 -bf 0 -a53cc 0 -max_muxing_queue_size 9999"
+      },
+      "fpEnabled": true,
+      "id": "arg4k01",
+      "position": {
+        "x": 400,
+        "y": 1040
+      }
+    },
+    {
+      "name": "Set Container mkv (4K)",
+      "sourceRepo": "Community",
+      "pluginName": "ffmpegCommandSetContainer",
+      "version": "1.0.0",
+      "inputsDB": {
+        "container": "mkv",
+        "forceConform": false
+      },
+      "fpEnabled": true,
+      "id": "cnt4k01",
+      "position": {
+        "x": 400,
+        "y": 1160
+      }
+    },
+    {
+      "name": "Execute (4K)",
+      "sourceRepo": "Community",
+      "pluginName": "ffmpegCommandExecute",
+      "version": "1.0.0",
+      "fpEnabled": true,
+      "id": "exe4k01",
+      "position": {
+        "x": 400,
+        "y": 1280
+      }
+    },
+    {
+      "name": "Begin Command (bloat)",
+      "sourceRepo": "Community",
+      "pluginName": "ffmpegCommandStart",
+      "version": "1.0.0",
+      "fpEnabled": true,
+      "id": "beg0011",
+      "position": {
+        "x": 800,
+        "y": 800
+      }
+    },
+    {
+      "name": "Set Video Encoder",
+      "sourceRepo": "Community",
+      "pluginName": "ffmpegCommandSetVideoEncoder",
+      "version": "1.0.0",
+      "inputsDB": {
+        "outputCodec": "hevc",
+        "hardwareEncoding": true,
+        "hardwareType": "nvenc",
+        "hardwareDecoding": true,
+        "forceEncoding": true,
+        "ffmpegPresetEnabled": true,
+        "ffmpegPreset": "slow",
+        "ffmpegQualityEnabled": false
+      },
+      "fpEnabled": true,
+      "id": "enc0012",
+      "position": {
+        "x": 800,
+        "y": 920
+      }
+    },
+    {
+      "name": "Custom Arguments (CQ21)",
+      "sourceRepo": "Community",
+      "pluginName": "ffmpegCommandCustomArguments",
+      "version": "1.0.0",
+      "inputsDB": {
+        "inputArguments": "",
+        "outputArguments": "-b:v 0 -cq:v 21 -rc-lookahead 32 -bf 0 -a53cc 0 -max_muxing_queue_size 9999"
+      },
+      "fpEnabled": true,
+      "id": "arg0013",
+      "position": {
+        "x": 800,
+        "y": 1040
+      }
+    },
+    {
+      "name": "Set Container mkv",
+      "sourceRepo": "Community",
+      "pluginName": "ffmpegCommandSetContainer",
+      "version": "1.0.0",
+      "inputsDB": {
+        "container": "mkv",
+        "forceConform": false
+      },
+      "fpEnabled": true,
+      "id": "cnt0014",
+      "position": {
+        "x": 800,
+        "y": 1160
+      }
+    },
+    {
+      "name": "Execute",
+      "sourceRepo": "Community",
+      "pluginName": "ffmpegCommandExecute",
+      "version": "1.0.0",
+      "fpEnabled": true,
+      "id": "exe0015",
+      "position": {
+        "x": 800,
+        "y": 1280
+      }
+    },
+    {
+      "name": "Run Health Check",
+      "sourceRepo": "Community",
+      "pluginName": "runHealthCheck",
+      "version": "1.0.0",
+      "inputsDB": {
+        "type": "quick",
+        "gpuAcceleration": "auto"
+      },
+      "fpEnabled": true,
+      "id": "hck0001",
+      "position": {
+        "x": 600,
+        "y": 1524
+      }
+    },
+    {
+      "name": "Replace Original File",
+      "sourceRepo": "Community",
+      "pluginName": "replaceOriginalFile",
+      "version": "1.0.0",
+      "fpEnabled": true,
+      "id": "rpl0001",
+      "position": {
+        "x": 600,
+        "y": 1680
+      }
+    },
+    {
+      "name": "On Flow Error",
+      "sourceRepo": "Community",
+      "pluginName": "onFlowError",
+      "version": "1.0.0",
+      "fpEnabled": true,
+      "id": "ofe0001",
+      "position": {
+        "x": 1000,
+        "y": 1520
+      }
+    },
+    {
+      "name": "Require Review",
+      "sourceRepo": "Community",
+      "pluginName": "requireReview",
+      "version": "1.0.0",
+      "fpEnabled": true,
+      "id": "rvw0001",
+      "position": {
+        "x": 1000,
+        "y": 1680
+      }
+    }
+  ],
+  "flowEdges": [
+    {
+      "source": "inp0001",
+      "sourceHandle": "1",
+      "target": "aud0001",
+      "targetHandle": null,
+      "id": "e01"
+    },
+    {
+      "source": "aud0001",
+      "sourceHandle": "1",
+      "target": "hdr0001",
+      "targetHandle": null,
+      "id": "e02"
+    },
+    {
+      "source": "hdr0001",
+      "sourceHandle": "1",
+      "target": "hck0001",
+      "targetHandle": null,
+      "id": "e03"
+    },
+    {
+      "source": "hdr0001",
+      "sourceHandle": "2",
+      "target": "cod0001",
+      "targetHandle": null,
+      "id": "e04"
+    },
+    {
+      "source": "cod0001",
+      "sourceHandle": "1",
+      "target": "bit0001",
+      "targetHandle": null,
+      "id": "e05"
+    },
+    {
+      "source": "cod0001",
+      "sourceHandle": "2",
+      "target": "vdk0001",
+      "targetHandle": null,
+      "id": "e06"
+    },
+    {
+      "source": "bit0001",
+      "sourceHandle": "1",
+      "target": "res0001",
+      "targetHandle": null,
+      "id": "e07"
+    },
+    {
+      "source": "res0001",
+      "sourceHandle": "6",
+      "target": "beg4k01",
+      "targetHandle": null,
+      "id": "e08"
+    },
+    {
+      "source": "res0001",
+      "sourceHandle": "7",
+      "target": "beg4k01",
+      "targetHandle": null,
+      "id": "e09"
+    },
+    {
+      "source": "res0001",
+      "sourceHandle": "8",
+      "target": "beg4k01",
+      "targetHandle": null,
+      "id": "e10"
+    },
+    {
+      "source": "res0001",
+      "sourceHandle": "1",
+      "target": "beg0011",
+      "targetHandle": null,
+      "id": "e11"
+    },
+    {
+      "source": "res0001",
+      "sourceHandle": "2",
+      "target": "beg0011",
+      "targetHandle": null,
+      "id": "e12"
+    },
+    {
+      "source": "res0001",
+      "sourceHandle": "3",
+      "target": "beg0011",
+      "targetHandle": null,
+      "id": "e13"
+    },
+    {
+      "source": "res0001",
+      "sourceHandle": "4",
+      "target": "beg0011",
+      "targetHandle": null,
+      "id": "e14"
+    },
+    {
+      "source": "res0001",
+      "sourceHandle": "5",
+      "target": "beg0011",
+      "targetHandle": null,
+      "id": "e15"
+    },
+    {
+      "source": "res0001",
+      "sourceHandle": "9",
+      "target": "beg0011",
+      "targetHandle": null,
+      "id": "e16"
+    },
+    {
+      "source": "beg4k01",
+      "sourceHandle": "1",
+      "target": "enc4k01",
+      "targetHandle": null,
+      "id": "e17"
+    },
+    {
+      "source": "enc4k01",
+      "sourceHandle": "1",
+      "target": "arg4k01",
+      "targetHandle": null,
+      "id": "e18"
+    },
+    {
+      "source": "arg4k01",
+      "sourceHandle": "1",
+      "target": "cnt4k01",
+      "targetHandle": null,
+      "id": "e19"
+    },
+    {
+      "source": "cnt4k01",
+      "sourceHandle": "1",
+      "target": "exe4k01",
+      "targetHandle": null,
+      "id": "e20"
+    },
+    {
+      "source": "exe4k01",
+      "sourceHandle": "1",
+      "target": "hck0001",
+      "targetHandle": null,
+      "id": "e21"
+    },
+    {
+      "source": "beg0011",
+      "sourceHandle": "1",
+      "target": "enc0012",
+      "targetHandle": null,
+      "id": "e22"
+    },
+    {
+      "source": "enc0012",
+      "sourceHandle": "1",
+      "target": "arg0013",
+      "targetHandle": null,
+      "id": "e23"
+    },
+    {
+      "source": "arg0013",
+      "sourceHandle": "1",
+      "target": "cnt0014",
+      "targetHandle": null,
+      "id": "e24"
+    },
+    {
+      "source": "cnt0014",
+      "sourceHandle": "1",
+      "target": "exe0015",
+      "targetHandle": null,
+      "id": "e25"
+    },
+    {
+      "source": "exe0015",
+      "sourceHandle": "1",
+      "target": "hck0001",
+      "targetHandle": null,
+      "id": "e26"
+    },
+    {
+      "source": "vdk0001",
+      "sourceHandle": "1",
+      "target": "hck0001",
+      "targetHandle": null,
+      "id": "e27"
+    },
+    {
+      "source": "hck0001",
+      "sourceHandle": "1",
+      "target": "rpl0001",
+      "targetHandle": null,
+      "id": "e28"
+    },
+    {
+      "source": "ofe0001",
+      "sourceHandle": "1",
+      "target": "rvw0001",
+      "targetHandle": null,
+      "id": "e29"
+    }
+  ],
+  "isUiLocked": false
+}

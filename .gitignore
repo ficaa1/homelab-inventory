@@ -11,6 +11,7 @@
 !testdata/**/*.json
 !**/testdata/*.json
 !/deploy/mediapolicy/policy.example.json
+!/deploy/tdarr/Shrink.json
 
 *.out
 .DS_Store
