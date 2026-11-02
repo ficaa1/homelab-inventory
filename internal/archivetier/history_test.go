@@ -250,7 +250,7 @@ func TestRestoreConfigValidation(t *testing.T) {
 		}
 	}
 	c := testConfig()
-	c.RestoreMounts = []MountMapping{{AppRoot: "/library", LocalRoot: "/mnt/share"}}
+	c.RestoreMounts = []MountMapping{{AppRoot: "/library", LocalRoot: "/data/media"}}
 	c.QuarantineDir = "/archive-quarantine"
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)

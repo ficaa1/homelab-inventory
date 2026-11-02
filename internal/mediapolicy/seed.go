@@ -482,7 +482,7 @@ func (s *Service) seedLibraryMoveSize(appPath string) (int64, error) {
 		total += file.Size
 	}
 	if total <= 0 {
-		return 0, fmt.Errorf("Download library move size unknown")
+		return 0, fmt.Errorf("download disk library move size unknown")
 	}
 	return total, nil
 }

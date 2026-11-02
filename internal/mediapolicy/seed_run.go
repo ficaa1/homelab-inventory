@@ -520,7 +520,7 @@ func (s *Service) seedDestination(f SeedFile, p SeedPlan) (string, error) {
 }
 func (s *Service) seedOld(f SeedFile) (string, error) {
 	if !seedUnder(f.Source, s.Config.Seeding.DownloadRoot) {
-		return "", fmt.Errorf("removal outside Download download root")
+		return "", fmt.Errorf("removal outside the download root")
 	}
 	local, e := seedMap(f.Source, []archivetier.MountMapping{s.Config.Seeding.DownloadMount})
 	if e != nil {
@@ -528,7 +528,7 @@ func (s *Service) seedOld(f SeedFile) (string, error) {
 	}
 	got, e := seedEvidence(local, f.Size)
 	if e != nil || got.Inode != f.Evidence.Inode || got.Device != f.Evidence.Device || got.Modified != f.Evidence.Modified {
-		return "", fmt.Errorf("Download source identity changed")
+		return "", fmt.Errorf("download disk source identity changed")
 	}
 	return local, nil
 }
@@ -610,7 +610,7 @@ func (s *Service) seedLibraryOwnership(ctx context.Context, p SeedPlan, allowMov
 					}
 				}
 				if !accounted {
-					return fmt.Errorf("Arr still references Download source inode")
+					return fmt.Errorf("Arr still references download disk source inode")
 				}
 			}
 		}
@@ -771,7 +771,7 @@ func (s *Service) executeSeed(ctx context.Context, j *SeedJob) error {
 			return e
 		}
 		if !ok {
-			return fmt.Errorf("Download rollback recheck failed")
+			return fmt.Errorf("download disk rollback recheck failed")
 		}
 		if e = s.seedStart(ctx, j); e != nil {
 			return e
@@ -785,7 +785,7 @@ func (s *Service) executeSeed(ctx context.Context, j *SeedJob) error {
 				return e
 			}
 		}
-		j.Error = "NAS recheck failed; rolled back to verified Download data"
+		j.Error = "NAS recheck failed; rolled back to verified download disk data"
 		return s.seedPhase(j, "rolled_back")
 	}
 	j.NASVerified = true

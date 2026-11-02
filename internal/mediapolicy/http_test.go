@@ -17,7 +17,7 @@ func TestEditorAllowlist(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	client := SharedHTTP(&Transport{Apply: true, Store: store, RadarrOrigin: upstream.URL, SonarrOrigin: "http://sonarr.invalid"})
+	client := SharedHTTP(&Transport{Apply: true, Store: store, RadarrOrigin: upstream.URL, SonarrOrigin: "http://sonarr.example.org"})
 	for _, tc := range []struct {
 		method, path string
 		allowed      bool
@@ -122,7 +122,7 @@ func TestSonarrExactEditorAllowlist(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	tr := &Transport{Apply: true, Store: store, SonarrOrigin: upstream.URL, RadarrOrigin: "http://radarr.invalid"}
+	tr := &Transport{Apply: true, Store: store, SonarrOrigin: upstream.URL, RadarrOrigin: "http://radarr.example.org"}
 	client := SharedHTTP(tr)
 	for _, tc := range []struct {
 		method, path string
@@ -191,7 +191,7 @@ func TestCleanupDeleteTransportAllowlist(t *testing.T) {
 			t.Errorf("%s: %v", tc.path, err)
 		}
 	}
-	for _, origin := range []string{upstream.URL, "http://unapproved.invalid"} {
+	for _, origin := range []string{upstream.URL, "http://unapproved.example.org"} {
 		tr.Apply = false
 		if origin != upstream.URL {
 			tr.Apply = true

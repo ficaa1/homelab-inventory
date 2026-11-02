@@ -24,7 +24,7 @@ import (
 //	POST batch/preview     the reviewed plan, its hash and a two-minute confirmation token
 //	POST batch/execute     recheck everything, validate on the sidecar, submit once
 //
-// Writes take the normal dashboard login, like the private dashboard; the
+// Writes take the normal dashboard login; the
 // preview token and reviewed hash are what guard a batch.
 
 func (p *Integration) APITimeout(method, path string) time.Duration {
@@ -182,7 +182,7 @@ func (p *Integration) submit(ctx context.Context, actor string, in engine.Execut
 	return plan, "unknown", nil
 }
 
-// failure keeps the private API's codes; reads answer 200 with a status so the
+// failure preserves HTTP status codes; reads answer 200 with a status so the
 // page can tell "not configured" from "unavailable".
 func (p *Integration) failure(err error, read bool) plugin.APIResponse {
 	code, status, message := 400, "unavailable", p.safe(err.Error())

@@ -89,8 +89,8 @@ func TestTagCreationWriteBarrier(t *testing.T) {
 				case "dry run":
 					copy.Apply = false
 				case "wrong origin":
-					copy.SonarrOrigin = "http://other.invalid"
-					copy.RadarrOrigin = "http://other.invalid"
+					copy.SonarrOrigin = "http://other.example.org"
+					copy.RadarrOrigin = "http://other.example.org"
 				case "no store":
 					copy.Store = nil
 				case "poisoned":

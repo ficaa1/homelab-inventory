@@ -1,0 +1,79 @@
+{
+  "archiveEnabled": false,
+  "archive": {
+    "timezone": "UTC",
+    "start": "01:00",
+    "end": "06:00",
+    "requireFreeleech": false,
+    "downloadMinFreeGB": 20,
+    "downloadRoots": [
+      "/data/downloads/completed"
+    ],
+    "libraryRoots": [
+      "/data/media/movies",
+      "/data/media/series"
+    ],
+    "mounts": [
+      {
+        "appRoot": "/data/media",
+        "localRoot": "/inspection/media"
+      },
+      {
+        "appRoot": "/data/downloads",
+        "localRoot": "/inspection/downloads"
+      }
+    ],
+    "sidecarMounts": [],
+    "restoreMounts": [],
+    "quarantineDir": "",
+    "indexerIDs": {
+      "sonarr": 1,
+      "radarr": 1
+    },
+    "plexKeys": {},
+    "reviewedVersions": {
+      "sonarr": "4.0.19.2979",
+      "radarr": "6.3.0.10514"
+    },
+    "selection": {
+      "sizes": {
+        "1080p": {
+          "floor": 1,
+          "target": 3,
+          "cap": 5
+        },
+        "2160p": {
+          "floor": 4,
+          "target": 8,
+          "cap": 14
+        }
+      },
+      "codecFactors": {
+        "hevc": 1,
+        "avc": 2,
+        "av1": 0.85
+      },
+      "trustedGroups": [],
+      "deniedGroups": [],
+      "minScore": 60
+    }
+  },
+  "seeding": {
+    "enabled": false,
+    "downloadRoot": "/data/downloads/completed",
+    "downloadMount": {
+      "appRoot": "/data/downloads",
+      "localRoot": "/writable/downloads"
+    },
+    "nasMount": {
+      "appRoot": "/data/media",
+      "localRoot": "/writable/media"
+    },
+    "seedRoot": "/data/media/.seeding",
+    "nasMinFreeGB": 500,
+    "libraryRoots": {
+      "radarr": "/data/media/movies",
+      "sonarr": "/data/media/series"
+    }
+  }
+}

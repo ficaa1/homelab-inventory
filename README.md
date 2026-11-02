@@ -39,7 +39,8 @@ More options, upgrades and removal: [Install](docs/install.md).
 - **Plugins** for media, household Taste recommendations, Archive and Tdarr
   controls, uploads, network health and speed tests, Cloudflare and security
   canaries. Enable only the integrations you use.
-  [Plugins](docs/plugins.md)
+  [Plugins](docs/plugins.md). Archive and Tdarr use the included
+  [media-policy service](deploy/mediapolicy/README.md) for library policy and state.
 - **Encrypted backups** in Admin, with previewed restore and private-dashboard
   migration. [Backup and migration](docs/backups.md)
 - Optional: [sign-in](docs/configuration.md#browser-sign-in-oidc) with Google,
