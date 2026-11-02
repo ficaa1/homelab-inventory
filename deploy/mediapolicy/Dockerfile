@@ -1,6 +1,8 @@
 FROM golang:1.25-alpine AS build
 WORKDIR /src
-COPY . .
+COPY go.mod ./
+COPY cmd/mediapolicy ./cmd/mediapolicy
+COPY internal ./internal
 RUN CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' -o /mediapolicy ./cmd/mediapolicy
 
 FROM alpine:3
