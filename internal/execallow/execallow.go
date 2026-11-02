@@ -25,6 +25,8 @@ import (
 
 // safeName matches names safe for use as a service/container identifier.
 // Shell metacharacters and argument-injection sequences are rejected.
+var safeImage = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._/@:-]*$`)
+
 var safeName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
 
 const (
@@ -67,6 +69,10 @@ type command struct {
 // allowed is the set of named operations. Every entry maps to a command that
 // is safe to carry out given validated arguments.
 var allowed = map[string]command{
+	"compose-set-image": {required: []string{"compose_file", "old_image", "new_image"}, optional: []string{"service"}},
+	"compose-pull":      {required: []string{"compose_file"}, optional: []string{"service"}},
+	"compose-up":        {required: []string{"compose_file"}, optional: []string{"service"}},
+	"image-prune":       {},
 	"compose-restart": {
 		required: []string{"compose_file"},
 		optional: []string{"service", "project"},
@@ -85,6 +91,10 @@ func (r *Runner) Run(ctx context.Context, command string, args map[string]string
 	}
 	if r.Execute != nil {
 		return r.Execute(ctx, command, args)
+	}
+
+	if command == "compose-set-image" {
+		return r.composeSetImage(args["compose_file"], args["old_image"], args["new_image"])
 	}
 
 	if command == "container-restart" {
@@ -142,6 +152,16 @@ func (r *Runner) validate(command string, args map[string]string) Result {
 		return Result{Command: command, ExitCode: -1, Error: fmt.Sprintf("container %q is not a valid name", v)}
 	}
 
+	if command == "compose-set-image" {
+		for _, key := range []string{"old_image", "new_image"} {
+			if !safeImage.MatchString(args[key]) {
+				return Result{Error: key + " is not a valid image reference"}
+			}
+		}
+		if args["old_image"] == args["new_image"] {
+			return Result{Error: "new_image must differ from old_image"}
+		}
+	}
 	if command == "container-restart" || command == "compose-restart" {
 		if r.Inventory == nil {
 			return Result{Error: "latest target host inventory is unavailable"}
@@ -228,6 +248,17 @@ func (r *Runner) runArgv(ctx context.Context, argv []string) Result {
 // It is a pure function for testability.
 func buildArgv(name string, args map[string]string) []string {
 	switch name {
+	case "compose-pull", "compose-up":
+		a := []string{"docker", "compose", "-f", args["compose_file"], strings.TrimPrefix(name, "compose-")}
+		if name == "compose-up" {
+			a = append(a, "-d")
+		}
+		if s := args["service"]; s != "" {
+			a = append(a, s)
+		}
+		return a
+	case "image-prune":
+		return []string{"docker", "image", "prune", "-f"}
 	case "compose-restart":
 		a := []string{"docker", "compose", "-f", args["compose_file"]}
 		if p := args["project"]; p != "" {

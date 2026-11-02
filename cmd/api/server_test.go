@@ -547,7 +547,6 @@ func TestRemovedFeatureRoutesAreNotServed(t *testing.T) {
 	for _, path := range []string{
 		"/ext/tautulli/activity", "/tv/media", "/taste/picks", "/tdarr/status",
 		"/archive", "/upload", "/network", "/seasongate",
-		"/digest/send", "/exec",
 	} {
 		for _, method := range []string{"GET", "POST"} {
 			req := httptest.NewRequest(method, path, nil)

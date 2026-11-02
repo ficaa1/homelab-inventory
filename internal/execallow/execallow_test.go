@@ -2,6 +2,8 @@ package execallow
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -57,7 +59,7 @@ func TestBuildArgvContainerRestart(t *testing.T) {
 
 func TestCommands(t *testing.T) {
 	names := Commands()
-	expected := []string{"compose-restart", "container-restart"}
+	expected := []string{"compose-pull", "compose-restart", "compose-set-image", "compose-up", "container-restart", "image-prune"}
 	if !strSliceEq(names, expected) {
 		t.Fatalf("expected %v, got %v", expected, names)
 	}
@@ -75,10 +77,55 @@ func strSliceEq(a, b []string) bool {
 	return true
 }
 
-func TestRemovedOperationsRefused(t *testing.T) {
-	for _, name := range []string{"compose-set-image", "compose-pull", "compose-up", "image-prune"} {
-		if res := new(Runner).Run(context.Background(), name, nil); res.ExitCode != -1 || !strings.Contains(res.Error, "unknown command") {
-			t.Errorf("accepted %s", name)
+func TestUpgradeCommands(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "compose.yml")
+	r := &Runner{Policy: Policy{Host: "host-a", ComposeFiles: map[string]string{"app": file}}}
+	for _, tc := range []struct {
+		command, service string
+		argv             []string
+	}{
+		{"compose-pull", "app", []string{"docker", "compose", "-f", file, "pull", "app"}},
+		{"compose-up", "", []string{"docker", "compose", "-f", file, "up", "-d"}},
+		{"image-prune", "", []string{"docker", "image", "prune", "-f"}},
+	} {
+		args := map[string]string{"compose_file": file, "service": tc.service}
+		if err := r.Validate(tc.command, args); err != nil {
+			t.Fatal(err)
+		}
+		if !strSliceEq(buildArgv(tc.command, args), tc.argv) {
+			t.Fatal(buildArgv(tc.command, args))
+		}
+	}
+	args := map[string]string{"compose_file": file, "old_image": "app:v1", "new_image": "app:v2"}
+	for _, content := range []string{"image: app:v1\n", "image: other:v1\n", "image: app:v1\n# app:v1\n"} {
+		if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+		result := r.Run(context.Background(), "compose-set-image", args)
+		wantOK := strings.Count(content, "app:v1") == 1
+		if (result.ExitCode == 0) != wantOK {
+			t.Fatal(result)
+		}
+		data, _ := os.ReadFile(file)
+		if wantOK && string(data) != "image: app:v2\n" || !wantOK && string(data) != content {
+			t.Fatal(string(data))
+		}
+		info, _ := os.Stat(file)
+		if info.Mode().Perm() != 0644 {
+			t.Fatal(info.Mode())
+		}
+	}
+	for _, bad := range []map[string]string{
+		{"compose_file": file + ".bak"}, {"compose_file": file, "service": "--help"},
+		{"compose_file": file, "old_image": "app:v1", "new_image": "app:v1"},
+		{"compose_file": file, "old_image": "app:v1", "new_image": "app:v2;pwd"},
+	} {
+		command := "compose-set-image"
+		if bad["old_image"] == "" {
+			command = "compose-pull"
+		}
+		if r.Validate(command, bad) == nil {
+			t.Fatal("accepted", bad)
 		}
 	}
 }
