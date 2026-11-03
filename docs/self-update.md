@@ -108,7 +108,9 @@ checksums from that same server catch corruption, not a compromised server.
 Use HTTPS and compare the displayed release-key fingerprint through an
 independent trusted channel. `--allow-http` is an explicit trusted-network
 exception and exposes enrollment credentials to observers. Once installed, the
-release key is pinned; rerunning enrollment cannot silently replace it.
+release key is pinned and the installer checks it on reruns. The launcher itself
+is checked only against the API’s SHA256SUMS, not a release signature, so rerunning
+enrollment again trusts the installer and launcher supplied by that API.
 
 A configured canary receives the current candidate. Other new hosts receive the
 last signer-promoted runtime. Before the first signer promotion, non-canary
@@ -126,10 +128,14 @@ The private `.migration` directory records preparation, backups and cutover inte
 A prepared retry rechecks the key and legacy floor, then reuses its saved token.
 A lost redemption response can be retried with the same persisted installation
 nonce for 30 minutes; a different nonce or hostname cannot reuse the code.
-After stopping the old schedule, any failed cutover restores its configuration
-and restarts it. An interrupted cutover is reconciled on the next installer run,
-or by a scheduled launcher already installed during cutover. Floors survive
-rollback. Keep backups private: they include the previous token.
+The systemd timer stays active during cutover. A failed cutover restores the old
+configuration; after an abrupt kill, the next timer tick runs the old schedule or
+the installed launcher reconciles the saved intent. Handled termination signals
+trigger rollback immediately. If TrueNAS middleware cannot restore cron, recovery
+files and intent remain for the next cron invocation to retry. Floors survive
+rollback. TrueNAS cron hides middleware mail output and records up to 1 MiB per
+invocation in `launcher.log`, retaining one previous log, both mode 0600.
+Keep backups private: they include the previous token.
 
 Check **Hosts** for signed mode, the expected sequence and updater, a fresh
 accepted inventory, and healthy committed operation. Check locally on systemd:
