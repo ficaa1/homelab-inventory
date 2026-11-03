@@ -346,7 +346,9 @@ func (w *Watch) Check(ctx context.Context, panel bool) error {
 			t := now
 			w.saved.BadSince = &t
 		}
-	} else {
+	} else if status == "ok" {
+		// Unknown probes after a restart do not prove recovery. Keep the timer,
+		// but autofix below still requires a newly confirmed down/cutoff state.
 		w.saved.BadSince = nil
 	}
 	if err = w.save(); err != nil {
