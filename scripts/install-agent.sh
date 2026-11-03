@@ -100,11 +100,6 @@ if [ "$updates" = slots ]; then
     if [ "$scheduler" = truenas-cron ]; then
       case $state in /mnt/*) ;; *) die 'choose a mounted dataset directory under /mnt';; esac
       case $state in *[!a-zA-Z0-9/_.-]*|*/../*|*/..|*/./*|*/.|*//*|*/) die 'state directory must be an absolute plain path without traversal';; esac
-      zfs_mounts=$(zfs list -H -o name,mountpoint,mounted) || die 'cannot inspect configured ZFS dataset mountpoints'
-      printf '%s\n' "$zfs_mounts" | awk -F '\t' -v path="$state" '
-        NF != 3 { exit 1 }
-        $2 ~ /^\// && $3 != "yes" && ($2 == "/" || path == $2 || index(path, $2 "/") == 1) { exit 1 }
-      ' || die 'state directory is at or below an unmounted ZFS dataset; mount it first or choose a new path'
       probe=$state
       while [ ! -d "$probe" ]; do probe=${probe%/*}; [ -n "$probe" ] || die 'dataset is not mounted'; done
       mount_info=$(findmnt -n -T "$probe" -o TARGET,FSTYPE,OPTIONS) || die 'dataset mount cannot be read'
@@ -113,6 +108,13 @@ if [ "$updates" = slots ]; then
       case ,$3, in *,noexec,*|*,ro,*) die 'dataset must be writable with exec allowed';; esac
       [ "$state" != "$1" ] || die 'state directory must be a dedicated subdirectory, not a pool or dataset mountpoint'
       case $state/ in "$1"/*) ;; *) die 'state directory is outside mounted dataset';; esac
+      # Only datasets below the covering mount matter: TrueNAS keeps inactive
+      # boot environments as unmounted datasets mounted at /.
+      zfs_mounts=$(zfs list -H -o name,mountpoint,mounted) || die 'cannot inspect configured ZFS dataset mountpoints'
+      printf '%s\n' "$zfs_mounts" | awk -F '\t' -v path="$state" -v mnt="$1" '
+        NF != 3 { exit 1 }
+        $2 ~ /^\// && $3 != "yes" && index($2, mnt "/") == 1 && (path == $2 || index(path, $2 "/") == 1) { exit 1 }
+      ' || die 'state directory is at or below an unmounted ZFS dataset; mount it first or choose a new path'
     fi
     if [ "$scheduler" = truenas-cron ]; then bootstrap_parent=$1; fi
     # Refuse symlink ancestors before touching directory permissions.

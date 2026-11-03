@@ -446,7 +446,7 @@ print(json.dumps(result))
                 (malformed/'.homelab-inventory').write_text('homelab-inventory\n\n')
                 child = dataset/'locked'
                 child.mkdir(mode=0o700)
-                zfsfile.write_text(f'tank/agents\t{dataset}\tyes\ntank/locked\t{child}\tno\n')
+                zfsfile.write_text(f'boot-pool/ROOT/previous\t/\tno\ntank/agents\t{dataset}\tyes\ntank/locked\t{child}\tno\n')
                 for refused in (dataset, shared, empty, malformed, child, child/'agent'):
                     mode = refused.stat().st_mode if refused.exists() else None
                     for command in (cronargs, served_cronargs):
@@ -457,7 +457,8 @@ print(json.dumps(result))
                         assert not (refused/'.migration').exists()
                         if refused != malformed:
                             assert not (refused/'.homelab-inventory').exists()
-                zfsfile.write_text(f'tank/agents\t{dataset}\tyes\n')
+                # An inactive TrueNAS boot environment is an unmounted dataset at /.
+                zfsfile.write_text(f'boot-pool/ROOT/previous\t/\tno\ntank/agents\t{dataset}\tyes\n')
                 # Failure after the predecessor was disabled must re-enable it
                 # and remove the newly created replacement job.
                 Path(str(jobsfile)+'.fail').touch()
