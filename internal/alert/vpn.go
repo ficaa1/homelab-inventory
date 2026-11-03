@@ -12,6 +12,7 @@ import (
 type VPNHealth struct {
 	Host, Container, Status, Reason string
 	LatestHandshake                 *time.Time
+	Since                           *time.Time
 }
 
 // VPNAlerts uses one path for both inventory and live evidence, preserving the
