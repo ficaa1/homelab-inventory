@@ -73,8 +73,9 @@ only go up.
 
 **What is checked.** Each release is signed with Ed25519; hosts check the
 signature, file sizes and hashes, and run a read-only self-test before using it.
-Only `discover` updates itself. `agentupdate`, which does the checking, is
-upgraded by rerunning the installer. Reports never decide a rollout: an agent
+Legacy signed installs update only `discover`; their `agentupdate` is upgraded
+by rerunning the installer. Slots installs update both runtime components
+together, as described below. Reports never decide a rollout: an agent
 token can download releases but cannot sign or promote them.
 
 **Platforms.** `AGENT_PLATFORMS` (default `linux/amd64,linux/arm64`, plus
@@ -118,8 +119,8 @@ to force a downgrade, or mount the private key into the API.
 
 Hosts and alerts use the same update-health projection. Running, offered and
 rejected release numbers are separate; the updater version identifies the
-installed posting/checking binary, which still requires an installer rerun to
-upgrade. A missing status field is never treated as proof of an unsigned install.
+installed posting/checking binary. Legacy installs require an installer rerun
+to upgrade it; slots installs replace it in the signed pair. A missing status field is never treated as proof of an unsigned install.
 
 | State | Meaning |
 | --- | --- |
@@ -194,6 +195,101 @@ updates are not configured.
 Status contains safe stage/code enums, bounded counters and sticky
 `firstFailure`/`lastFailure` records. It never includes raw errors, stderr, paths,
 URLs or response bodies. Shared agent-token telemetry does not authorize offers
-or attest to a host's identity. Updater replacement, signed enrollment and the
-reinstall flow are separate follow-up work; these reporting changes reach old
-installations only when the new updater is installed.
+or attest to a host's identity. Signed enrollment and conversion remain separate follow-up work. These
+reporting changes reach old installations only when a new updater is installed.
+
+## Runtime slots (fresh installations)
+
+`--updates slots` installs a signed `discover` and `agentupdate` pair. The
+root-owned `agentboot` launcher holds the key, token and sequence floor. Both
+binaries can then update together. Upgrade the launcher by rerunning the
+installer. Launcher banks and launcher self-update are not implemented.
+
+Publish with `make release` as above. It now signs two envelopes at the same
+sequence: `latest.json` is the legacy discover-only offer; `N/runtime.json` is
+protocol 1 for slots. Old signed and unsigned installations keep their current
+behavior. They are not converted when the API is upgraded. A release directory
+made by an old signer continues to work for legacy hosts but cannot enroll or
+update a slots host. Retain old sequence directories for in-flight reports and
+artifact downloads; the API verifies each retained envelope before serving only
+its listed artifacts.
+
+On a fresh Linux systemd host, supply a trusted launcher, public key and signed
+baseline through your existing trusted channel:
+
+```sh
+sudo sh ./install-agent.sh --updates slots --binary-dir "$PWD/bin" \
+  --api-url https://inventory.example.org --token-file /root/inventory-token \
+  --public-key /root/release-public.key --manifest /root/releases/1/runtime.json \
+  --artifacts /root/releases/1
+```
+
+For a disposable test use `--prefix /absolute/test-root`; it runs the first
+report without systemd. This path refuses an existing plain or legacy signed
+installation. Enrollment, conversion, a promoted bootstrap selector and TrueNAS
+cron are separate follow-up work. Choose the baseline deliberately; the local
+installer does not bypass the operator's responsibility to select it.
+
+Under `/var/lib/homelab-agent`:
+
+- `agentboot`, `public.key`, `token`, `config.json`: installer-managed launcher,
+  trust and credentials. The service and wrapper always invoke `agentboot`.
+- `slots/a/DIGEST/` and `slots/b/DIGEST/`: immutable `discover`, `agentupdate` and
+  the exact signed `runtime.json`. The baseline starts in both banks as one
+  known-good identity. Each new pair has a new directory; no executable is
+  overwritten while it runs.
+- `control.0`, `control.1`: checksummed mirrors containing the floor, exact
+  manifest digest, active and fallback identities, transaction and first failure.
+  Readers choose the highest valid generation without taking `lock`.
+- `report.json`: one bounded validated report, retained only during delivery.
+  `lock` is a stable inode and is never unlinked to break contention.
+
+The transaction moves through these states:
+
+| State | Meaning |
+| --- | --- |
+| prepared | Both artifacts passed signature, hash, size, space and self-test checks. The candidate, floor reservation and known-good fallback are durable. Execution has not started. |
+| pending | Execution may have started. An interrupted pending trial falls back and quarantines its sequence. |
+| report-pending | A valid trial report is durable. The launcher retries those exact bytes once per scheduled tick, with a journalled continuation count. Network and API failures leave it here and the known-good pair keeps reporting. |
+| committed | The launcher witnessed a durable API receipt for the exact nonce, manifest, pair and report hash, then wrote the local commit. |
+| quarantined | The candidate failed or execution was ambiguous. Only the recorded fallback runs; repair requires a higher sequence. |
+
+A prepared transaction can resume because the pending record always precedes
+execution. A process exit or worker-written health file never commits a trial.
+New error-level collector/code pairs fail the trial; existing diagnostic IDs
+remain the baseline. The launcher checks ordinary committed runs too, so a later
+collector or updater failure restores the recorded fallback. It independently
+fetches a higher offered runtime if the worker fails, hangs, emits invalid output
+or cannot plan its successor. Hold and canary policy still apply.
+
+The worker has private pipes, no API token and no update lock. Protocol 1 checks
+host, schema 5, build, signed role hashes, sequence and transaction nonce. The
+launcher posts the bytes it validated without re-encoding Inventory. Unknown
+fields and null sections survive. The server keeps exact accepted bytes and an
+idempotent receipt (the latest trial plus a few recent reports per host); losing a POST response does not require running the candidate
+again. Shared fleet credentials still provide telemetry, not host attestation or
+permission to promote a release.
+
+Each worker has a monotonic process-group deadline. On Linux the launcher kills
+and reaps descendants as a subreaper. The launcher also has a 12-minute aggregate
+budget, with a separate bounded status attempt. No sequence or retry decision
+uses `Created` or a host calendar deadline. Health lag uses server receipt time.
+Normal TLS certificate validation remains in use; clock-independent pinned TLS
+is outside this step.
+
+Downloads stream into private same-filesystem staging files. Files and parent
+directories are synced before publication. Space checks reserve bytes for the
+report and journal and check free inodes. The launcher prunes only its own stale
+slots and partials under the lock, keeping active, fallback and pending pairs.
+Under storage pressure it runs the recorded fallback without writing a selector
+symlink. An unreadable floor fails closed and posts `state_corrupt`; deleting
+control files is never a recovery procedure. A permanently broken disk or trust
+anchor still needs operator repair.
+
+The fault harness runs with `go test ./internal/agentboot`. It builds real
+launchers and updaters, signs synthetic executable collectors, and terminates
+at file-sync, rename, directory-sync and receipt boundaries. Fault injection is
+compiled only with the test build tag; installed launchers have no environment
+fault switches. Installer checks run with `python3 scripts/test-install-agent.py`.
+These tests do not establish real LXC, arm64 or appliance behavior; verify those
+platforms before fleet rollout.

@@ -136,3 +136,10 @@ mkdir -p /mnt/example/agent/state && chmod 700 /mnt/example/agent/state
 
 **Checksums.** They catch a broken download, not a compromised server. Read
 `get.sh` before running it as root if you prefer.
+
+For a fresh signed runtime layout, `--updates slots` installs the launcher and
+both signed runtime components. It requires local `--binary-dir`,
+`--public-key`, `--manifest` (the release's `N/runtime.json`), `--artifacts` and
+`--token-file`; it does not yet support `--download`, enrollment or conversion.
+See [runtime slots](self-update.md#runtime-slots-fresh-installations). Rerunning
+the installer upgrades the launcher while preserving the floor and runtime.

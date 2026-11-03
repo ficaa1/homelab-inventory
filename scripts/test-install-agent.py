@@ -51,7 +51,9 @@ def main():
             binary = artifacts / f"discover-linux-{target}"
             binary.write_text(collector_script)
             binary.chmod(0o755)
-        shutil.copy2(ROOT / "bin" / f"agentupdate-linux-{arch}", artifacts)
+        for target in ("amd64", "arm64"):
+            for name in ("agentupdate", "agentboot"):
+                shutil.copy2(ROOT / "bin" / f"{name}-linux-{target}", artifacts)
 
         def run(*args, **kwargs):
             result = subprocess.run(args, cwd=ROOT, env=env, capture_output=True, timeout=60, **kwargs)
@@ -142,6 +144,33 @@ def main():
                     "--manifest", str(release_tree / "latest.json"), "--artifacts", str(artifacts))
                 assert json.loads((signed_prefix / "var/lib/homelab-agent/state.json").read_text())["current"] == 2
                 run(installer, "--prefix", str(signed_prefix), "--uninstall")
+                # Fresh slots: real launcher and updater, signed baseline twice.
+                slots_prefix = tmp / "slots-root"
+                slots_args = [installer, "--prefix", str(slots_prefix), "--api-url", origin,
+                    "--token-file", str(token_file), "--binary-dir", str(artifacts),
+                    "--updates", "slots", "--public-key", str(public),
+                    "--manifest", str(release_tree / "2/runtime.json"), "--artifacts", str(artifacts)]
+                run(*slots_args)
+                slots = slots_prefix / "var/lib/homelab-agent"
+                def control():
+                    return json.loads((slots / "control.0").read_text())["payload"]
+                assert control()["floor"] == 2 and control()["state"] == "committed"
+                assert len(list((slots / "slots/a").glob("*/discover"))) == 1
+                assert len(list((slots / "slots/b").glob("*/agentupdate"))) == 1
+                assert "agentboot -config" in (slots_prefix / "etc/systemd/system/homelab-discover.service").read_text()
+                # Omitting the slots flag must not silently replace its schedule
+                # with an unsigned poster that bypasses the reserved floor.
+                refused = subprocess.run([installer, "--prefix", str(slots_prefix), "--api-url", origin,
+                    "--token-file", str(token_file), "--binary-dir", str(artifacts)],
+                    cwd=ROOT, env=env, capture_output=True, timeout=60)
+                assert refused.returncode != 0 and control()["floor"] == 2
+                run(*slots_args)  # installer upgrades launcher without resetting floor
+                run(release_script, "release", "local-test")
+                run(str(slots_prefix / "usr/local/bin/homelab-discover"))
+                assert control()["floor"] == 3 and control()["active"]["sequence"] == 3
+                assert control()["fallback"]["sequence"] == 2 and control()["receipt"]["identity"]["sequence"] == 3
+                run(installer, "--prefix", str(slots_prefix), "--uninstall")
+                assert (slots / "control.0").exists() and not (slots / "token").exists()
             finally:
                 proc.terminate()
                 proc.wait(timeout=10)

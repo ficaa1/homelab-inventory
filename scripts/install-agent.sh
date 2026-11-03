@@ -3,22 +3,23 @@
 set -eu
 umask 077
 usage() {
-  echo 'Usage: install-agent.sh --api-url URL [--allow-http] [--enroll CODE | --token-file FILE] [--download] [--binary-dir DIR] [--signed --public-key FILE --manifest FILE --artifacts DIR] [--prefix DIR] [--uninstall]'
+  echo 'Usage: install-agent.sh --api-url URL [--allow-http] [--enroll CODE | --token-file FILE] [--download] [--binary-dir DIR] [--updates slots] [--signed --public-key FILE --manifest FILE --artifacts DIR] [--prefix DIR] [--uninstall]'
 }
 die() { echo "install-agent: $*" >&2; exit 1; }
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repo_dir=$(dirname "$script_dir")
 api_url=${INSTALL_API_URL:-} enroll= download=${INSTALL_DOWNLOAD:-0} token_file= public_key= manifest= artifacts= prefix= signed=0 uninstall=0
+updates=legacy
 allow_http=${ALLOW_HTTP:-0}
 case $allow_http in 0|1) ;; *) die 'ALLOW_HTTP must be 0 or 1';; esac
 binary_dir=$repo_dir/bin
 while [ "$#" -gt 0 ]; do
   case $1 in
-    --api-url|--enroll|--token-file|--binary-dir|--public-key|--manifest|--artifacts|--prefix)
+    --api-url|--enroll|--token-file|--binary-dir|--public-key|--manifest|--artifacts|--prefix|--updates)
       [ "$#" -ge 2 ] || die "missing option value"
       case $1 in
         --api-url) api_url=$2;; --enroll) enroll=$2;; --token-file) token_file=$2;; --binary-dir) binary_dir=$2;;
-        --public-key) public_key=$2;; --manifest) manifest=$2;; --artifacts) artifacts=$2;; --prefix) prefix=$2;;
+        --public-key) public_key=$2;; --manifest) manifest=$2;; --artifacts) artifacts=$2;; --prefix) prefix=$2;; --updates) updates=$2;;
       esac
       shift 2;;
     --allow-http) allow_http=1; shift;;
@@ -29,6 +30,7 @@ while [ "$#" -gt 0 ]; do
     *) usage >&2; die 'unknown option';;
   esac
 done
+case $updates in legacy|slots) ;; *) die "--updates must be slots (or omit it for legacy mode)";; esac
 case $prefix in ''|/*) ;; *) die 'prefix must be absolute';; esac
 # Paths are also embedded in systemd units; keep their syntax unambiguous.
 case $prefix in *[!a-zA-Z0-9/_.-]*) die 'unsupported prefix characters';; /) prefix=;; esac
@@ -44,10 +46,13 @@ if [ "$uninstall" -eq 1 ]; then
     systemctl disable --now homelab-discover.timer || true
     systemctl stop homelab-discover.service || true
   fi
-  rm -f "$units/homelab-discover.service" "$units/homelab-discover.timer" "$bindir/homelab-discover" "$bindir/discover" "$state/config.json" "$state/token" "$state/.token.new" "$state/agentupdate"
+  rm -f "$units/homelab-discover.service" "$units/homelab-discover.timer" "$bindir/homelab-discover" "$bindir/discover" "$state/config.json" "$state/token" "$state/.token.new" "$state/agentupdate" "$state/agentboot"
   if [ -z "$prefix" ]; then systemctl daemon-reload; fi
   echo 'install-agent: removed schedule and credentials; retained signed replay state for safe enrollment'
   exit 0
+fi
+if [ "$updates" = legacy ] && { [ -f "$state/control.0" ] || [ -f "$state/control.1" ]; }; then
+  die 'existing slots installation requires --updates slots; refusing to bypass its floor'
 fi
 [ "$(uname -s)" = Linux ] || die 'Linux required'
 case $(uname -m) in x86_64) arch=amd64;; aarch64|arm64) arch=arm64;; *) die 'Linux amd64 or arm64 required';; esac
@@ -64,6 +69,13 @@ case $api_url in
 esac
 origin_host=${api_url#*://}
 case $origin_host in ''|*[!a-zA-Z0-9.:[\]-]*) die 'API URL must be an origin with a plain host and optional port';; esac
+if [ "$updates" = slots ]; then
+  [ -z "$enroll" ] && [ "$download" -eq 0 ] || die 'slots currently require local baseline artifacts and --token-file; enrollment and downloads are separate follow-up work'
+  [ ! -f "$state/state.json" ] || die 'existing signed layout needs the separate migration workflow'
+  if [ ! -f "$state/control.0" ] && [ ! -f "$state/control.1" ]; then
+    [ ! -f "$state/config.json" ] && [ ! -f "$units/homelab-discover.service" ] || die 'slots requires a fresh installation; migration is separate'
+  fi
+fi
 mkdir -p "$state" "$bindir" "$units"
 chmod 700 "$state"
 prompt_file= download_dir=
@@ -120,6 +132,70 @@ fi
 # Validate before replacing working credentials; nothing is posted yet.
 export ALLOW_HTTP=$allow_http
 "$updater" -check-config -api-url "$api_url" -token-file "$token_file" -dir "$state" -discover "$collector"
+if [ "$updates" = slots ]; then
+  launcher=$binary_dir/agentboot-linux-$arch
+  [ -x "$launcher" ] || die 'make dist first; agentboot is required'
+  [ -n "$public_key" ] && [ -f "$public_key" ] || die '--updates slots requires --public-key'
+  if [ -f "$state/control.0" ] || [ -f "$state/control.1" ]; then
+    cmp -s "$public_key" "$state/public.key" || die 'key differs; follow explicit key rotation'
+    "$launcher" -dir "$state" -status >/dev/null || die 'control records unreadable; refusing reinstall'
+  else
+    [ -n "$manifest" ] && [ -f "$manifest" ] && [ -d "$artifacts" ] || die 'fresh slots requires --manifest (runtime.json) and --artifacts'
+    cp "$public_key" "$state/public.key"
+    chmod 600 "$state/public.key"
+    "$launcher" -dir "$state" -public "$state/public.key" -initialize "$manifest" -input "$artifacts"
+  fi
+  # A launcher upgrade is an explicit installer operation. Never replace either
+  # runtime with the local updater; both copies came from the signed baseline.
+  if [ -z "$prefix" ]; then
+    systemctl stop homelab-discover.timer 2>/dev/null || true
+    systemctl stop homelab-discover.service 2>/dev/null || true
+  fi
+  cp "$launcher" "$state/agentboot.new"
+  chmod 755 "$state/agentboot.new"
+  mv -f "$state/agentboot.new" "$state/agentboot"
+  cp "$token_file" "$state/.token.new"
+  chmod 600 "$state/.token.new"
+  mv -f "$state/.token.new" "$state/token"
+  "$updater" -configure -config "$state/config.json" -dir "$state" -discover "$bindir/discover" -public "$state/public.key" -api-url "$api_url" -token-file "$state/token" -signed
+  cat > "$bindir/homelab-discover" <<WRAPPER
+#!/bin/sh
+exec "$state/agentboot" -config "$state/config.json"
+WRAPPER
+  chmod 755 "$bindir/homelab-discover"
+  cat > "$units/homelab-discover.service" <<UNIT
+[Unit]
+Description=Supervise and report signed inventory runtime
+Wants=network-online.target
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=$state/agentboot -config $state/config.json
+TimeoutStartSec=14min
+KillMode=control-group
+UMask=0077
+UNIT
+  chmod 644 "$units/homelab-discover.service"
+  cat > "$units/homelab-discover.timer" <<'TIMER'
+[Unit]
+Description=Run signed inventory launcher
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+[Install]
+WantedBy=timers.target
+TIMER
+  chmod 644 "$units/homelab-discover.timer"
+  if [ -z "$prefix" ]; then
+    systemctl daemon-reload
+    systemctl enable --now homelab-discover.timer
+    systemctl start homelab-discover.service
+  else
+    "$bindir/homelab-discover"
+  fi
+  echo 'install-agent: signed slots installed; first report accepted'
+  exit 0
+fi
 if [ "$signed" -eq 1 ]; then
   [ -n "$public_key" ] && [ -f "$public_key" ] || die '--signed requires --public-key'
   if [ ! -f "$state/state.json" ]; then
