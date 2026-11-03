@@ -3,10 +3,15 @@ package agentupdate
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -23,7 +28,34 @@ func Enroll(ctx context.Context, origin, code, host, tokenFile string, allowHTTP
 	if tokenFile == "" {
 		return errors.New("enrollment requires -token-file")
 	}
-	body, _ := json.Marshal(map[string]string{"code": code, "hostname": host})
+	// Persist the retry identity before sending anything. A lost response can
+	// redeem the same single-use code only from this installation and hostname.
+	noncePath := tokenFile + ".enrollment"
+	hash := fmtHash(code)
+	var saved struct {
+		CodeHash string `json:"code_hash"`
+		Nonce    string `json:"nonce"`
+	}
+	if b, e := os.ReadFile(noncePath); e == nil {
+		if json.Unmarshal(b, &saved) != nil {
+			return errors.New("invalid enrollment retry record")
+		}
+	}
+	if saved.CodeHash != hash || len(saved.Nonce) != 32 {
+		var b [16]byte
+		if _, e := rand.Read(b[:]); e != nil {
+			return errors.New("creating enrollment retry identity")
+		}
+		saved.CodeHash, saved.Nonce = hash, hex.EncodeToString(b[:])
+		bjson, _ := json.Marshal(saved)
+		if e := os.MkdirAll(filepath.Dir(tokenFile), 0700); e != nil {
+			return errors.New("saving enrollment retry identity")
+		}
+		if e := fsx.WriteAtomic(noncePath, bjson, 0600); e != nil {
+			return errors.New("saving enrollment retry identity")
+		}
+	}
+	body, _ := json.Marshal(map[string]string{"code": code, "hostname": host, "nonce": saved.Nonce})
 	req, err := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(origin, "/")+"/agent/enroll", bytes.NewReader(body))
 	if err != nil {
 		return errors.New("invalid enrollment request")
@@ -46,3 +78,5 @@ func Enroll(ctx context.Context, origin, code, host, tokenFile string, allowHTTP
 	}
 	return fsx.WriteAtomic(tokenFile, []byte(out.Token+"\n"), 0600)
 }
+
+func fmtHash(value string) string { h := sha256.Sum256([]byte(value)); return hex.EncodeToString(h[:]) }

@@ -31,6 +31,100 @@ func (s *server) agentDir() string {
 	}
 	return os.Getenv("AGENT_RELEASE_DIR")
 }
+
+// enrollmentBaseline deliberately ignores browser promotion and per-host offers.
+// Only the signer-owned promoted pointer authorizes non-canary enrollment.
+func (s *server) enrollmentBaseline(host string) (agentrelease.Manifest, []byte, error) {
+	if s.agentDir() == "" {
+		return agentrelease.Manifest{}, nil, errors.New("signed updates are not configured")
+	}
+	if host != "" && store.ValidateHost(host) != nil {
+		return agentrelease.Manifest{}, nil, errors.New("invalid hostname")
+	}
+	m, _, control, err := agentrelease.Read(s.agentDir())
+	if err != nil {
+		return agentrelease.Manifest{}, nil, errors.New("signed release unavailable")
+	}
+	state, _, err := agentoffers.Read(s.store.AgentOffersPath())
+	if err != nil || agentoffers.Effective(m, control, state) == "hold" {
+		return agentrelease.Manifest{}, nil, errors.New("signed enrollment is on hold")
+	}
+	for _, canary := range agentoffers.CanaryHosts() {
+		if host != "" && host == canary {
+			runtime, data, err := agentrelease.ReadSequence(s.agentDir(), m.Sequence, true)
+			if err != nil || !runtimeMatches(m, runtime) {
+				return agentrelease.Manifest{}, nil, errors.New("verified signed runtime unavailable")
+			}
+			if !s.bootstrapArtifactsAvailable(runtime) {
+				return agentrelease.Manifest{}, nil, errors.New("signed runtime artifacts unavailable")
+			}
+			return runtime, data, nil
+		}
+	}
+	promoted, data, err := agentrelease.ReadPromoted(s.agentDir())
+	if err != nil {
+		return agentrelease.Manifest{}, nil, errors.New("no promoted enrollment baseline; enroll a configured canary or promote with the signer first")
+	}
+	if !s.bootstrapArtifactsAvailable(promoted) {
+		return agentrelease.Manifest{}, nil, errors.New("promoted runtime artifacts unavailable")
+	}
+	return promoted, data, nil
+}
+
+func runtimeMatches(legacy, runtime agentrelease.Manifest) bool {
+	if runtime.LauncherProtocol != 1 || runtime.Sequence != legacy.Sequence || runtime.Version != legacy.Version || runtime.Revision != legacy.Revision || len(runtime.Platforms) != len(legacy.Platforms) {
+		return false
+	}
+	for _, platform := range legacy.Platforms {
+		a, b := runtime.Artifacts[platform+"/discover"], legacy.Artifacts[platform+"/discover"]
+		if a.Name != b.Name || a.SHA256 != b.SHA256 || a.Size != b.Size {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *server) bootstrapAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !httpx.BearerOK(r, s.agentCredential(), httpx.DenyWhenUnset) && !httpx.BearerOK(r, s.apiToken(), httpx.DenyWhenUnset) {
+			writeError(w, 401, "missing or invalid bearer token")
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (s *server) handleAgentBootstrap(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	host := r.URL.Query().Get("host")
+	if store.ValidateHost(host) != nil {
+		writeError(w, 400, "valid host required")
+		return
+	}
+	_, data, err := s.enrollmentBaseline(host)
+	if err != nil {
+		writeError(w, 409, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(data)
+}
+
+func (s *server) handleAgentPublicKey(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	public, err := os.ReadFile(filepath.Join(s.agentDir(), "public.key"))
+	if s.agentDir() == "" || err != nil {
+		writeError(w, 503, "release public key unavailable")
+		return
+	}
+	if _, err := agentrelease.PublicKeyFingerprint(public); err != nil {
+		writeError(w, 503, "release public key unavailable")
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = w.Write(public)
+}
+
 func (s *server) handleAgentManifest(w http.ResponseWriter, r *http.Request) {
 	m, data, c, e := agentrelease.Read(s.agentDir())
 	if e != nil {
@@ -105,7 +199,7 @@ func (s *server) handleAgentStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Configuration absence is a normal, useful status, not an HTTP error.
-	writeJSON(w, 200, map[string]any{"sequence": snap.Sequence, "revision": snap.Revision, "version": snap.Version, "mode": snap.Mode, "control": snap.Control, "ssh_hold": snap.SSHHold, "promoted": snap.Mode == "promote", "configured": snap.Configured, "unavailable": snap.Unavailable, "canary_hosts": agentoffers.CanaryHosts(), "hosts": snap.Hosts})
+	writeJSON(w, 200, map[string]any{"sequence": snap.Sequence, "revision": snap.Revision, "version": snap.Version, "mode": snap.Mode, "control": snap.Control, "ssh_hold": snap.SSHHold, "promoted": snap.Mode == "promote", "configured": snap.Configured, "unavailable": snap.Unavailable, "canary_hosts": agentoffers.CanaryHosts(), "hosts": snap.Hosts, "signed_updates": s.signedEnrollmentStatus(r.URL.Query().Get("host"))})
 }
 func (s *server) handlePostAgentStatus(w http.ResponseWriter, r *http.Request) {
 	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
@@ -317,4 +411,14 @@ func (s *server) handleAgentReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 201, rec)
+}
+
+func (s *server) bootstrapArtifactsAvailable(m agentrelease.Manifest) bool {
+	for _, a := range m.Artifacts {
+		st, e := os.Stat(filepath.Join(s.agentDir(), strconv.FormatUint(m.Sequence, 10), a.Name))
+		if e != nil || !st.Mode().IsRegular() || st.Size() != a.Size {
+			return false
+		}
+	}
+	return true
 }

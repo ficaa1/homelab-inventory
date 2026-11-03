@@ -157,3 +157,56 @@ func TestEnvironmentClaimAndAgentProvisioning(t *testing.T) {
 		t.Fatal("provisioned agent token did not persist")
 	}
 }
+
+func TestNonceRedemptionPersistenceBindingAndRetryDeadline(t *testing.T) {
+	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	dir := t.TempDir()
+	open := func() *Manager {
+		t.Helper()
+		m, err := Open(dir, Tokens{API: strings.Repeat("a", 32)}, now, Window, func() time.Time { return now })
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	m := open()
+	code, _, expires, err := m.EnrollHost("host-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonce := strings.Repeat("n", 32)
+	if _, err := m.RedeemNonce(code, "host-b", nonce); !errors.Is(err, ErrCode) {
+		t.Fatal("hostname binding bypassed")
+	}
+	now = expires.Add(-time.Minute)
+	tokens, err := m.RedeemNonce(code, "host-a", nonce)
+	if err != nil {
+		t.Fatal(err)
+	}
+	redeemed := now
+	raw, err := os.ReadFile(filepath.Join(dir, "state-auth.json"))
+	if err != nil || strings.Contains(string(raw), nonce) {
+		t.Fatal("installation nonce must be hashed")
+	}
+	now = expires.Add(time.Minute)
+	m = open()
+	if got, err := m.RedeemNonce(code, "host-a", nonce); err != nil || got.Agent != tokens.Agent {
+		t.Fatal("lost-response retry failed after restart/expiry")
+	}
+	for _, tuple := range []struct{ host, nonce string }{{"host-b", nonce}, {"host-a", strings.Repeat("x", 32)}, {"host-a", ""}} {
+		if _, err := m.RedeemNonce(code, tuple.host, tuple.nonce); !errors.Is(err, ErrCode) {
+			t.Fatal("redemption authority widened")
+		}
+	}
+	// Creating later codes must retain retry state after the original code expiry.
+	if _, _, _, err := m.Enroll(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := open().RedeemNonce(code, "host-a", nonce); err != nil {
+		t.Fatal("retry state pruned by later enrollment")
+	}
+	now = redeemed.Add(RedemptionRetryWindow)
+	if _, err := open().RedeemNonce(code, "host-a", nonce); !errors.Is(err, ErrCode) {
+		t.Fatal("retry deadline extended")
+	}
+}
