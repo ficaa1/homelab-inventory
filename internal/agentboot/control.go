@@ -25,6 +25,7 @@ type Control struct {
 	Nonce           string              `json:"nonce,omitempty"`
 	ReportHash      string              `json:"report_hash,omitempty"`
 	Receipt         *agentproto.Receipt `json:"receipt,omitempty"`
+	Confirmations   uint64              `json:"confirmations,omitempty"`
 	Continuations   uint64              `json:"continuations"`
 	Errors          []string            `json:"errors,omitempty"`
 	CandidateErrors []string            `json:"candidate_errors,omitempty"`
@@ -41,7 +42,7 @@ func validSlot(s Slot, floor uint64) bool {
 	return (s.Bank == "a" || s.Bank == "b") && s.Sequence > 0 && s.Sequence <= floor && validDigest(s.Digest) && validDigest(s.Discover) && validDigest(s.Updater) && s.Version != "" && s.Revision > 0
 }
 func valid(c Control) bool {
-	if c.Format != 1 || c.Generation == 0 || c.Floor == 0 || !validDigest(c.FloorDigest) || !validSlot(c.Active, c.Floor) || !validSlot(c.Fallback, c.Floor) {
+	if c.Confirmations > 3 || c.Format != 1 || c.Generation == 0 || c.Floor == 0 || !validDigest(c.FloorDigest) || !validSlot(c.Active, c.Floor) || !validSlot(c.Fallback, c.Floor) {
 		return false
 	}
 	switch c.State {

@@ -163,12 +163,8 @@ func (r Runner) prepare(ctx context.Context, c *Control, data []byte) error {
 	if _, ids, err := r.collect(ctx, *c, c.Active, n); err == nil {
 		c.Errors = ids
 	} else {
-		if c.Active != c.Fallback {
-			if e = r.quarantine(c, err); e != nil {
-				return e
-			}
-		} else {
-			mark(c, "trial", err)
+		if e = r.confirmFailure(ctx, c, err, nil, "prepare"); e != nil {
+			return e
 		}
 	}
 	if e = r.prune(*c); e != nil {
@@ -195,6 +191,7 @@ func (r Runner) prepare(ctx context.Context, c *Control, data []byte) error {
 	next.Receipt = nil
 	next.ReportHash = ""
 	next.Continuations = 0
+	next.Confirmations = 0
 	next.Update.Result = "trial"
 	// The reservation and known-good pair are mirrored before execution. No
 	// selector symlink is required, so ENOSPC cannot block direct fallback.
@@ -283,6 +280,62 @@ func newErrors(baseline, ids []string) bool {
 	return false
 }
 
+// confirmFailure runs the recorded fallback under the same worker deadline
+// before attributing a failure to code. Trial diagnostics are compared by ID;
+// committed diagnostics never reach this path. Posting is independent of proof.
+func (r Runner) confirmFailure(ctx context.Context, c *Control, err error, ids []string, phase string) error {
+	n, e := nonce()
+	if e != nil {
+		return e
+	}
+	data, fallbackIDs, fallbackErr := r.collect(ctx, *c, c.Fallback, n)
+	confirmed := fallbackErr == nil
+	for _, id := range ids {
+		if !newErrors(c.Errors, []string{id}) {
+			continue
+		}
+		for _, fallbackID := range fallbackIDs {
+			if id == fallbackID {
+				confirmed = false
+			}
+		}
+	}
+	trial := phase == "trial"
+	if trial && !confirmed {
+		c.Confirmations++
+	}
+	if confirmed && (trial || c.Active != c.Fallback) || trial && c.Confirmations >= 3 {
+		e = r.quarantine(c, err)
+	} else {
+		mark(c, "trial", err)
+		if trial {
+			// The reserved floor still forbids replay from an offer; only this
+			// exact journalled candidate may retry after a host-wide symptom.
+			c.State = "prepared"
+		}
+		e = r.save(c)
+	}
+	if e != nil {
+		return e
+	}
+	if !confirmed && !trial {
+		return err
+	}
+	if phase == "prepare" {
+		return nil
+	}
+	if fallbackErr == nil {
+		_, e = r.post(ctx, *c, data, c.Fallback.Identity, n)
+		if e != nil {
+			return e
+		}
+	}
+	if fallbackErr != nil {
+		return err
+	}
+	return nil
+}
+
 // Run holds one stable lock inode. Status can still be read or sent when that
 // lock is busy or the control records are corrupt. Only Run writes the floor.
 func (r Runner) Run(ctx context.Context) (runErr error) {
@@ -357,6 +410,9 @@ func (r Runner) Run(ctx context.Context) (runErr error) {
 			if err = r.prepare(ctx, &c, data); err != nil {
 				mark(&c, "check", err)
 				_ = r.save(&c)
+				if classify("check", err).Stage == "trial" {
+					return err
+				}
 				return r.fallbackReport(ctx, &c)
 			}
 			checkedOffer = c.Update.Target == c.Active.Sequence
@@ -373,6 +429,10 @@ func (r Runner) Run(ctx context.Context) (runErr error) {
 			err = failure("trial", "trial_new_errors")
 		}
 		if err != nil {
+			code := classify("trial", err).Code
+			if code == "trial_new_errors" || code == "trial_timeout" {
+				return r.confirmFailure(ctx, &c, err, ids, "trial")
+			}
 			e = r.quarantine(&c, err)
 			if e != nil {
 				mark(&c, "state", e)
@@ -395,19 +455,15 @@ func (r Runner) Run(ctx context.Context) (runErr error) {
 		}
 		return e
 	}
-	// A committed runtime is supervised on every tick, including regressions
-	// after a successful trial. A fallback is never used as a candidate replay.
+	// Committed diagnostics track the host baseline. Execution failures require
+	// a successful same-tick fallback before changing the selected runtime.
 	n, e := nonce()
 	if e != nil {
 		return e
 	}
 	data, ids, err := r.collect(ctx, c, c.Active, n)
-	if err != nil || newErrors(c.Errors, ids) && c.Active.Identity != c.Fallback.Identity {
-		if err == nil {
-			err = failure("trial", "trial_new_errors")
-		}
-		_ = r.quarantine(&c, err)
-		return r.fallbackReport(ctx, &c)
+	if err != nil {
+		return r.confirmFailure(ctx, &c, err, nil, "committed")
 	}
 	if _, e = r.post(ctx, c, data, c.Active.Identity, n); e != nil {
 		mark(&c, "post", e)
@@ -435,7 +491,5 @@ func (r Runner) fallbackReport(ctx context.Context, c *Control) error {
 		return classify("trial", e)
 	}
 	_, e = r.post(ctx, *c, data, s.Identity, n)
-	c.Active = s
-	c.Update.Sequence = s.Sequence
 	return e
 }

@@ -26,6 +26,17 @@ func main() {
 		mode = string(b[i+9:])
 	}
 	state := filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(path))))
+	if _, e := os.Stat(filepath.Join(state, "host-recovered")); e != nil && (mode == "trigger-errors" || mode == "trigger-timeout") {
+		_ = os.WriteFile(filepath.Join(state, "host-symptom"), []byte(mode[len("trigger-"):]), 0600)
+	}
+	if symptom, e := os.ReadFile(filepath.Join(state, "host-symptom")); e == nil {
+		mode = string(symptom)
+	}
+	if mode == "later-errors" || mode == "later-timeout" {
+		if _, e := os.Stat(filepath.Join(state, "break-collector")); e == nil {
+			mode = mode[len("later-"):]
+		}
+	}
 	switch mode {
 	case "silent":
 		return
@@ -37,6 +48,9 @@ func main() {
 		return
 	case "exit":
 		os.Exit(3)
+	case "timeout":
+		time.Sleep(300 * time.Second)
+		return
 	case "hung":
 		child := exec.Command("/bin/sleep", "300")
 		if child.Start() != nil {

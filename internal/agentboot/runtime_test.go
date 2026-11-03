@@ -219,6 +219,9 @@ func TestRuntimeFaults(t *testing.T) {
 	for _, kind := range []string{"partial", "signature", "hash", "platform", "roles", "traversal", "space", "inode-space", "journal-space", "mirror-space", "fsync", "lock", "lost", "rejected", "current-delivery", "backward", "baseline-errors", "later", "dead-updater", "one-record", "both-records", "prune", "held"} {
 		cases = append(cases, scenario{kind, kind, "", "", 0})
 	}
+	for _, kind := range []string{"trial-host-errors", "trial-host-timeout", "trial-host-errors-bound", "trial-host-timeout-bound", "committed-host-errors", "committed-candidate-errors", "committed-host-timeout", "committed-candidate-timeout", "committed-host-exit", "committed-host-invalid", "committed-host-identity", "prepare-host-exit"} {
+		cases = append(cases, scenario{kind, kind, "", "", 0})
+	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -281,6 +284,16 @@ func TestRuntimeFaults(t *testing.T) {
 			}
 			if strings.HasPrefix(tc.point, "quarantined") {
 				candidateMode = "exit"
+			}
+			switch tc.kind {
+			case "trial-host-errors", "trial-host-errors-bound":
+				candidateMode = "trigger-errors"
+			case "trial-host-timeout", "trial-host-timeout-bound":
+				candidateMode = "trigger-timeout"
+			case "committed-candidate-errors":
+				candidateMode = "later-errors"
+			case "committed-candidate-timeout":
+				candidateMode = "later-timeout"
 			}
 			l.publish(2, candidateMode)
 			switch tc.kind {
@@ -392,6 +405,82 @@ func TestRuntimeFaults(t *testing.T) {
 			}
 			if tc.kind == "kill" && err == nil {
 				t.Fatal("fault boundary was not exercised")
+			}
+			if strings.HasPrefix(tc.kind, "trial-host-") {
+				if before.Confirmations != 1 || before.State != "prepared" || before.Candidate == nil || before.Active.Sequence != 1 || before.Floor != 2 || before.Update.Rejected != 0 || before.Update.FirstFailure == nil {
+					t.Fatalf("host symptom consumed candidate: state=%s rejected=%d", before.State, before.Update.Rejected)
+				}
+				// Each invocation reloads the journal: retries must survive restarts.
+				if e = l.run("", "", 0); e != nil && strings.Contains(tc.kind, "errors") {
+					t.Fatal(e)
+				}
+				retry := l.load()
+				if retry.Confirmations != 2 || retry.State != "prepared" || retry.Update.Rejected != 0 {
+					t.Fatal("second host symptom quarantined")
+				}
+				if strings.HasSuffix(tc.kind, "-bound") {
+					_ = l.run("", "", 0)
+					last := l.load()
+					if last.Confirmations != 3 || last.State != "quarantined" || last.Update.Rejected != 2 || last.Floor != 2 || last.Active.Sequence != 1 {
+						t.Fatal("host symptom retry budget unbounded")
+					}
+				} else {
+					// Stop the host symptom without changing the signed candidate.
+					// The recovery marker disables the fixture's host fault trigger.
+					os.WriteFile(filepath.Join(dir, "host-recovered"), []byte("ok"), 0600)
+					os.Remove(filepath.Join(dir, "host-symptom"))
+					if e = l.run("", "", 0); e != nil {
+						t.Fatal(e)
+					}
+					last := l.load()
+					if last.State != "committed" || last.Active.Sequence != 2 || last.Floor != 2 || last.Update.Rejected != 0 || last.Update.FirstFailure != nil {
+						t.Fatal("same candidate did not recover")
+					}
+				}
+				return
+			}
+			if strings.HasPrefix(tc.kind, "committed-") || tc.kind == "prepare-host-exit" {
+				if before.State != "committed" || before.Active.Sequence != 2 {
+					t.Fatal("trial did not commit")
+				}
+				symptom := "errors"
+				switch tc.kind {
+				case "committed-host-timeout", "committed-candidate-timeout":
+					symptom = "timeout"
+				case "committed-host-exit", "prepare-host-exit":
+					symptom = "exit"
+				case "committed-host-invalid":
+					symptom = "malformed"
+				case "committed-host-identity":
+					symptom = "wrong-build"
+				}
+				if strings.HasPrefix(tc.kind, "committed-candidate-") {
+					os.WriteFile(filepath.Join(dir, "break-collector"), []byte("break"), 0600)
+				} else {
+					os.WriteFile(filepath.Join(dir, "host-symptom"), []byte(symptom), 0600)
+				}
+				if tc.kind == "prepare-host-exit" {
+					l.publish(3, "good")
+				}
+				_ = l.run("", "", 0)
+				failed := l.load()
+				if tc.kind == "committed-candidate-timeout" {
+					if failed.State != "quarantined" || failed.Active.Sequence != 1 || failed.Update.Rejected != 2 || failed.Floor != 2 {
+						t.Fatal("candidate timeout not confirmed")
+					}
+					return
+				}
+				if failed.State != "committed" || failed.Active != before.Active || failed.Fallback != before.Fallback || failed.Floor != before.Floor || failed.FloorDigest != before.FloorDigest || failed.Update.Rejected != 0 {
+					t.Fatal("host change rejected committed code or consumed floor")
+				}
+				if symptom == "errors" {
+					if len(failed.Errors) != 1 || failed.Update.FirstFailure != nil {
+						t.Fatal("committed diagnostic not recorded as baseline")
+					}
+				} else if failed.Update.FirstFailure == nil || len(l.statuses) == 0 || l.statuses[len(l.statuses)-1].Code == "" {
+					t.Fatal("host execution failure not reported")
+				}
+				return
 			}
 			if tc.kind == "trial" || tc.kind == "worker" {
 				if before.State != "quarantined" || before.Active.Sequence != 1 || before.Floor != 2 || before.Update.Rejected != 2 {
