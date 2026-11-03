@@ -8,7 +8,7 @@ visible but stops counting and notifying; it does not fix anything.
 | --- | --- | --- |
 | host.stale | warning / critical | Last inventory older than 45 minutes / 2 hours. |
 | host.schema | info | Inventory schema differs from the API schema. |
-| agent.update.unhealthy | warning → critical | Failed or rejected updates, rollbacks, or eligible-offer lag over 45 minutes; critical after 24 hours unresolved. |
+| agent.update.unhealthy | critical | Failed or rejected updates, rollbacks, or eligible-offer lag over 45 minutes. |
 | agent.release.unavailable | warning | Configured signed release or offer journal is unreadable; last known host update health is retained. |
 | zfs.pool.health | critical | Pool is not healthy. |
 | zfs.pool.capacity | warning / critical | Pool capacity reaches 80% / 90%. |
