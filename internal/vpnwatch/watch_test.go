@@ -3,6 +3,8 @@ package vpnwatch
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,12 +21,19 @@ import (
 func TestAutofixThresholdCooldownReloadAndMuteSetting(t *testing.T) {
 	dir := t.TempDir()
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	on := false
+	on, directOK := false, false
+	directCalls := 0
 	attempts, messages := 0, 0
 	byGateway := map[string]int{}
 	inv := &inventory.Inventory{VPN: &inventory.VPN{Container: "vpn", State: "exited"}}
 	inv.Host.Hostname = "host-a"
-	opts := Options{Now: func() time.Time { return now }, Settings: func() (bool, int) { return on, 10 }, Runner: &execallow.Runner{Inventory: func() (*inventory.Inventory, error) { return inv, nil }}, Inspect: func(context.Context, string) (vpnprobe.Container, error) {
+	opts := Options{Direct: func(context.Context) error {
+		directCalls++
+		if !directOK {
+			return errors.New("internet unavailable")
+		}
+		return nil
+	}, Now: func() time.Time { return now }, Settings: func() (bool, int) { return on, 10 }, Runner: &execallow.Runner{Inventory: func() (*inventory.Inventory, error) { return inv, nil }}, Inspect: func(context.Context, string) (vpnprobe.Container, error) {
 		return vpnprobe.Container{}, errors.New("unavailable")
 	}, Reconnect: func(_ context.Context, n string) (actions.Entry, error) {
 		attempts++
@@ -52,7 +61,16 @@ func TestAutofixThresholdCooldownReloadAndMuteSetting(t *testing.T) {
 	if attempts != 0 {
 		t.Fatal("autofix ran while disabled")
 	}
+	if directCalls != 0 {
+		t.Fatal("direct check ran before an automatic attempt was due")
+	}
 	on = true
+	check()
+	snap := w.Snapshot("vpn")
+	if attempts != 0 || messages != 0 || snap.Autofix.LastRun != nil || snap.Autofix.CooldownUntil != nil || !strings.Contains(snap.Autofix.Reason, "internet unreachable") {
+		t.Fatalf("upstream outage must skip silently without cooldown: %+v", snap)
+	}
+	directOK = true
 	check()
 	if attempts != 1 || messages != 1 {
 		t.Fatalf("threshold attempt/message %d/%d", attempts, messages)
@@ -116,6 +134,35 @@ func TestAutofixThresholdCooldownReloadAndMuteSetting(t *testing.T) {
 			t.Fatalf("incompatible state must start fresh: %v", err)
 		}
 	}
+	t.Run("direct request bounds and no redirects", func(t *testing.T) {
+		status, oversized, requests := http.StatusOK, false, 0
+		endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requests++
+			if r.Method != http.MethodGet || r.URL.Path != "/ip" {
+				t.Error("wrong direct request")
+			}
+			w.Header().Set("Location", "/redirected")
+			w.WriteHeader(status)
+			if oversized {
+				_, _ = w.Write([]byte(strings.Repeat("x", (64<<10)+1)))
+			} else {
+				_, _ = w.Write([]byte("192.0.2.20"))
+			}
+		}))
+		defer endpoint.Close()
+		t.Setenv("VPN_CHECK_URL", endpoint.URL+"/ip")
+		t.Setenv("HTTP_PROXY", "http://127.0.0.1:1")
+		for _, tc := range []struct {
+			status        int
+			oversized, ok bool
+		}{{200, false, true}, {503, false, false}, {302, false, false}, {200, true, false}} {
+			status, oversized, requests = tc.status, tc.oversized, 0
+			err := directCheck(context.Background())
+			if (err == nil) != tc.ok || requests != 1 {
+				t.Fatalf("direct request status=%d oversized=%v requests=%d err=%v", status, oversized, requests, err)
+			}
+		}
+	})
 }
 
 func TestExitFailureConfirmationAndCadence(t *testing.T) {

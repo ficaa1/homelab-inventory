@@ -40,7 +40,7 @@ func Project(inv *inventory.Inventory, v *inventory.VPN, watch *Watch, manager *
 			}
 			h.ExitIP, h.Country, h.City, h.Org = f.ExitIP, f.Country, f.City, f.Org
 			a := snap.Autofix
-			h.Autofix = plugin.NetworkAutofix{Enabled: a.Enabled, AfterMinutes: a.AfterMinutes, State: a.State, LastRun: a.LastRun, CooldownUntil: a.CooldownUntil}
+			h.Autofix = plugin.NetworkAutofix{Enabled: a.Enabled, AfterMinutes: a.AfterMinutes, State: a.State, Reason: a.Reason, LastRun: a.LastRun, CooldownUntil: a.CooldownUntil}
 		}
 	}
 	h.ReconnectAllowed = manager != nil && allowed && h.Host == actionsHost && v.Container != ""

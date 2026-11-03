@@ -256,6 +256,7 @@
     recovery.push(["Automatic reconnect", fix ? (fix.enabled ? "On · after " + fix.afterMinutes + "m unhealthy" : "Off") : "Unavailable"]);
     if (fix) {
       recovery.push(["Recovery state", state(fix.state)]);
+      if (fix.reason) recovery.push(["Recovery reason", fix.reason]);
       var cooldown = since(fix.cooldownUntil);
       recovery.push(["Cooldown", cooldown != null && cooldown < 0 ? age(-cooldown) + " remaining" : "None"]);
       recovery.push(["Last automatic run", fix.lastRun ? HI.ago(fix.lastRun) : "No automatic run recorded"]);

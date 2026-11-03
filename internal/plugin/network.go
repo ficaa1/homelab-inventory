@@ -34,6 +34,7 @@ type NetworkAutofix struct {
 	Enabled       bool       `json:"enabled"`
 	AfterMinutes  int        `json:"afterMinutes"`
 	State         string     `json:"state"`
+	Reason        string     `json:"reason"`
 	LastRun       *time.Time `json:"lastRun"`
 	CooldownUntil *time.Time `json:"cooldownUntil"`
 }

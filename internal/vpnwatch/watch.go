@@ -26,6 +26,7 @@ type Autofix struct {
 	Enabled       bool       `json:"enabled"`
 	AfterMinutes  int        `json:"afterMinutes"`
 	State         string     `json:"state"`
+	Reason        string     `json:"reason"`
 	LastRun       *time.Time `json:"lastRun"`
 	CooldownUntil *time.Time `json:"cooldownUntil"`
 }
@@ -59,6 +60,7 @@ type Options struct {
 	Exit      func(context.Context, string) (vpnprobe.Facts, error)
 	Inspect   func(context.Context, string) (vpnprobe.Container, error)
 	Reconnect func(context.Context, string) (actions.Entry, error)
+	Direct    func(context.Context) error
 	Now       func() time.Time
 }
 type gateway struct {
@@ -69,6 +71,7 @@ type gateway struct {
 	failures                      int
 	startedAt                     time.Time
 	liveState, liveHealth         string
+	autofixReason                 string
 	verifiedAt                    time.Time
 	revision                      uint64 // Invalidates in-flight probes when a manual action finishes.
 }
@@ -101,6 +104,9 @@ func Open(dir string, opts Options) (*Watch, error) {
 		w.opts.Inspect = func(ctx context.Context, n string) (vpnprobe.Container, error) {
 			return vpnprobe.Inspect(ctx, opts.Runner, n)
 		}
+	}
+	if opts.Direct == nil {
+		w.opts.Direct = directCheck
 	}
 	b, err := os.ReadFile(w.path)
 	if err == nil {
@@ -146,6 +152,9 @@ func (w *Watch) snapshot(g gateway, now time.Time) Snapshot {
 	s.Autofix = Autofix{Enabled: on, AfterMinutes: n, State: "off", LastRun: g.saved.LastAuto}
 	if on {
 		s.Autofix.State = "watching"
+		if g.autofixReason != "" {
+			s.Autofix.State, s.Autofix.Reason = "skipped", g.autofixReason
+		}
 	}
 	if g.saved.LastAuto != nil {
 		t := g.saved.LastAuto.Add(time.Hour)
@@ -411,6 +420,7 @@ func (w *Watch) probe(ctx context.Context, panel bool, now time.Time, inv *inven
 		// Unknown probes after a restart do not prove recovery. Keep the timer,
 		// but autofix below still requires a newly confirmed down/cutoff state.
 		g.saved.BadSince = nil
+		g.autofixReason = ""
 	}
 	return nil
 }
@@ -428,6 +438,24 @@ func (w *Watch) autofix(ctx context.Context, container string, now time.Time) er
 	if w.opts.Reconnect == nil && w.opts.Actions == nil {
 		return nil
 	}
+	// Only automatic recovery makes this request, outside the container. A
+	// failed direct check must not spend the gateway's cooldown or notify.
+	if err := w.opts.Direct(ctx); err != nil {
+		w.mu.Lock()
+		current := w.gateways[container]
+		if current.revision == g.revision {
+			current.autofixReason = "internet unreachable from the dashboard host; automatic reconnect skipped"
+			w.gateways[container] = current
+		}
+		w.mu.Unlock()
+		return nil
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if on, _ := w.settings(); !on {
+		return nil
+	}
 	// Reserve before execution, so a crash cannot cause an automatic retry loop.
 	w.mu.Lock()
 	current := w.gateways[container]
@@ -438,6 +466,7 @@ func (w *Watch) autofix(ctx context.Context, container string, now time.Time) er
 	previousAuto := current.saved.LastAuto
 	t := now
 	current.saved.LastAuto = &t
+	current.autofixReason = ""
 	w.gateways[container], w.saved[container] = current, current.saved
 	err := w.save()
 	w.mu.Unlock()
@@ -497,6 +526,9 @@ func (w *Watch) autofix(ctx context.Context, container string, now time.Time) er
 		stop()
 	}
 	e.Target = container
+	if err != nil {
+		e.Result = "failed"
+	}
 	w.Reconnected(e)
 	return nil
 }
@@ -508,6 +540,7 @@ func (g *gateway) resetObservations(e actions.Entry) {
 	}
 	g.lastWG, g.lastExit, g.lastInspect = time.Time{}, time.Time{}, time.Time{}
 	g.failures, g.exitOK = 0, false
+	g.autofixReason = ""
 	g.revision++
 }
 

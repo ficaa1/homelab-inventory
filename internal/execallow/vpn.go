@@ -120,7 +120,8 @@ func (w *wgOutput) String() string {
 	return strings.Join(w.rows, "\n")
 }
 
-func checkURL() (string, error) {
+// VPNCheckURL returns the shared server-configured endpoint for exit checks.
+func VPNCheckURL() (string, error) {
 	value := os.Getenv("VPN_CHECK_URL")
 	if value == "" {
 		value = "https://ipinfo.io/json"
@@ -155,7 +156,7 @@ func (r *Runner) runProbe(ctx context.Context, command string, args map[string]s
 	case "vpn-wg-dump":
 		res = r.runCaptured(ctx, buildArgv(command, args), true)
 	case "vpn-exit-check":
-		target, err := checkURL()
+		target, err := VPNCheckURL()
 		if err != nil {
 			return Result{Command: command, ExitCode: -1, Error: err.Error()}
 		}
