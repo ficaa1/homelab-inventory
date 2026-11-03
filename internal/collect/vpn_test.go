@@ -51,7 +51,7 @@ func TestVPNProcCountersAndAttachment(t *testing.T) {
 		t.Skip("Linux proc namespace fixture")
 	}
 	root := t.TempDir()
-	for pid, ns := range map[string]string{"101": "net:[1001]", "102": "net:[1001]", "103": "net:[1002]"} {
+	for pid, ns := range map[string]string{"101": "net:[1001]", "102": "net:[1001]", "103": "net:[1002]", "105": "net:[1003]"} {
 		dir := filepath.Join(root, "proc", pid, "ns")
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
@@ -60,32 +60,40 @@ func TestVPNProcCountersAndAttachment(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	dir := filepath.Join(root, "proc/101/net")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "dev"), []byte(vpnNetDevFixture), 0o644); err != nil {
-		t.Fatal(err)
+	for _, pid := range []string{"101", "105"} {
+		dir := filepath.Join(root, "proc", pid, "net")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "dev"), []byte(vpnNetDevFixture), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	inv := &inventory.Inventory{Docker: &inventory.Docker{Available: true, Containers: []inventory.Container{
-		{Name: "zeta", State: "exited", CapAdd: []string{"NET_ADMIN"}},
-		{Name: "gateway", State: "running", PID: 101, Health: "healthy"}, // Interface alone detects it.
-		{Name: "attached", State: "running", PID: 102, NetworkMode: "container:gateway"},
-		{Name: "detached", State: "running", PID: 103, NetworkMode: "container:gateway"},
-		{Name: "unknown", State: "running", PID: 104, NetworkMode: "container:gateway"},
-		{Name: "zeta-worker", State: "exited", NetworkMode: "container:zeta"},
+		{Name: "tunnel", State: "running", PID: 105, CapAdd: []string{"NET_ADMIN", "SYS_MODULE"}},
+		{Name: "vpn", State: "running", PID: 101, Health: "healthy", CapAdd: []string{"NET_ADMIN"}}, // Interface alone detects it.
+		{Name: "attached", State: "running", PID: 102, NetworkMode: "container:vpn"},
+		{Name: "detached", State: "running", PID: 103, NetworkMode: "container:vpn"},
+		{Name: "proxy", State: "running", NetworkMode: "container:tunnel"},
 	}}}
 	env := &Env{RootFS: root, diags: &inv.Diagnostics, name: "correlate"}
 	correlate(env, inv)
 	v := inv.VPN
-	if v == nil || v.Container != "gateway" || v.Health != "healthy" || !v.InterfaceUp || v.Interface != "wg0" || v.RXBytes == nil || *v.RXBytes != 123 || v.TXBytes == nil || *v.TXBytes != 456 {
+	if v == nil || v.Container != "vpn" || v.Health != "healthy" || !v.InterfaceUp || v.Interface != "wg0" || v.RXBytes == nil || *v.RXBytes != 123 || v.TXBytes == nil || *v.TXBytes != 456 {
 		t.Fatalf("unexpected gateway facts: %+v", v)
 	}
-	if len(v.Dependents) != 3 || v.Dependents[0].Attached == nil || !*v.Dependents[0].Attached || v.Dependents[1].Attached == nil || *v.Dependents[1].Attached || v.Dependents[2].Attached != nil {
+	if len(v.Dependents) != 2 || v.Dependents[0].Attached == nil || !*v.Dependents[0].Attached || v.Dependents[1].Attached == nil || *v.Dependents[1].Attached {
 		t.Fatalf("namespace identity not preserved: %+v", v.Dependents)
 	}
-	if len(inv.Diagnostics) != 1 || inv.Diagnostics[0].Severity != inventory.SeverityInfo || !strings.Contains(inv.Diagnostics[0].Message, "zeta") {
-		t.Fatalf("other gateway candidate not diagnosed: %+v", inv.Diagnostics)
+	var wire struct {
+		VPNs []inventory.VPN `json:"vpns"`
+	}
+	raw, _ := json.Marshal(inv)
+	if err := json.Unmarshal(raw, &wire); err != nil || len(wire.VPNs) != 2 || wire.VPNs[0].Container != "vpn" || wire.VPNs[1].Container != "tunnel" || len(wire.VPNs[1].Dependents) != 1 {
+		t.Fatalf("both gateways must be reported, most dependents first: %s (%v)", raw, err)
+	}
+	if len(inv.Diagnostics) != 0 {
+		t.Fatalf("unexpected gateway diagnostic: %+v", inv.Diagnostics)
 	}
 	for _, state := range []string{"paused", "restarting"} {
 		inv.Docker.Containers[2].State = state
@@ -107,12 +115,15 @@ func TestVPNProcCountersAndAttachment(t *testing.T) {
 		}
 		inv.Docker.Containers[1].State = "running"
 	}
+	if inv.VPN != &inv.VPNs[0] {
+		t.Fatal("legacy vpn must mirror first gateway")
+	}
 	provider := inv.Docker.Containers[1]
-	// Equal dependency preference is resolved by name, regardless of order.
+	// Equal dependent counts are ordered by name, regardless of input order.
 	inv.Docker.Containers = []inventory.Container{
 		inv.Docker.Containers[0],
 		{Name: "beta", CapAdd: []string{"CAP_NET_ADMIN"}},
-		{Name: "zeta-worker", NetworkMode: "container:zeta"},
+		{Name: "proxy", NetworkMode: "container:tunnel"},
 		{Name: "beta-worker", NetworkMode: "container:beta"},
 	}
 	correlate(env, inv)
@@ -123,15 +134,27 @@ func TestVPNProcCountersAndAttachment(t *testing.T) {
 	provider.CapAdd = nil
 	inv.Docker.Containers = []inventory.Container{provider}
 	correlate(env, inv)
-	if inv.VPN.Container != "gateway" || !inv.VPN.InterfaceUp || inv.VPN.Dependents == nil || len(inv.VPN.Dependents) != 0 {
+	if inv.VPN.Container != "vpn" || !inv.VPN.InterfaceUp || inv.VPN.Dependents == nil || len(inv.VPN.Dependents) != 0 {
 		t.Fatal("standalone tunnel or empty dependent semantics changed")
 	}
 	for _, state := range []string{"paused", "restarting", "exited"} {
 		inv.VPN = nil
 		inv.Docker.Containers[0].State = state
 		correlate(env, inv)
-		if inv.VPN != nil {
+		if inv.VPN != nil || inv.VPNs == nil || len(inv.VPNs) != 0 {
 			t.Fatalf("%s container without NET_ADMIN and dependents was detected", state)
+		}
+	}
+	for _, docker := range []*inventory.Docker{nil, {Available: false}, {Available: true}} {
+		inv.Docker = docker
+		correlate(env, inv)
+		raw, _ := json.Marshal(inv)
+		want := `"vpns":null`
+		if docker != nil && docker.Available {
+			want = `"vpns":[]`
+		}
+		if inv.VPN != nil || !strings.Contains(string(raw), want) {
+			t.Fatalf("lost collection semantics: %s", raw)
 		}
 	}
 }

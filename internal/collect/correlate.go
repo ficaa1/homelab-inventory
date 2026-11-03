@@ -50,9 +50,11 @@ func correlate(env *Env, inv *inventory.Inventory) {
 // observations. NET_ADMIN providers with configured dependents remain visible
 // when stopped or proc is inaccessible; no peer or exit facts are invented.
 func correlateVPN(env *Env, inv *inventory.Inventory) {
+	inv.VPN, inv.VPNs = nil, nil
 	if inv.Docker == nil || !inv.Docker.Available {
 		return
 	}
+	inv.VPNs = []inventory.VPN{}
 	type candidate struct {
 		container  *inventory.Container
 		tunnel     *vpnTunnel
@@ -102,32 +104,32 @@ func correlateVPN(env *Env, inv *inventory.Inventory) {
 	}
 	sort.Slice(candidates, func(i, j int) bool {
 		a, b := candidates[i], candidates[j]
-		if (len(a.dependents) > 0) != (len(b.dependents) > 0) {
-			return len(a.dependents) > 0
+		if len(a.dependents) != len(b.dependents) {
+			return len(a.dependents) > len(b.dependents)
 		}
 		if a.container.Name != b.container.Name {
 			return a.container.Name < b.container.Name
 		}
 		return a.container.ID < b.container.ID
 	})
-	c := candidates[0]
-	inv.VPN = &inventory.VPN{
-		Container: c.container.Name, State: c.container.State,
-		Health: c.container.Health, StartedAt: c.container.StartedAt,
-		Dependents: c.dependents,
+	for _, c := range candidates {
+		v := inventory.VPN{
+			Container: c.container.Name, State: c.container.State,
+			Health: c.container.Health, StartedAt: c.container.StartedAt,
+			Dependents: c.dependents,
+		}
+		if c.tunnel != nil {
+			v.Interface = c.tunnel.name
+			v.InterfaceUp = true
+			v.RXBytes = &c.tunnel.rx
+			v.TXBytes = &c.tunnel.tx
+		}
+		if c.probeErr != nil {
+			env.Infof("VPN gateway %q tunnel counters unavailable from proc", c.container.Name)
+		}
+		inv.VPNs = append(inv.VPNs, v)
 	}
-	if c.tunnel != nil {
-		inv.VPN.Interface = c.tunnel.name
-		inv.VPN.InterfaceUp = true
-		inv.VPN.RXBytes = &c.tunnel.rx
-		inv.VPN.TXBytes = &c.tunnel.tx
-	}
-	if c.probeErr != nil {
-		env.Infof("VPN gateway %q tunnel counters unavailable from proc", c.container.Name)
-	}
-	for _, other := range candidates[1:] {
-		env.Infof("additional VPN gateway candidate %q was not selected", other.container.Name)
-	}
+	inv.VPN = &inv.VPNs[0]
 }
 
 func vpnContainerReference(ref string, ct *inventory.Container) bool {
