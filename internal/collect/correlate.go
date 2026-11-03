@@ -3,6 +3,7 @@ package collect
 import (
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -36,12 +37,104 @@ var unitCgroup = regexp.MustCompile(`/([a-zA-Z0-9_.@\\:-]+\.(?:service|scope))`)
 // correlate fills in derived, cross-section fields. It never fails the run:
 // a missing correlation degrades the inventory, it does not invalidate it.
 func correlate(env *Env, inv *inventory.Inventory) {
+	correlateVPN(env, inv)
 	if inv.Network == nil {
 		return
 	}
 	inv.Network.EphemeralRange = readEphemeralRange(env)
 	markEphemeral(inv.Network)
 	attributeListeners(env, inv)
+}
+
+// correlateVPN joins Docker's namespace configuration with read-only proc
+// observations. Capability-only candidates remain visible when stopped or
+// when proc is inaccessible; no interface, peer or exit facts are invented.
+func correlateVPN(env *Env, inv *inventory.Inventory) {
+	if inv.Docker == nil || !inv.Docker.Available {
+		return
+	}
+	type candidate struct {
+		container  *inventory.Container
+		tunnel     *vpnTunnel
+		probeErr   error
+		dependents []inventory.VPNDependent
+	}
+	var candidates []candidate
+	for i := range inv.Docker.Containers {
+		ct := &inv.Docker.Containers[i]
+		if strings.HasPrefix(ct.NetworkMode, "container:") {
+			continue // A namespace consumer is not its gateway.
+		}
+		tunnel, err := readVPNTunnel(env, ct)
+		capable := false
+		for _, cap := range ct.CapAdd {
+			switch strings.TrimPrefix(strings.ToUpper(cap), "CAP_") {
+			case "NET_ADMIN", "ALL":
+				capable = true
+			}
+		}
+		if tunnel == nil && !capable {
+			continue
+		}
+		c := candidate{container: ct, tunnel: tunnel, probeErr: err, dependents: []inventory.VPNDependent{}}
+		providerNS := vpnNetNS(env, ct)
+		for j := range inv.Docker.Containers {
+			dep := &inv.Docker.Containers[j]
+			ref, shared := strings.CutPrefix(dep.NetworkMode, "container:")
+			if !shared || !vpnContainerReference(ref, ct) {
+				continue
+			}
+			d := inventory.VPNDependent{Name: dep.Name, State: dep.State, StartedAt: dep.StartedAt}
+			if depNS := vpnNetNS(env, dep); providerNS != "" && depNS != "" {
+				attached := providerNS == depNS
+				d.Attached = &attached
+			}
+			c.dependents = append(c.dependents, d)
+		}
+		sort.Slice(c.dependents, func(i, j int) bool { return c.dependents[i].Name < c.dependents[j].Name })
+		candidates = append(candidates, c)
+	}
+	if len(candidates) == 0 {
+		return
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		a, b := candidates[i], candidates[j]
+		if (len(a.dependents) > 0) != (len(b.dependents) > 0) {
+			return len(a.dependents) > 0
+		}
+		if a.container.Name != b.container.Name {
+			return a.container.Name < b.container.Name
+		}
+		return a.container.ID < b.container.ID
+	})
+	c := candidates[0]
+	inv.VPN = &inventory.VPN{
+		Container: c.container.Name, State: c.container.State,
+		Health: c.container.Health, StartedAt: c.container.StartedAt,
+		Dependents: c.dependents,
+	}
+	if c.tunnel != nil {
+		inv.VPN.Interface = c.tunnel.name
+		inv.VPN.InterfaceUp = true
+		inv.VPN.RXBytes = &c.tunnel.rx
+		inv.VPN.TXBytes = &c.tunnel.tx
+	}
+	if c.probeErr != nil {
+		env.Infof("VPN gateway %q tunnel counters unavailable from proc", c.container.Name)
+	}
+	for _, other := range candidates[1:] {
+		env.Infof("additional VPN gateway candidate %q was not selected", other.container.Name)
+	}
+}
+
+func vpnContainerReference(ref string, ct *inventory.Container) bool {
+	if ref == ct.Name || ref == strings.TrimPrefix(ct.Name, "/") || ref == ct.ID {
+		return true
+	}
+	// Inventory IDs are shortened, but Docker network mode usually holds the
+	// full ID. Never resolve an arbitrarily short prefix to a container.
+	return len(ct.ID) >= 12 && len(ref) >= 12 &&
+		(strings.HasPrefix(ref, ct.ID) || strings.HasPrefix(ct.ID, ref))
 }
 
 // readEphemeralRange reads the kernel's dynamic port range. The default is

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/inventory"
 	"github.com/ficaa1/homelab-inventory/internal/redact"
@@ -133,6 +134,10 @@ func (c DockerCollector) Collect(ctx context.Context, env *Env, inv *inventory.I
 		if r, ok := runtime[ps.ID]; ok {
 			ct.RestartCount = r.RestartCount
 			ct.NetworkMode = r.NetworkMode
+			ct.PID = r.PID
+			ct.CapAdd = r.CapAdd
+			ct.StartedAt = r.StartedAt
+			ct.Health = r.Health
 		}
 		if l := labels[ps.ID]; l != nil {
 			ct.ComposeProject = l["com.docker.compose.project"]
@@ -170,24 +175,23 @@ func inspectLabels(ctx context.Context, env *Env, ids []string) map[string]map[s
 	return out
 }
 
-// runtimeFacts are the two things about a container that only the inspect
-// document knows and that nothing else in the schema records.
+// runtimeFacts deliberately excludes environment variables and health logs.
 type runtimeFacts struct {
-	RestartCount int    `json:"restart_count"`
-	NetworkMode  string `json:"network_mode"`
+	RestartCount int        `json:"restart_count"`
+	NetworkMode  string     `json:"network_mode"`
+	PID          int        `json:"pid"`
+	CapAdd       []string   `json:"cap_add"`
+	StartedAt    *time.Time `json:"started_at"`
+	Health       string     `json:"health"`
 }
 
-// inspectRuntime returns restart counts and network modes keyed by container ID.
-//
-// RestartCount turns the crash-loop rule from an inference into a fact: the
-// uptime-versus-age heuristic says "this looks like it restarted", and this
-// says how many times. NetworkMode is the only place the schema can learn that
-// a container reaches the network through another one — five services here go
-// through vpnservice, and `docker ps` shows nothing about it.
+// inspectRuntime returns selected runtime facts keyed by container ID.
+// NetworkMode records namespace consumers, while PID enables passive proc
+// observations. Health includes only the status, never healthcheck output.
 func inspectRuntime(ctx context.Context, env *Env, ids []string) map[string]runtimeFacts {
 	out := map[string]runtimeFacts{}
 	lines := inspectLines(ctx, env, ids,
-		`{{.Id}} {"restart_count":{{.RestartCount}},"network_mode":"{{.HostConfig.NetworkMode}}"}`,
+		dockerRuntimeFormat,
 		"runtime")
 	for id, payload := range lines {
 		var f runtimeFacts
@@ -195,10 +199,15 @@ func inspectRuntime(ctx context.Context, env *Env, ids []string) map[string]runt
 			env.WarnErr("could not parse runtime facts for "+shortID(id), err)
 			continue
 		}
+		if f.StartedAt != nil && f.StartedAt.IsZero() {
+			f.StartedAt = nil
+		}
 		out[id] = f
 	}
 	return out
 }
+
+const dockerRuntimeFormat = `{{.Id}} {"restart_count":{{.RestartCount}},"network_mode":{{json .HostConfig.NetworkMode}},"pid":{{.State.Pid}},"cap_add":{{json .HostConfig.CapAdd}},"started_at":{{json .State.StartedAt}},"health":{{if .State.Health}}{{json .State.Health.Status}}{{else}}""{{end}}}`
 
 func inspectMounts(ctx context.Context, env *Env, ids []string) map[string][]dockerMount {
 	out := map[string][]dockerMount{}

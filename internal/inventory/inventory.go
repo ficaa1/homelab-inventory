@@ -33,7 +33,7 @@ const SchemaVersion = "5"
 // whenever the agent source changes, then refresh agentSourceHash as directed
 // by TestAgentSourceRevision. Older agents omit it and report revision zero.
 // Revision 1 starts the extracted project after the collector and module cut.
-const AgentRevision = 3
+const AgentRevision = 4
 
 // Inventory is the root document emitted by one run of the discovery binary on
 // one machine.
@@ -409,6 +409,12 @@ type Container struct {
 	// when this container shares another's network namespace. The last is the
 	// one that records network namespace sharing.
 	NetworkMode string `json:"network_mode,omitempty"`
+	// Runtime facts are narrowly selected from inspect, never .Config.Env or
+	// healthcheck logs. A nil StartedAt means Docker supplied no valid start.
+	PID       int        `json:"pid,omitempty"`
+	CapAdd    []string   `json:"cap_add,omitempty"`
+	StartedAt *time.Time `json:"started_at,omitempty"`
+	Health    string     `json:"health,omitempty"`
 	// DependsOn is the compose dependency, taken from the label compose writes.
 	DependsOn []string `json:"depends_on,omitempty"`
 }
