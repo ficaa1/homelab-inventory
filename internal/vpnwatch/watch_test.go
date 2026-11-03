@@ -170,11 +170,19 @@ func TestExitFailureConfirmationAndCadence(t *testing.T) {
 	started := now.Add(-time.Hour)
 	h := now.Add(-4 * time.Minute)
 	calls := 0
-	inv := &inventory.Inventory{VPN: &inventory.VPN{Container: "vpn", State: "running"}}
+	wgCalls := map[string]int{}
+	inv := &inventory.Inventory{VPNs: []inventory.VPN{{Container: "vpn", State: "running"}, {Container: "tunnel", State: "running"}}}
 	inv.Host.Hostname = "host-a"
-	w, err := Open(t.TempDir(), Options{Now: func() time.Time { return now }, Runner: &execallow.Runner{Inventory: func() (*inventory.Inventory, error) { return inv, nil }}, WG: func(context.Context, string) (vpnprobe.Facts, error) { return vpnprobe.Facts{LatestHandshake: &h}, nil }, Inspect: func(context.Context, string) (vpnprobe.Container, error) {
+	w, err := Open(t.TempDir(), Options{Now: func() time.Time { return now }, Runner: &execallow.Runner{Inventory: func() (*inventory.Inventory, error) { return inv, nil }}, WG: func(_ context.Context, name string) (vpnprobe.Facts, error) {
+		wgCalls[name]++
+		return vpnprobe.Facts{LatestHandshake: &h}, nil
+	}, Inspect: func(context.Context, string) (vpnprobe.Container, error) {
 		return vpnprobe.Container{State: "running", StartedAt: started}, nil
-	}, Exit: func(context.Context, string) (vpnprobe.Facts, error) {
+	}, Exit: func(_ context.Context, name string) (vpnprobe.Facts, error) {
+		if name == "tunnel" {
+			ip := "192.0.2.20"
+			return vpnprobe.Facts{ExitIP: &ip}, nil
+		}
 		calls++
 		return vpnprobe.Facts{}, errors.New("unreachable")
 	}})
@@ -190,10 +198,28 @@ func TestExitFailureConfirmationAndCadence(t *testing.T) {
 	if calls != 2 || w.Snapshot("vpn").Status != "down" {
 		t.Fatalf("confirmation calls %d state %+v", calls, w.Snapshot("vpn"))
 	}
+	if wgCalls["vpn"] != 1 || wgCalls["tunnel"] != 1 {
+		t.Fatalf("per-gateway cadence: %v", wgCalls)
+	}
+	for _, v := range inv.VPNGateways() {
+		projected := Project(inv, &v, w, nil, "host-a", true)
+		if !projected.Live || projected.Container != v.Container {
+			t.Fatalf("gateway projection: %+v", projected)
+		}
+		if v.Container == "vpn" && (projected.Status != "down" || projected.ExitIP != nil) {
+			t.Fatalf("vpn projection: %+v", projected)
+		}
+		if v.Container == "tunnel" && (projected.Status != "ok" || projected.ExitIP == nil || *projected.ExitIP != "192.0.2.20") {
+			t.Fatalf("tunnel projection: %+v", projected)
+		}
+	}
 	// Wedged Docker must not block panel or alert readers. A concurrent manual
 	// reconnect also invalidates the older in-flight probe result.
 	entered, release := make(chan struct{}), make(chan struct{})
-	w.opts.Inspect = func(context.Context, string) (vpnprobe.Container, error) {
+	w.opts.Inspect = func(_ context.Context, name string) (vpnprobe.Container, error) {
+		if name != "vpn" {
+			return vpnprobe.Container{State: "running", StartedAt: started}, nil
+		}
 		close(entered)
 		<-release
 		return vpnprobe.Container{State: "exited", StartedAt: started}, nil

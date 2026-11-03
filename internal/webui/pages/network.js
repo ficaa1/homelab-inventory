@@ -210,8 +210,9 @@
     if (v.live) chips.push(chip("Live", "", "API tunnel checks"));
     if (inventoryStale) chips.push(ageChip(vpnAge));
     var flow = h("span", { class: "net-flow" });
-    if (source("vpn")) {
-      var rx = series("vpnRx")[0], tx = series("vpnTx")[0];
+    var rx = series("vpnRx").filter(function (x) { return x.labels && x.labels.name === v.container; })[0];
+    var tx = series("vpnTx").filter(function (x) { return x.labels && x.labels.name === v.container; })[0];
+    if (source("vpn") && (rx || tx)) {
       if (panelStale("vpnRx") || panelStale("vpnTx")) flow.className += " net-dim";
       flow.appendChild(h("span", { class: "net-cell" }, [h("span", { class: "net-dir", title: "Received", text: "↓" }), spark(rx && rx.points, { zero: true, dot: false }), h("b", { text: bps(rx && rx.value) })]));
       flow.appendChild(h("span", { class: "net-cell" }, [h("span", { class: "net-dir", title: "Sent", text: "↑" }), spark(tx && tx.points, { zero: true, dot: false }), h("b", { text: bps(tx && tx.value) })]));
@@ -225,18 +226,19 @@
     }
     var where = d ? [d.country ? h("b", { text: d.country }) : null, d.city ? h("span", { text: d.city }) : null] : [];
     var summary = [
-      h("span", { class: "net-vpn-head" }, [dot, h("span", { class: "ops-label" }, [HI.iconNode("shield", "sm"), "VPN"]), h("span", { class: "net-chips" }, chips)]),
+      h("span", { class: "net-vpn-head" }, [dot, h("span", { class: "ops-label" }, [HI.iconNode("shield", "sm"), v.container || "VPN"]), h("span", { class: "net-chips" }, chips)]),
       h("span", { class: "net-ip", text: d && d.exitIp || "—" }),
       h("span", { class: "net-where" }, where), flow];
     var rows = [["Status", stale ? "Stale · " + state(v.status) : state(v.status)], ["Reason", v.reason || "—"],
       ["Container", v.container || "—"], ["Container state", d && d.state || "—"], ["Health", d && d.health || "—"], ["Since", v.since ? HI.ago(v.since) : "—"],
+      ["Exit address", d && d.exitIp || "—"], ["Location", d ? [d.country, d.city].filter(Boolean).join(" · ") || "—" : "—"],
       ["Handshake", hs == null ? "Unavailable" : age(hs) + " ago"], ["Endpoint", d && d.endpoint || "—"], ["Org", d && d.org || "—"],
       ["Received", d && d.rxBytes != null ? size(d.rxBytes) : "—"], ["Sent", d && d.txBytes != null ? size(d.txBytes) : "—"],
       ["Collected", v.inventoryAt ? HI.ago(v.inventoryAt) : "—"]];
     if (inventoryStale) rows.push(["Inventory", "Stale · live checks shown where available"]);
     if (many) rows.unshift(["Host", v.host || "—"]);
     if (q && q.status === "ok") rows.push(["qBittorrent", (q.version || "—") + " · " + (q.connectionStatus || "—") + (q.dhtNodes != null ? " · DHT " + q.dhtNodes : "")]);
-    var key = "vpn-" + (v.host || "");
+    var key = "vpn-" + JSON.stringify([v.host || "", v.container || ""]);
     if (full && !(key in open)) open[key] = true;
     var body = [facts(rows)];
     if (Array.isArray(v.dependents)) {
@@ -273,7 +275,7 @@
     if (!sum) return card("ops-wide net-vpn", "shield", "VPN", [], [s.err.summary ? muted("Unavailable") : skel(true)]);
     var list = Array.isArray(sum.vpns) && sum.vpns.length ? sum.vpns : [sum.vpn || { stale: true }];
     if (!list[0].data && !list[0].inventoryAt && !list[0].status) return card("ops-wide", "shield", "VPN", [], [muted("No host has reported tunnel facts")]);
-    return full ? list.map(function (v) { return vpnCard(v, true); }) : [vpnCard(list[0], false)];
+    return list.map(function (v) { return vpnCard(v, full); });
   }
 
   // ------------------------------------------------------------ WAN and quality

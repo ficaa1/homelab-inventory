@@ -165,7 +165,7 @@ func (n *Network) summary(ctx context.Context) summaryAnswer {
 	return out
 }
 
-// vpns lists every host reporting tunnel facts, the most recently collected first.
+// vpns lists every gateway reporting tunnel facts, newest host inventory first.
 func (n *Network) vpns(now time.Time) []vpnView {
 	out := []vpnView{}
 	if n.inventory == nil {
@@ -205,9 +205,6 @@ func (n *Network) vpns(now time.Time) []vpnView {
 		for j := i; j > 0 && out[j].InventoryAt.After(*out[j-1].InventoryAt); j-- {
 			out[j], out[j-1] = out[j-1], out[j]
 		}
-	}
-	if len(out) > 20 {
-		out = out[:20]
 	}
 	return out
 }
