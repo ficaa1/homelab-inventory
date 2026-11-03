@@ -40,7 +40,7 @@ func VPNAlerts(host string, v *inventory.VPN, live *VPNHealth, now time.Time) []
 	out := []Alert{}
 	if status == "down" || status == "cutoff" {
 		var since *time.Time
-		if live != nil {
+		if live != nil && live.Host == host && live.Container == v.Container {
 			since = live.Since
 		}
 		out = append(out, Alert{Since: since, Host: host, Rule: "vpn." + status, Subject: v.Container, Level: LevelCritical, Message: fmt.Sprintf("VPN %s: %s", v.Container, reason)})
@@ -54,6 +54,9 @@ func VPNAlerts(host string, v *inventory.VPN, live *VPNHealth, now time.Time) []
 // ApplyVPN replaces inventory VPN alerts only for the gateway covered by live
 // evidence, then restores counts even when the replacement is empty.
 func (r *Report) ApplyVPN(v *inventory.VPN, live VPNHealth, now time.Time) {
+	if v == nil || v.Container != live.Container {
+		return
+	}
 	out := r.Alerts[:0]
 	for _, a := range r.Alerts {
 		if a.Host == live.Host && a.Subject == live.Container && (a.Rule == "vpn.down" || a.Rule == "vpn.cutoff" || a.Rule == "vpn.handshake.stale") {

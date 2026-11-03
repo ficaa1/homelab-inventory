@@ -36,4 +36,39 @@ func TestVPNInventoryAndWatchRules(t *testing.T) {
 	if rep.Counts.Critical != 0 || rep.Counts.Warning != 1 {
 		t.Fatalf("override counts: %+v", rep)
 	}
+	inv := &inventory.Inventory{Host: inventory.Host{Hostname: "host-a"}, CollectedAt: now, Tool: inventory.Tool{Revision: inventory.AgentRevision}, SchemaVersion: inventory.SchemaVersion,
+		VPN: v, VPNs: []inventory.VPN{*v, {Container: "tunnel", State: "paused"}},
+		Docker: &inventory.Docker{Available: true, Containers: []inventory.Container{{Name: "vpn", State: "running", Status: "unhealthy"}, {Name: "tunnel", State: "paused"}}}}
+	rep = Evaluate([]*inventory.Inventory{inv}, DefaultThresholds(), now)
+	for _, a := range rep.Alerts {
+		if a.Rule == "docker.container.unhealthy" {
+			t.Fatalf("duplicate docker alert for gateway: %+v", a)
+		}
+	}
+	assertVPN := func(want map[string]string) {
+		t.Helper()
+		got := map[string]string{}
+		for _, a := range rep.Alerts {
+			if a.Rule == "vpn.down" || a.Rule == "vpn.cutoff" || a.Rule == "vpn.handshake.stale" {
+				got[a.Subject] = a.Rule
+			}
+		}
+		if len(got) != len(want) {
+			t.Fatalf("VPN alerts: %v want %v", got, want)
+		}
+		for container, rule := range want {
+			if got[container] != rule {
+				t.Fatalf("VPN alerts: %v want %v", got, want)
+			}
+		}
+	}
+	assertVPN(map[string]string{"vpn": "vpn.cutoff", "tunnel": "vpn.down"})
+	rep.ApplyVPN(&inv.VPNs[0], live, now)
+	assertVPN(map[string]string{"vpn": "vpn.handshake.stale", "tunnel": "vpn.down"})
+	rep.ApplyVPN(&inv.VPNs[1], VPNHealth{Host: "host-b", Container: "tunnel", Status: "ok"}, now)
+	assertVPN(map[string]string{"vpn": "vpn.handshake.stale", "tunnel": "vpn.down"})
+	inv.VPNs = nil // Old agents still use the same alert path.
+	rep = Evaluate([]*inventory.Inventory{inv}, DefaultThresholds(), now)
+	assertVPN(map[string]string{"vpn": "vpn.cutoff"})
+
 }

@@ -249,7 +249,9 @@ func Evaluate(invs []*inventory.Inventory, th Thresholds, now time.Time) *Report
 		e.proxmox(inv)
 		e.systemd(inv)
 		e.docker(inv)
-		e.out = append(e.out, VPNAlerts(host, inv.VPN, nil, now)...)
+		for _, v := range inv.VPNGateways() {
+			e.out = append(e.out, VPNAlerts(host, &v, nil, now)...)
+		}
 		e.filesystems(inv)
 		e.diskHealth(inv)
 		e.firewall(inv)
@@ -628,7 +630,7 @@ func (e *evaluator) docker(inv *inventory.Inventory) {
 		return
 	}
 	for _, c := range inv.Docker.Containers {
-		if inv.VPN != nil && inv.VPN.Container == c.Name {
+		if inv.VPNGateway(c.Name) != nil {
 			continue
 		} // VPN health has one authoritative alert path.
 		// Same three states cmd/discover's summary calls out. "exited" is

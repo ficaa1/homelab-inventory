@@ -198,7 +198,7 @@ func (r *Runner) validate(command string, args map[string]string) Result {
 				return Result{Error: err.Error()}
 			}
 		}
-		if (command == "vpn-wg-dump" || command == "vpn-exit-check") && (inv.VPN == nil || inv.VPN.Container != args["container"]) {
+		if (command == "vpn-wg-dump" || command == "vpn-exit-check") && inv.VPNGateway(args["container"]) == nil {
 			return Result{Error: "container is not the latest inventory VPN gateway"}
 		}
 	}

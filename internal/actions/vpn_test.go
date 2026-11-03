@@ -28,6 +28,12 @@ func TestResolveVPNReconnectHashAndMembership(t *testing.T) {
 	if _, err := Resolve(inv, "vpn_reconnect", "worker-a", execallow.Policy{Host: "host-a"}); err == nil {
 		t.Fatal("accepted non-gateway target")
 	}
+	inv.VPNs = []inventory.VPN{*inv.VPN, {Container: "tunnel", Dependents: []inventory.VPNDependent{{Name: "proxy"}}}}
+	inv.Docker.Containers = append(inv.Docker.Containers, inventory.Container{Name: "tunnel"}, inventory.Container{Name: "proxy", NetworkMode: "container:tunnel"})
+	p, err = Resolve(inv, "vpn_reconnect", "tunnel", execallow.Policy{Host: "host-a"})
+	if err != nil || !reflect.DeepEqual(p.Containers, []string{"tunnel", "proxy"}) {
+		t.Fatalf("second gateway plan=%+v err=%v", p, err)
+	}
 	inv.Docker.Containers = inv.Docker.Containers[:2]
 	if _, err := Resolve(inv, "vpn_reconnect", "gateway", execallow.Policy{Host: "host-a"}); err == nil {
 		t.Fatal("accepted missing configured dependent")

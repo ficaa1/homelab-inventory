@@ -15,11 +15,12 @@ import (
 
 func resolveVPN(inv *inventory.Inventory, target string, p Preview) (Preview, error) {
 	gateway, err := execallow.FindContainer(inv, target)
-	if err != nil || inv.VPN == nil || inv.VPN.Container != target {
+	v := inv.VPNGateway(target)
+	if err != nil || v == nil {
 		return p, errTargetMissing
 	}
 	names := map[string]bool{}
-	for _, d := range inv.VPN.Dependents {
+	for _, d := range v.Dependents {
 		names[d.Name] = true
 	}
 	for _, c := range inv.Docker.Containers {

@@ -48,6 +48,21 @@ printf 'private-fixture' >&2
 			t.Fatalf("accepted %s", name)
 		}
 	}
+	inv, _ := r.Inventory()
+	inv.Docker.Containers = append(inv.Docker.Containers, inventory.Container{Name: "tunnel"})
+	inv.VPNs = []inventory.VPN{*inv.VPN, {Container: "tunnel"}}
+	for _, command := range []string{"vpn-wg-dump", "vpn-exit-check"} {
+		for _, name := range []string{"gateway", "tunnel"} {
+			if err := r.Validate(command, map[string]string{"container": name}); err != nil {
+				t.Fatalf("gateway %s refused: %v", name, err)
+			}
+		}
+	}
+	inv.VPNs = []inventory.VPN{}
+	if r.Validate("vpn-wg-dump", map[string]string{"container": "gateway"}) == nil {
+		t.Fatal("empty vpns must override legacy vpn")
+	}
+
 	if r.Validate("vpn-exit-check", map[string]string{"container": "gateway", "url": "https://example.com"}) == nil {
 		t.Fatal("accepted arbitrary argument")
 	}
