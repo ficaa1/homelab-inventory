@@ -13,6 +13,7 @@ import (
 )
 
 func main() {
+	runtimePair := flag.Bool("runtime", false, "publish protocol-1 runtime pair plus legacy discover manifest")
 	platforms := flag.Bool("platforms", false, "print configured build platforms")
 	key := flag.String("key", "release-ed25519.key", "signer-owned mode-0600 private key")
 	dir := flag.String("dir", "releases", "release directory")
@@ -74,7 +75,11 @@ func main() {
 	if *input == "" || *version == "" {
 		fail(fmt.Errorf("input and version required"))
 	}
-	if e = agentrelease.Publish(*dir, *key, *input, *version, inventory.AgentRevision); e != nil {
+	publish := agentrelease.Publish
+	if *runtimePair {
+		publish = agentrelease.PublishRuntime
+	}
+	if e = publish(*dir, *key, *input, *version, inventory.AgentRevision); e != nil {
 		fail(e)
 	}
 }

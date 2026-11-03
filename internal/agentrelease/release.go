@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ficaa1/homelab-inventory/internal/agentproto"
 	"github.com/ficaa1/homelab-inventory/internal/fsx"
 )
 
@@ -28,14 +29,18 @@ type Artifact struct {
 	Name   string `json:"name"`
 	SHA256 string `json:"sha256"`
 	Size   int64  `json:"size"`
+	Role   string `json:"role,omitempty"`
 }
 type Manifest struct {
-	Platforms []string            `json:"platforms"`
-	Sequence  uint64              `json:"sequence"`
-	Revision  int                 `json:"revision"`
-	Version   string              `json:"version"`
-	Created   time.Time           `json:"created"`
-	Artifacts map[string]Artifact `json:"artifacts"` // platform/component
+	Product              string              `json:"product,omitempty"`
+	LauncherProtocol     int                 `json:"launcher_protocol,omitempty"`
+	RuntimeCompatibility int                 `json:"runtime_compatibility,omitempty"`
+	Platforms            []string            `json:"platforms"`
+	Sequence             uint64              `json:"sequence"`
+	Revision             int                 `json:"revision"`
+	Version              string              `json:"version"`
+	Created              time.Time           `json:"created"`
+	Artifacts            map[string]Artifact `json:"artifacts"` // platform/component
 }
 type Signed struct {
 	Manifest  json.RawMessage `json:"manifest"`
@@ -48,6 +53,9 @@ func Verify(data, public []byte) (Manifest, error) {
 	if len(data) > 65536 {
 		return m, errors.New("manifest too large")
 	}
+	if _, err := agentproto.Object(data); err != nil {
+		return m, errors.New("invalid envelope")
+	}
 	if err := json.Unmarshal(data, &s); err != nil {
 		return m, errors.New("invalid envelope")
 	}
@@ -56,19 +64,31 @@ func Verify(data, public []byte) (Manifest, error) {
 	if err != nil || e != nil || len(key) != ed25519.PublicKeySize || !ed25519.Verify(key, s.Manifest, sig) {
 		return m, errors.New("invalid manifest signature")
 	}
+	if _, err = agentproto.Object(s.Manifest); err != nil {
+		return m, errors.New("invalid manifest")
+	}
 	if err = json.Unmarshal(s.Manifest, &m); err != nil {
 		return m, errors.New("invalid manifest")
 	}
-	if m.Sequence == 0 || m.Revision < 1 || m.Version == "" || m.Created.IsZero() || len(m.Platforms) == 0 || len(m.Artifacts) != len(m.Platforms) {
+	components := []string{"discover"}
+	if m.LauncherProtocol != 0 {
+		if m.LauncherProtocol != 1 || m.RuntimeCompatibility != 1 || m.Product != "homelab-inventory" {
+			return m, errors.New("unsupported runtime protocol")
+		}
+		components = []string{"discover", "agentupdate"}
+	} else if m.Product != "" || m.RuntimeCompatibility != 0 {
+		return m, errors.New("incomplete runtime contract")
+	}
+	if m.Sequence == 0 || m.Revision < 1 || m.Version == "" || m.Created.IsZero() || len(m.Platforms) == 0 || len(m.Artifacts) != len(m.Platforms)*len(components) {
 		return m, errors.New("incomplete manifest")
 	}
 	if err := validatePlatforms(m.Platforms); err != nil {
 		return m, err
 	}
 	for _, platform := range m.Platforms {
-		for _, component := range []string{"discover"} {
+		for _, component := range components {
 			a, ok := m.Artifacts[platform+"/"+component]
-			if !ok || a.Name != component+"-"+platform || a.Size <= 0 || a.Size > MaxArtifact || len(a.SHA256) != 64 {
+			if !ok || (m.LauncherProtocol != 0 && a.Role != component) || (m.LauncherProtocol == 0 && a.Role != "") || a.Name != component+"-"+platform || a.Size <= 0 || a.Size > MaxArtifact || len(a.SHA256) != 64 {
 				return m, errors.New("invalid artifact metadata")
 			}
 			if _, err := hex.DecodeString(a.SHA256); err != nil {
@@ -158,8 +178,18 @@ func Keygen(path string) ([]byte, error) {
 	return []byte(base64.StdEncoding.EncodeToString(pub) + "\n"), nil
 }
 
+// PublishRuntime emits a separate protocol-1 pair alongside the unchanged legacy
+// manifest. Keeping latest.json discover-only lets already installed verifiers
+// continue working without trusting new artifact roles.
+func PublishRuntime(dir, keyPath, input, version string, revision int) error {
+	return publish(dir, keyPath, input, version, revision, true)
+}
+
 // Publish is called only by the offline signer, never by the HTTP server.
 func Publish(dir, keyPath, input, version string, revision int) error {
+	return publish(dir, keyPath, input, version, revision, false)
+}
+func publish(dir, keyPath, input, version string, revision int, pair bool) error {
 	key, err := readPrivateKey(keyPath)
 	if err != nil {
 		return err
@@ -192,8 +222,15 @@ func Publish(dir, keyPath, input, version string, revision int) error {
 		return err
 	}
 	m := Manifest{Platforms: platforms, Sequence: seq, Revision: revision, Version: version, Created: time.Now().UTC(), Artifacts: map[string]Artifact{}}
+	components := []string{"discover"}
+	if pair {
+		components = append(components, "agentupdate")
+		m.Product = "homelab-inventory"
+		m.LauncherProtocol = 1
+		m.RuntimeCompatibility = 1
+	}
 	for _, platform := range platforms {
-		for _, component := range []string{"discover"} {
+		for _, component := range components {
 			name := component + "-" + platform
 			source := filepath.Join(input, name)
 			data, e := os.ReadFile(source)
@@ -206,16 +243,37 @@ func Publish(dir, keyPath, input, version string, revision int) error {
 			if e = fsx.WriteAtomic(filepath.Join(staging, name), data, 0755); e != nil {
 				return e
 			}
-			m.Artifacts[platform+"/"+component] = Artifact{Name: name, SHA256: Digest(data), Size: int64(len(data))}
+			a := Artifact{Name: name, SHA256: Digest(data), Size: int64(len(data))}
+			if pair {
+				a.Role = component
+			}
+			m.Artifacts[platform+"/"+component] = a
 		}
 	}
-	payload, err := json.Marshal(m)
+	signed, err := sign(m, key)
 	if err != nil {
 		return err
 	}
-	signed, err := json.Marshal(Signed{Manifest: payload, Signature: base64.StdEncoding.EncodeToString(ed25519.Sign(ed25519.PrivateKey(key), payload))})
-	if err != nil {
-		return err
+	var runtimeSigned []byte
+	if pair {
+		runtimeSigned = signed
+		if err = fsx.WriteAtomic(filepath.Join(staging, "runtime.json"), runtimeSigned, 0644); err != nil {
+			return err
+		}
+		legacy := m
+		legacy.Product = ""
+		legacy.LauncherProtocol = 0
+		legacy.RuntimeCompatibility = 0
+		legacy.Artifacts = map[string]Artifact{}
+		for _, p := range platforms {
+			a := m.Artifacts[p+"/discover"]
+			a.Role = ""
+			legacy.Artifacts[p+"/discover"] = a
+		}
+		signed, err = sign(legacy, key)
+		if err != nil {
+			return err
+		}
 	}
 	if err = fsx.WriteAtomic(filepath.Join(dir, "public.key"), pub, 0644); err != nil {
 		return err
@@ -232,10 +290,15 @@ func Publish(dir, keyPath, input, version string, revision int) error {
 	if err = os.Rename(staging, release); err != nil {
 		return err
 	}
+	if err = syncDirectory(dir); err != nil {
+		return err
+	}
 	// Reset controls before publishing a new sequence. No directory is HTTP-writable.
 	if err = WriteJSON(filepath.Join(dir, "control.json"), Control{Sequence: seq, Mode: "auto"}); err != nil {
 		return err
 	}
+	// Readers obtain runtime.json from the retained directory selected by the
+	// legacy latest pointer; there is no second mutable latest pointer to race.
 	return fsx.WriteAtomic(filepath.Join(dir, "latest.json"), signed, 0644)
 }
 
@@ -294,6 +357,26 @@ func Resign(dir, keyPath string) error {
 	if err = fsx.WriteAtomic(filepath.Join(dir, strconv.FormatUint(m.Sequence, 10), "manifest.json"), data, 0644); err != nil {
 		return err
 	}
+	runtimePath := filepath.Join(dir, strconv.FormatUint(m.Sequence, 10), "runtime.json")
+	if rb, e := os.ReadFile(runtimePath); e == nil {
+		oldPub, e := os.ReadFile(filepath.Join(dir, "public.key"))
+		if e != nil {
+			return e
+		}
+		rm, e := Verify(rb, oldPub)
+		if e != nil {
+			return e
+		}
+		rb, e = sign(rm, key)
+		if e != nil {
+			return e
+		}
+		if e = fsx.WriteAtomic(runtimePath, rb, 0644); e != nil {
+			return e
+		}
+	} else if !os.IsNotExist(e) {
+		return e
+	}
 	if err = fsx.WriteAtomic(filepath.Join(dir, "latest.json"), data, 0644); err != nil {
 		return err
 	}
@@ -321,4 +404,41 @@ func validatePlatforms(platforms []string) error {
 		seen[p] = true
 	}
 	return nil
+}
+
+func sign(m Manifest, key ed25519.PrivateKey) ([]byte, error) {
+	b, e := json.Marshal(m)
+	if e != nil {
+		return nil, e
+	}
+	return json.Marshal(Signed{Manifest: b, Signature: base64.StdEncoding.EncodeToString(ed25519.Sign(key, b))})
+}
+func syncDirectory(path string) error {
+	f, e := os.Open(path)
+	if e != nil {
+		return e
+	}
+	defer f.Close()
+	return f.Sync()
+}
+
+// ReadSequence verifies the retained exact envelope before exposing any names.
+func ReadSequence(dir string, seq uint64, pair bool) (Manifest, []byte, error) {
+	name := "manifest.json"
+	if pair {
+		name = "runtime.json"
+	}
+	data, e := os.ReadFile(filepath.Join(dir, strconv.FormatUint(seq, 10), name))
+	if e != nil {
+		return Manifest{}, nil, e
+	}
+	pub, e := os.ReadFile(filepath.Join(dir, "public.key"))
+	if e != nil {
+		return Manifest{}, nil, e
+	}
+	m, e := Verify(data, pub)
+	if e == nil && (m.Sequence != seq || pair && m.LauncherProtocol != 1) {
+		e = errors.New("retained manifest identity mismatch")
+	}
+	return m, data, e
 }

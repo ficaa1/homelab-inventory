@@ -13,6 +13,7 @@ import (
 var version = "dev"
 
 func main() {
+	worker := flag.Bool("worker", false, "protocol-1 private launcher pipe; no token or local state")
 	dir := flag.String("dir", "/var/lib/homelab-agent", "private persistent state")
 	pub := flag.String("public", "/var/lib/homelab-agent/public.key", "pinned public key")
 	initialize := flag.String("initialize", "", "trusted signed manifest for enrollment")
@@ -30,6 +31,12 @@ func main() {
 	tokenFile := flag.String("token-file", "", "private bearer token file; never a token argument")
 	enroll := flag.String("enroll", "", "single-use enrollment code; writes agent token to -token-file")
 	flag.Parse()
+	if *worker {
+		if err := agentupdate.Worker(context.Background(), os.Stdin, os.Stdout); err != nil {
+			fail(fmt.Errorf("worker: trial_invalid_output"))
+		}
+		return
+	}
 	if *enroll != "" {
 		host, err := os.Hostname()
 		if err != nil {
