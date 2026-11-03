@@ -45,7 +45,7 @@ More options, upgrades and removal: [Install](docs/install.md).
   migration. [Backup and migration](docs/backups.md)
 - Optional: [sign-in](docs/configuration.md#browser-sign-in-oidc) with Google,
   Authentik, Authelia or Keycloak, [signed agent updates](docs/self-update.md),
-  [container restarts](docs/restarts.md), and an MCP server for AI assistants.
+  [container restarts](docs/restarts.md), [VPN recovery](docs/vpn.md), and an MCP server for AI assistants.
 
 ![Fleet overview with synthetic hosts](docs/images/home.png)
 
@@ -54,6 +54,6 @@ More options, upgrades and removal: [Install](docs/install.md).
 - Linux hosts (amd64, arm64). Proxmox, TrueNAS and ZFS are picked up when present.
 - Use HTTPS (through your own reverse proxy) beyond a trusted network.
 - Docs: [install](docs/install.md), [configuration](docs/configuration.md),
-  [plugins](docs/plugins.md), [alerts](docs/alerts.md), [API](docs/api.md),
+  [plugins](docs/plugins.md), [alerts](docs/alerts.md), [VPN](docs/vpn.md), [API](docs/api.md),
   [security](SECURITY.md), [contributing](CONTRIBUTING.md).
 - Status: v0.1, early. Licensed under [AGPL-3.0](LICENSE).

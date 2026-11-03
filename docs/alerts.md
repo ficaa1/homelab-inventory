@@ -28,6 +28,9 @@ visible but stops counting and notifying; it does not fix anything.
 | systemd.unit.failed | warning | Unit is failed. |
 | docker.container.unhealthy | warning | Container is unhealthy or unexpectedly stopped. |
 | docker.container.restarting | warning | Container is restarting, or an established container has very short uptime. |
+| vpn.down | critical | Gateway is stopped or repeated live exit checks fail. See [VPN health](vpn.md). |
+| vpn.cutoff | critical | A running dependent is detached from the gateway's current network namespace. |
+| vpn.handshake.stale | warning | Live WireGuard handshake is older than three minutes; this alone does not diagnose an outage. |
 | docker.image.floating | info | Containers use untagged or latest images without a digest. |
 | firewall.unknown | info | Packet filter could not be read. |
 | firewall.no_inbound_filtering | info | Exposed TCP ports exist without inbound filtering. |
