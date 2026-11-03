@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/agentoffers"
+	"github.com/ficaa1/homelab-inventory/internal/agentproto"
 	"github.com/ficaa1/homelab-inventory/internal/agentrelease"
 	"github.com/ficaa1/homelab-inventory/internal/agentstatus"
 	"github.com/ficaa1/homelab-inventory/internal/alert"
@@ -24,19 +25,23 @@ const LagBudget = 45 * time.Minute
 var mu sync.Mutex
 
 type Projection struct {
-	State     string                 `json:"state"`
-	Label     string                 `json:"label"`
-	Reason    string                 `json:"reason,omitempty"`
-	Published uint64                 `json:"published,omitempty"`
-	Offered   uint64                 `json:"offered,omitempty"`
-	Running   uint64                 `json:"running,omitempty"`
-	Rejected  uint64                 `json:"rejected,omitempty"`
-	Updater   string                 `json:"updater,omitempty"`
-	Paused    bool                   `json:"paused,omitempty"`
-	Unhealthy bool                   `json:"unhealthy"`
-	Critical  bool                   `json:"critical"`
-	Update    *inventory.AgentUpdate `json:"update,omitempty"`
-	Received  time.Time              `json:"received,omitempty"`
+	Transaction string                 `json:"transaction,omitempty"`
+	Active      *agentproto.Identity   `json:"active,omitempty"`
+	Fallback    *agentproto.Identity   `json:"fallback,omitempty"`
+	Candidate   *agentproto.Identity   `json:"candidate,omitempty"`
+	State       string                 `json:"state"`
+	Label       string                 `json:"label"`
+	Reason      string                 `json:"reason,omitempty"`
+	Published   uint64                 `json:"published,omitempty"`
+	Offered     uint64                 `json:"offered,omitempty"`
+	Running     uint64                 `json:"running,omitempty"`
+	Rejected    uint64                 `json:"rejected,omitempty"`
+	Updater     string                 `json:"updater,omitempty"`
+	Paused      bool                   `json:"paused,omitempty"`
+	Unhealthy   bool                   `json:"unhealthy"`
+	Critical    bool                   `json:"critical"`
+	Update      *inventory.AgentUpdate `json:"update,omitempty"`
+	Received    time.Time              `json:"received,omitempty"`
 }
 type entry struct {
 	Withdrawn uint64     `json:"withdrawn,omitempty"`
@@ -191,6 +196,10 @@ func Evaluate(dir, releaseDir string, invs []*inventory.Inventory, now time.Time
 		}
 		p := Projection{Published: m.Sequence, Update: u, Received: receipt.Received}
 		if u != nil {
+			p.Transaction = u.Transaction
+			p.Active = u.Active
+			p.Fallback = u.Fallback
+			p.Candidate = u.Candidate
 			p.Running = u.Sequence
 			p.Rejected = u.Rejected
 			p.Updater = u.Updater
@@ -203,7 +212,7 @@ func Evaluate(dir, releaseDir string, invs []*inventory.Inventory, now time.Time
 		// Withdrawal means loss of eligibility outside a hold. Holds pause incidents.
 		withdrawn := !held && !offered && (e.View.Offered != 0 || e.View.Paused)
 		fresh := !receipt.Received.IsZero() && now.Sub(receipt.Received) <= LagBudget && !receipt.Received.After(now)
-		success := u != nil && (u.Result == "ok" || u.Result == "installed") && u.Failures == 0 && u.FirstFailure == nil && u.Rejected == 0
+		success := u != nil && (u.Transaction == "" || u.Transaction == "committed") && (u.Result == "ok" || u.Result == "installed") && u.Failures == 0 && u.FirstFailure == nil && u.Rejected == 0
 		recovered := offered && fresh && success && u.Sequence >= m.Sequence && receipt.Received.After(e.Evidence)
 		if withdrawn {
 			e.Withdrawn = e.View.Offered
@@ -255,7 +264,7 @@ func Evaluate(dir, releaseDir string, invs []*inventory.Inventory, now time.Time
 		} else if !offered {
 			p.State = "waiting"
 			p.Label = "Waiting for canary/promotion"
-		} else if u.Result == "trial" {
+		} else if u.Result == "trial" || u.Transaction == "prepared" || u.Transaction == "pending" || u.Transaction == "report-pending" {
 			p.State = "updating"
 			p.Label = "Updating"
 		} else if success && u.Sequence >= m.Sequence {

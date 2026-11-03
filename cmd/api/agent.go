@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -13,10 +14,13 @@ import (
 
 	"github.com/ficaa1/homelab-inventory/internal/agenthealth"
 	"github.com/ficaa1/homelab-inventory/internal/agentoffers"
+	"github.com/ficaa1/homelab-inventory/internal/agentproto"
+	"github.com/ficaa1/homelab-inventory/internal/agentreceipt"
 	"github.com/ficaa1/homelab-inventory/internal/agentrelease"
 	"github.com/ficaa1/homelab-inventory/internal/agentstatus"
 	"github.com/ficaa1/homelab-inventory/internal/auth"
 	"github.com/ficaa1/homelab-inventory/internal/httpx"
+	"github.com/ficaa1/homelab-inventory/internal/inventory"
 	"github.com/ficaa1/homelab-inventory/internal/store"
 )
 
@@ -37,6 +41,26 @@ func (s *server) handleAgentManifest(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+	if p := r.URL.Query().Get("protocol"); p != "" {
+		if p != "1" {
+			writeError(w, 400, "unsupported launcher protocol")
+			return
+		}
+		runtime, runtimeData, err := agentrelease.ReadSequence(s.agentDir(), m.Sequence, true)
+		if err != nil || runtime.Version != m.Version || runtime.Revision != m.Revision {
+			writeError(w, 503, "signed runtime unavailable")
+			return
+		}
+		for _, platform := range m.Platforms {
+			a := runtime.Artifacts[platform+"/discover"]
+			legacy := m.Artifacts[platform+"/discover"]
+			if a.Name != legacy.Name || a.SHA256 != legacy.SHA256 || a.Size != legacy.Size {
+				writeError(w, 503, "runtime identity conflict")
+				return
+			}
+		}
+		data = runtimeData
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(data)
@@ -48,9 +72,12 @@ func (s *server) handleAgentArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := r.PathValue("name")
-	// Immutable artifact access is limited to names from the current signed manifest.
-	m, _, _, e := agentrelease.Read(s.agentDir())
-	if e != nil || seq != m.Sequence {
+	// Retained release envelopes authorize exact immutable artifact names.
+	m, _, e := agentrelease.ReadSequence(s.agentDir(), seq, true)
+	if e != nil {
+		m, _, e = agentrelease.ReadSequence(s.agentDir(), seq, false)
+	}
+	if e != nil {
 		http.NotFound(w, r)
 		return
 	}
@@ -210,4 +237,84 @@ func (s *server) handleAgentOffers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"sequence": m.Sequence, "action": in.Action})
+}
+
+// The launcher owns this POST. A receipt binds the exact bytes, manifest and
+// transaction, and is generated only after durable storage on this server.
+func (s *server) handleAgentReport(w http.ResponseWriter, r *http.Request) {
+	media, _, e := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if e != nil || media != "application/json" {
+		writeError(w, 415, "application/json required")
+		return
+	}
+	data, e := io.ReadAll(http.MaxBytesReader(w, r.Body, agentproto.MaxReport))
+	if e != nil {
+		writeError(w, 413, "report too large")
+		return
+	}
+	o, e := agentproto.Object(data)
+	if e != nil {
+		writeError(w, 400, "invalid report")
+		return
+	}
+	var rt agentproto.Runtime
+	var inv inventory.Inventory
+	if json.Unmarshal(o["agent_runtime"], &rt) != nil || json.Unmarshal(data, &inv) != nil || store.ValidateHost(inv.Host.Hostname) != nil {
+		writeError(w, 400, "invalid report")
+		return
+	}
+	if _, e = agentproto.ValidateReport(data, inv.Host.Hostname, rt.Nonce, rt.Identity); e != nil {
+		writeError(w, 400, "invalid report envelope")
+		return
+	}
+	// Bind role identities to the retained signed runtime, never telemetry.
+	m, envelope, e := agentrelease.ReadSequence(s.agentDir(), rt.Sequence, true)
+	var signed agentrelease.Signed
+	_ = json.Unmarshal(envelope, &signed)
+	a, ok := m.Artifacts[strings.ReplaceAll(inv.Tool.Platform, "/", "-")+"/discover"]
+	u, uok := m.Artifacts[strings.ReplaceAll(inv.Tool.Platform, "/", "-")+"/agentupdate"]
+	// Older collectors may omit platform. Match only a complete signed pair.
+	if inv.Tool.Platform == "" {
+		for _, p := range m.Platforms {
+			da := m.Artifacts[p+"/discover"]
+			ua := m.Artifacts[p+"/agentupdate"]
+			if da.SHA256 == rt.Discover && ua.SHA256 == rt.Updater {
+				a = da
+				u = ua
+				ok = true
+				uok = true
+				break
+			}
+		}
+	}
+	if e != nil || !ok || !uok || rt.Digest != agentrelease.Digest(signed.Manifest) || rt.Version != m.Version || rt.Revision != m.Revision || rt.Discover != a.SHA256 || rt.Updater != u.SHA256 {
+		writeError(w, 400, "report runtime mismatch")
+		return
+	}
+	rec, e := agentreceipt.Accept(s.store.Dir(), inv.Host.Hostname, rt, data, func(rec agentproto.Receipt) error {
+		s.ingestMu.Lock()
+		defer s.ingestMu.Unlock()
+		// Use the durable server receipt for the indexing ID: a backward host clock
+		// or same-time fallback report cannot collide with a different transaction.
+		if inv.Software != nil {
+			if err := s.packageStore().Ingest(&inv); err != nil {
+				return err
+			}
+			inv.Software = nil
+		}
+		if _, err := s.store.SaveReceived(&inv, rec.Received); err != nil {
+			return err
+		}
+		s.overviewCache.Invalidate()
+		return nil
+	})
+	if e != nil {
+		code := 500
+		if errors.Is(e, agentreceipt.ErrConflict) {
+			code = 409
+		}
+		writeError(w, code, "accepting report")
+		return
+	}
+	writeJSON(w, 201, rec)
 }

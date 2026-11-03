@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/agentoffers"
+	"github.com/ficaa1/homelab-inventory/internal/agentproto"
 	"github.com/ficaa1/homelab-inventory/internal/agentrelease"
 	"github.com/ficaa1/homelab-inventory/internal/agentstatus"
 	"github.com/ficaa1/homelab-inventory/internal/inventory"
@@ -37,6 +38,29 @@ func TestRolloutHealth(t *testing.T) {
 		name string
 		run  func(*testing.T, string, func(inventory.AgentUpdate, time.Time), func(string, time.Time) Snapshot)
 	}{
+		{"slot receipt is not a local commit", func(t *testing.T, _ string, save func(inventory.AgentUpdate, time.Time), eval func(string, time.Time) Snapshot) {
+			active := agentproto.Identity{Sequence: 6, Version: "pair-v2"}
+			fallback := agentproto.Identity{Sequence: 5, Version: "pair-v1"}
+			u := ok
+			u.Updater = "pair-v2"
+			u.Transaction = "report-pending"
+			u.Active = &active
+			u.Fallback = &fallback
+			u.Candidate = &active
+			save(u, at)
+			snap := eval(release, at)
+			p := snap.Hosts["host-a"]
+			if p.State != "updating" || p.Transaction != "report-pending" || p.Active.Sequence != 6 || p.Fallback.Sequence != 5 || p.Candidate.Sequence != 6 {
+				t.Fatal("slot health lost transaction", p)
+			}
+			u.Transaction = "committed"
+			u.Candidate = nil
+			save(u, at.Add(time.Minute))
+			p = eval(release, at.Add(time.Minute)).Hosts["host-a"]
+			if p.State != "current" || p.Updater != "pair-v2" || p.Fallback.Sequence != 5 {
+				t.Fatal("committed pair not current", p)
+			}
+		}},
 		{"unconfigured", func(t *testing.T, _ string, save func(inventory.AgentUpdate, time.Time), eval func(string, time.Time) Snapshot) {
 			save(fail, at)
 			s := eval("", at)

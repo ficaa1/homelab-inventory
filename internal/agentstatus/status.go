@@ -54,6 +54,9 @@ func Valid(d Document) bool {
 			return false
 		}
 	}
+	if u.Transaction != "" && !member(u.Transaction, "prepared|pending|report-pending|committed|quarantined") {
+		return false
+	}
 	if !member(u.Result, "ok|installed|trial|failed|rollback|blocked") || u.Failures < 0 || u.Failures > 1000000 || u.Stage != "" && !ValidStage(u.Stage) || u.Code != "" && !ValidCode(u.Code) {
 		return false
 	}
@@ -75,6 +78,19 @@ func Save(dir string, d Document, source string, now time.Time) error {
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "agent-status"), 0700); err != nil {
 		return err
+	}
+	// A retried accepted report can finish indexing after a newer report.
+	// Preserve receipt order on this channel instead of reviving old telemetry.
+	if old, e := os.ReadFile(path(dir, d.Host, source)); e == nil {
+		var prior Receipt
+		if json.Unmarshal(old, &prior) != nil {
+			return errors.New("invalid prior status")
+		}
+		if prior.Received.After(now) {
+			return nil
+		}
+	} else if !os.IsNotExist(e) {
+		return e
 	}
 	b, err := json.Marshal(Receipt{Document: d, Received: now.UTC()})
 	if err != nil {
