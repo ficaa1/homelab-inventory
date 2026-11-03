@@ -36,6 +36,9 @@ case $prefix in ''|/*) ;; *) die 'prefix must be absolute';; esac
 # Paths are also embedded in systemd units; keep their syntax unambiguous.
 case $prefix in *[!a-zA-Z0-9/_.-]*) die 'unsupported prefix characters';; /) prefix=;; esac
 case $scheduler in systemd|truenas-cron) ;; *) die '--scheduler must be systemd or truenas-cron';; esac
+if [ "$scheduler" = systemd ] && command -v midclt >/dev/null 2>&1 && { grep -qi truenas /etc/version 2>/dev/null || [ -e /usr/bin/middlewared ]; }; then
+  die 'TrueNAS requires --scheduler truenas-cron with a dedicated --state-dir'
+fi
 if [ -z "$prefix" ]; then
   [ "$(id -u)" -eq 0 ] || die 'run as root, or use --prefix for a disposable local test'
   if [ "$scheduler" = systemd ]; then command -v systemctl >/dev/null 2>&1 || die 'systemd required; use --scheduler truenas-cron on TrueNAS'; fi
@@ -103,13 +106,26 @@ if [ "$updates" = slots ]; then
       set -- $mount_info
       [ "$#" -eq 3 ] && [ "$1" != / ] && [ "$2" = zfs ] || die 'state directory must be on a mounted ZFS dataset'
       case ,$3, in *,noexec,*|*,ro,*) die 'dataset must be writable with exec allowed';; esac
+      [ "$state" != "$1" ] || die 'state directory must be a dedicated subdirectory, not a pool or dataset mountpoint'
       case $state/ in "$1"/*) ;; *) die 'state directory is outside mounted dataset';; esac
-      mkdir -p "$state"
-      chmod 700 "$state"
-      bootstrap_dir=$(mktemp -d "$state/.bootstrap-XXXXXX")
-    else
-      bootstrap_dir=$(mktemp -d)
     fi
+    # Refuse symlink ancestors before touching directory permissions.
+    probe=$state
+    while [ "$probe" != / ]; do
+      [ ! -L "$probe" ] || die 'state path must contain only real directories'
+      probe=${probe%/*}; [ -n "$probe" ] || probe=/
+    done
+    if [ "$scheduler" = truenas-cron ] && [ -d "$state" ]; then
+      if [ ! -f "$state/.homelab-inventory" ] || [ -L "$state/.homelab-inventory" ] || [ "$(cat "$state/.homelab-inventory")" != homelab-inventory ]; then
+        [ -z "$(find "$state" -mindepth 1 -maxdepth 1 -print -quit)" ] || die 'state directory must be new, empty, or marked by homelab-inventory; choose a dedicated subdirectory'
+      fi
+    fi
+    mkdir -p "$state"
+    if [ "$scheduler" = truenas-cron ]; then
+      printf 'homelab-inventory\n' > "$state/.homelab-inventory"
+    fi
+    chmod 700 "$state"
+    bootstrap_dir=$(mktemp -d "$state/.bootstrap-XXXXXX")
     trap 'rm -rf "$bootstrap_dir"' 0
     trap 'exit 1' HUP INT TERM
     for file in SHA256SUMS linux-$arch/agentboot; do

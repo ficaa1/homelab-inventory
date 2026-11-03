@@ -30,6 +30,7 @@ import (
 type Options struct {
 	Dir, Prefix, URL, Scheduler, ReplaceSchedule, ExpectedHost string
 	TokenFile, Enroll, Public, Manifest, Input                 string
+	Version                                                    string `json:"-"`
 	AllowHTTP                                                  bool
 	Scheduled                                                  bool `json:"-"`
 }
@@ -180,26 +181,54 @@ func snapshot(path string) (backup, error) {
 	}
 	return backup{true, b, uint32(st.Mode().Perm())}, nil
 }
-func restore(in *intent) error {
-	var errs []error
-	for path, b := range in.Files {
-		var e error
-		if b.Exists {
-			e = fsx.WriteAtomic(path, b.Data, os.FileMode(b.Mode))
-		} else {
-			e = os.Remove(path)
-			if os.IsNotExist(e) {
-				e = nil
-			}
-		}
-		if e != nil {
-			errs = append(errs, safe("restoring previous installation files failed"))
+func restoreFile(path string, b backup) error {
+	if b.Exists {
+		return fsx.WriteAtomic(path, b.Data, os.FileMode(b.Mode))
+	}
+	e := os.Remove(path)
+	if os.IsNotExist(e) {
+		return nil
+	}
+	return e
+}
+func restore(ctx context.Context, in *intent) error {
+	schedulerFiles := map[string]bool{}
+	if in.Options.Scheduler == "systemd" {
+		for _, rel := range []string{"usr/local/bin/homelab-discover", "etc/systemd/system/homelab-discover.service", "etc/systemd/system/homelab-discover.timer"} {
+			schedulerFiles[filepath.Join(in.Options.Prefix, rel)] = true
 		}
 	}
-	return errors.Join(errs...)
+	launcher := filepath.Join(in.Options.Dir, "agentboot")
+	// Keep the recovery launcher until old config and schedule are durable.
+	for path, b := range in.Files {
+		if schedulerFiles[path] || path == launcher {
+			continue
+		}
+		if e := restoreFile(path, b); e != nil {
+			return e
+		}
+	}
+	for _, rel := range []string{"usr/local/bin/homelab-discover", "etc/systemd/system/homelab-discover.service", "etc/systemd/system/homelab-discover.timer"} {
+		path := filepath.Join(in.Options.Prefix, rel)
+		if schedulerFiles[path] {
+			if e := restoreFile(path, in.Files[path]); e != nil {
+				return e
+			}
+		}
+	}
+	if in.Options.Scheduler == "systemd" && manageSystemd(in.Options) {
+		if e := system(ctx, "daemon-reload"); e != nil {
+			return e
+		}
+	}
+	return restoreFile(launcher, in.Files[launcher])
 }
 func rollback(ctx context.Context, in *intent) error {
 	var errs []error
+	// A fresh host has no predecessor to restore. Keep its recoverable schedule.
+	if in.Options.Scheduler == "systemd" && !in.HadSchedule {
+		return nil
+	}
 	if in.Options.Scheduler == "truenas-cron" {
 		if in.Cron != nil {
 			plan, e := RestoreCronPlan(*in.Cron)
@@ -209,15 +238,12 @@ func rollback(ctx context.Context, in *intent) error {
 				errs = append(errs, plan.Rollback(ctx))
 			}
 		}
-	} else {
-		if manageSystemd(in.Options) {
-			_ = system(ctx, "stop", "homelab-discover.timer")
-			if !in.Options.Scheduled {
-				_ = system(ctx, "stop", "homelab-discover.service")
-			}
-		}
 	}
-	errs = append(errs, restore(in))
+	// Keep recovery files and intent if middleware cannot confirm restoration.
+	if e := errors.Join(errs...); e != nil {
+		return e
+	}
+	errs = append(errs, restore(ctx, in))
 	if e := errors.Join(errs...); e != nil {
 		return e
 	}
@@ -249,9 +275,9 @@ func rollback(ctx context.Context, in *intent) error {
 }
 
 // Resume is called by the installed launcher before reading config. If power
-// failed after stopping the old schedule, the next scheduled invocation finishes
+// failed during cutover, the next scheduled invocation finishes
 // the exact prepared transaction using its already-redeemed credential.
-func Resume(ctx context.Context, dir string) (bool, error) {
+func Resume(ctx context.Context, dir, version string) (bool, error) {
 	in, e := load(dir)
 	if os.IsNotExist(e) {
 		return false, nil
@@ -263,6 +289,7 @@ func Resume(ctx context.Context, dir string) (bool, error) {
 		return false, nil
 	}
 	in.Options.Scheduled = true
+	in.Options.Version = version
 	return true, Install(ctx, in.Options)
 }
 
@@ -281,12 +308,26 @@ func Install(ctx context.Context, o Options) (retErr error) {
 	if o.Scheduler != "systemd" && o.Scheduler != "truenas-cron" {
 		return safe("unknown scheduler")
 	}
+	if o.Scheduler == "systemd" && agentmount.IsTrueNAS() {
+		return safe("TrueNAS requires --scheduler truenas-cron with a dedicated --state-dir")
+	}
 	if o.Scheduler == "truenas-cron" {
+		if e := agentmount.CheckDedicated(o.Dir); e != nil {
+			return e
+		}
 		if e := agentmount.CheckDataset(o.Dir); e != nil {
 			return e
 		}
 	} else if o.ReplaceSchedule != "" {
 		return safe("--replace-schedule requires truenas-cron")
+	}
+	if o.Scheduler == "truenas-cron" {
+		if e := os.MkdirAll(o.Dir, 0700); e != nil {
+			return e
+		}
+		if e := fsx.WriteAtomic(filepath.Join(o.Dir, agentmount.Marker), []byte("homelab-inventory\n"), 0600); e != nil {
+			return e
+		}
 	}
 	if e := privateDir(o.Dir); e != nil {
 		return e
@@ -309,6 +350,7 @@ func Install(ctx context.Context, o Options) (retErr error) {
 			return safe("resume with the original migration settings")
 		}
 		in.Options.Scheduled = o.Scheduled
+		in.Options.Version = o.Version
 		// Revert interrupted file replacement first. Keep controls/floor and token.
 		if e = rollback(ctx, &in); e != nil {
 			return e
@@ -336,6 +378,7 @@ func Install(ctx context.Context, o Options) (retErr error) {
 	if reuse {
 		in = previous
 		in.Options.Scheduled = o.Scheduled
+		in.Options.Version = o.Version
 		// Every rerun rechecks signed bytes and every executable; no stale stage trust.
 		if _, e = runner(o, stage).Load(); e != nil {
 			return safe("prepared migration controls unreadable; use a fresh enrollment code")
@@ -607,16 +650,7 @@ func Install(ctx context.Context, o Options) (retErr error) {
 	if e = writeJSON(journal(o.Dir), in); e != nil {
 		return e
 	}
-	if o.Scheduler == "systemd" && manageSystemd(o) {
-		if e = system(ctx, "stop", "homelab-discover.timer"); e != nil && in.HadSchedule {
-			return e
-		}
-		if !o.Scheduled {
-			if e = system(ctx, "stop", "homelab-discover.service"); e != nil && in.HadSchedule {
-				return e
-			}
-		}
-	}
+
 	// An explicit higher legacy migration may repair a previous rolled-back
 	// cutover. Every replacement strictly raises the existing floor.
 	if replaceControls {
@@ -644,6 +678,14 @@ func Install(ctx context.Context, o Options) (retErr error) {
 		if e = writeSystemd(o); e != nil {
 			return e
 		}
+		if manageSystemd(o) {
+			if e = system(ctx, "daemon-reload"); e != nil {
+				return e
+			}
+			if e = system(ctx, "enable", "--now", "homelab-discover.timer"); e != nil {
+				return e
+			}
+		}
 	}
 	config := agentboot.Config{Dir: o.Dir, Public: currentKey, URL: o.URL, TokenFile: filepath.Join(o.Dir, "token"), AllowHTTP: o.AllowHTTP}
 	if o.Scheduler == "truenas-cron" {
@@ -654,10 +696,11 @@ func Install(ctx context.Context, o Options) (retErr error) {
 	}
 	oldUnlock()
 	oldUnlock = nil
-	r := agentboot.Runner{Config: config, Host: h}
+	r := agentboot.Runner{Config: config, Host: h, Version: o.Version}
 	if e = r.VerifyInstalled(); e != nil {
 		return safe("installed runtime verification failed")
 	}
+	fmt.Fprintln(os.Stderr, "agentboot: sending first signed report; this may take several minutes")
 	// A real accepted report, independently witnessed by the launcher, precedes
 	// schedule adoption. Exit zero from a worker is never sufficient.
 	if e = r.Run(ctx); e != nil {

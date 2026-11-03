@@ -332,7 +332,7 @@ func validCronDir(dir string) bool {
 
 func desiredCron(dir string) CronJob {
 	quote := func(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'" }
-	return CronJob{User: "root", Description: cronDescription, Command: quote(filepath.Join(dir, "agentboot")) + " -config " + quote(filepath.Join(dir, "config.json")), Enabled: true, Schedule: CronSchedule{Minute: "*/15", Hour: "*", DOM: "*", Month: "*", DOW: "*"}}
+	return CronJob{User: "root", Description: cronDescription, Command: quote(filepath.Join(dir, "agentboot")) + " -config " + quote(filepath.Join(dir, "config.json")) + " -log", Stdout: true, Stderr: true, Enabled: true, Schedule: CronSchedule{Minute: "*/15", Hour: "*", DOM: "*", Month: "*", DOW: "*"}}
 }
 
 func cronIdentity(job, want CronJob) bool {

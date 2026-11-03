@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -92,6 +93,9 @@ func checkMountBelow(dir string, mounts io.Reader, parent string) error {
 	if s.Err() != nil {
 		return errors.New("cannot read agent dataset mounts")
 	}
+	if dir == mount {
+		return errors.New("state directory must be a dedicated subdirectory, not a pool or dataset mountpoint")
+	}
 	if filesystem != "zfs" || rootDevice == "" || device == rootDevice || mount == parent || !beneath(mount, parent) {
 		return errors.New("agent dataset is not on a mounted non-root dataset below /mnt")
 	}
@@ -134,4 +138,49 @@ func mountPath(s string) (string, bool) {
 		i += 3
 	}
 	return b.String(), true
+}
+
+// Marker identifies a dedicated installation directory on subsequent pastes.
+const Marker = ".homelab-inventory"
+
+// ValidateStatePath is also used by the API, which cannot inspect a remote host.
+func ValidateStatePath(dir string) error {
+	if !filepath.IsAbs(dir) || filepath.Clean(dir) != dir || !strings.HasPrefix(dir, "/mnt/") || len(strings.Split(strings.Trim(dir, "/"), "/")) < 3 || strings.ContainsAny(dir, " \t\r\n\x00%\"'\\") {
+		return errors.New("TrueNAS state_dir must be a dedicated subdirectory below /mnt/POOL, never a pool or dataset root; existing directories must be empty or marked by homelab-inventory")
+	}
+	return nil
+}
+
+// CheckDedicated must run before mkdir, chown or chmod on TrueNAS state.
+func CheckDedicated(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return errors.New("cannot inspect dedicated state directory")
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+	st, err := os.Lstat(filepath.Join(dir, Marker))
+	if err == nil && st.Mode().IsRegular() {
+		b, err := os.ReadFile(filepath.Join(dir, Marker))
+		if err == nil && string(b) == "homelab-inventory\n" {
+			return nil
+		}
+	}
+	return errors.New("state directory must be new, empty, or marked by homelab-inventory; choose a dedicated subdirectory")
+}
+
+// IsTrueNAS avoids invoking middleware just to identify the host.
+func IsTrueNAS() bool {
+	if _, err := exec.LookPath("midclt"); err != nil {
+		return false
+	}
+	if b, err := os.ReadFile("/etc/version"); err == nil && strings.Contains(strings.ToLower(string(b)), "truenas") {
+		return true
+	}
+	_, err := os.Stat("/usr/bin/middlewared")
+	return err == nil
 }

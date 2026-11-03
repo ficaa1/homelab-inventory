@@ -6,6 +6,7 @@ from pathlib import Path
 import platform
 import re
 import secrets
+import signal
 import shutil
 import socket
 import subprocess
@@ -187,6 +188,7 @@ def main():
                     "--manifest", str(release_tree / "2/runtime.json"), "--artifacts", str(artifacts)]
                 run(*slots_args)
                 slots = slots_prefix / "var/lib/homelab-agent"
+                assert latest()['agent_update']['launcher']
                 def control():
                     return json.loads((slots / "control.0").read_text())["payload"]
                 assert control()["floor"] == 2 and control()["state"] == "committed"
@@ -244,19 +246,27 @@ def main():
                 except urllib.error.HTTPError as error:
                     assert error.code == 403
 
-                # Fake systemd permits real post-stop failure and SIGKILL tests
+                # Fake systemd permits real cutover failure and signal tests
                 # without touching this machine's services.
                 fakebin = tmp / "fakebin"
                 fakebin.mkdir()
                 fake_systemd = fakebin / "systemctl"
                 fake_systemd.write_text("""#!/usr/bin/env python3
-import json, os, pathlib, signal, subprocess, sys
+import json, os, pathlib, shlex, signal, subprocess, sys
 root = pathlib.Path(os.environ['TEST_SCHEDULE_ROOT'])
 log = root / 'systemd.log'
 with log.open('a') as f: f.write(' '.join(sys.argv[1:]) + '\\n')
 mode = root / 'interrupt'
-if mode.exists() and sys.argv[1:] == ['stop', 'homelab-discover.service']:
- mode.unlink(); os.kill(os.getppid(), signal.SIGKILL)
+if mode.exists() and sys.argv[1:] == ['enable', '--now', 'homelab-discover.timer']:
+ sig=int(mode.read_text()); mode.unlink(); os.kill(os.getppid(), sig)
+active=root/'timer-active'
+if sys.argv[1:2]==['stop'] and sys.argv[-1]=='homelab-discover.timer': active.unlink(missing_ok=True)
+if sys.argv[1:2] in (['enable'], ['start']) and sys.argv[-1]=='homelab-discover.timer': active.touch()
+if sys.argv[1:]==['tick']:
+ assert active.exists(), 'timer was left stopped'
+ unit=pathlib.Path(os.environ['TEST_TIMER_UNIT']).read_text()
+ command=next(line.removeprefix('ExecStart=') for line in unit.splitlines() if line.startswith('ExecStart='))
+ sys.exit(subprocess.run(shlex.split(command)).returncode)
 fail = root / 'fail'
 if fail.exists() and sys.argv[1:3] == ['enable', '--now']:
  fail.unlink(); sys.exit(1)
@@ -303,18 +313,27 @@ sys.exit(0)
                 run(*reinstall)
                 assert (ms / 'token').read_text().strip() == agent_token
                 env.pop('TEST_SCHEDULE_WRAPPER')
-                interrupted = tmp / "interrupted"
-                plain[plain.index(str(migrated))] = str(interrupted)
-                run(*plain)
-                interruption = [installer, "--prefix", str(interrupted), "--api-url", origin,
-                    "--download", "--updates", "slots", "--enroll", code()]
-                (tmp / "interrupt").touch()
-                result = subprocess.run(interruption, cwd=ROOT, env=env, capture_output=True, timeout=60)
-                assert result.returncode != 0
-                ins = interrupted / "var/lib/homelab-agent"
-                assert json.loads((ins / ".migration/intent.json").read_text())["phase"] == "switching"
-                run(*interruption)
-                assert json.loads((ins / ".migration/intent.json").read_text())["phase"] == "committed"
+                # Every signal occurs after recovery entry points are published,
+                # before the first report. Only a later timer tick may recover.
+                for death in (signal.SIGKILL, signal.SIGINT, signal.SIGHUP, signal.SIGTERM):
+                    interrupted = tmp / f"interrupted-{int(death)}"
+                    killed_plain = list(plain)
+                    killed_plain[killed_plain.index(str(migrated))] = str(interrupted)
+                    run(*killed_plain)
+                    interruption = [installer, "--prefix", str(interrupted), "--api-url", origin,
+                        "--download", "--updates", "slots", "--token-file", str(token_file)]
+                    (tmp / "interrupt").write_text(str(int(death)))
+                    result = subprocess.run(interruption, cwd=ROOT, env=env, capture_output=True, timeout=60)
+                    assert result.returncode != 0
+                    ins = interrupted / "var/lib/homelab-agent"
+                    phase = json.loads((ins / ".migration/intent.json").read_text())["phase"]
+                    assert phase == ("switching" if death == signal.SIGKILL else "prepared")
+                    env['TEST_TIMER_UNIT'] = str(interrupted/'etc/systemd/system/homelab-discover.service')
+                    run(str(fake_systemd), 'tick')
+                    assert (tmp/'timer-active').exists()
+                    if death == signal.SIGKILL:
+                        assert json.loads((ins / ".migration/intent.json").read_text())["phase"] == "committed"
+                    run(str(fake_systemd), 'tick')  # working scheduled report after recovery
                 env.pop('AGENTINSTALL_TEST_SYSTEMD')
 
                 # TrueNAS config-DB fixture: real signed launcher/report, fake
@@ -338,6 +357,7 @@ sys.exit(0)
 import json, os, pathlib, sys
 p=pathlib.Path(os.environ['TEST_CRON_DB']); jobs=json.loads(p.read_text())
 method=sys.argv[2].split('.')[-1]; args=sys.argv[3:]
+if pathlib.Path(str(p)+'.offline').exists(): sys.exit(1)
 if method=='query': result=jobs
 elif method=='create':
  result=json.loads(args[0]); result['id']=max([j['id'] for j in jobs]+[0])+1; jobs.append(result)
@@ -347,7 +367,9 @@ else:
  jobs=[j for j in jobs if j['id']!=int(args[0])]; result=True
 p.write_text(json.dumps(jobs))
 if method=='update' and pathlib.Path(str(p)+'.fail').exists() and int(args[0])==7 and not result['enabled']:
- pathlib.Path(str(p)+'.fail').unlink(); sys.exit(1)
+ pathlib.Path(str(p)+'.fail').unlink()
+ if pathlib.Path(str(p)+'.break-rollback').exists(): pathlib.Path(str(p)+'.offline').touch()
+ sys.exit(1)
 print(json.dumps(result))
 """)
                 midclt.chmod(0o755)
@@ -357,17 +379,44 @@ print(json.dumps(result))
                     '--replace-schedule', 'previous-agent', '--binary-dir', str(artifacts),
                     '--token-file', str(token_file), '--public-key', str(public),
                     '--manifest', str(release_tree / '4/runtime.json'), '--artifacts', str(artifacts)]
+                # Mount roots and non-dedicated share directories retain mode/data.
+                shared = dataset/'share'
+                shared.mkdir(mode=0o755)
+                (shared/'unrelated').write_text('keep')
+                for refused in (dataset, shared):
+                    mode = refused.stat().st_mode
+                    bad = list(cronargs); bad[bad.index(str(cronstate))] = str(refused)
+                    result = subprocess.run(bad, cwd=ROOT, env=env, capture_output=True, timeout=60)
+                    assert result.returncode != 0 and refused.stat().st_mode == mode
+                    assert not (refused/'.migration').exists()
                 # Failure after the predecessor was disabled must re-enable it
                 # and remove the newly created replacement job.
                 Path(str(jobsfile)+'.fail').touch()
                 result = subprocess.run(cronargs, cwd=ROOT, env=env, capture_output=True, timeout=60)
                 assert result.returncode != 0
                 assert json.loads(jobsfile.read_text()) == [predecessor]
-                run(*cronargs)
+                # Failed middleware rollback must retain the executable/config,
+                # including across boot-time Resume failures, until a later tick.
+                Path(str(jobsfile)+'.fail').touch()
+                Path(str(jobsfile)+'.break-rollback').touch()
+                result = subprocess.run(cronargs, cwd=ROOT, env=env, capture_output=True, timeout=60)
+                assert result.returncode != 0
+                assert (cronstate/'agentboot').exists() and (cronstate/'config.json').exists()
+                assert (cronstate/'token').exists()
+                resume = [str(cronstate/'agentboot'), '-config', str(cronstate/'config.json'), '-log']
+                result = subprocess.run(resume, cwd=ROOT, env=env, capture_output=True, timeout=60)
+                assert result.returncode != 0
+                assert (cronstate/'agentboot').exists()
+                assert json.loads((cronstate/'.migration/intent.json').read_text())['phase']=='switching'
+                Path(str(jobsfile)+'.offline').unlink()
+                Path(str(jobsfile)+'.break-rollback').unlink()
+                run(*resume)
+                assert (cronstate/'launcher.log').stat().st_mode & 0o777 == 0o600
                 jobs = json.loads(jobsfile.read_text())
                 assert len(jobs) == 2 and not next(j for j in jobs if j['id']==7)['enabled']
                 own = next(j for j in jobs if j['description']=='homelab-inventory-agent')
                 assert own['user']=='root' and own['enabled'] and own['schedule']['minute']=='*/15'
+                assert own['stdout'] and own['stderr'] and own['command'].endswith(' -log')
                 assert str(cronstate / 'agentboot') in own['command']
                 run(*cronargs)  # stable ID, exactly one owned job
                 assert len(json.loads(jobsfile.read_text())) == 2
@@ -399,6 +448,7 @@ print(json.dumps(result))
                 result = subprocess.run(floor_conversion, cwd=ROOT, env=env, capture_output=True, timeout=60)
                 assert result.returncode != 0
                 fs = floor_prefix/'var/lib/homelab-agent'
+                assert (fs/'.migration/intent.json').exists(), result.stderr.decode()
                 legacy = json.loads((fs/'state.json').read_text())
                 legacy['high'] = 5
                 legacy['update']['rejected'] = 5

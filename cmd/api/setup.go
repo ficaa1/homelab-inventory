@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ficaa1/homelab-inventory/internal/agentmount"
 	"github.com/ficaa1/homelab-inventory/internal/agentoffers"
 	"github.com/ficaa1/homelab-inventory/internal/agentrelease"
 	"github.com/ficaa1/homelab-inventory/internal/auth"
@@ -212,6 +213,12 @@ func (s *server) handleSetupEnroll(w http.ResponseWriter, r *http.Request) {
 	if in.Scheduler == "truenas-cron" && (!filepath.IsAbs(in.StateDir) || filepath.Clean(in.StateDir) != in.StateDir || strings.ContainsAny(in.StateDir, " \t\r\n\x00%\"'\\")) || in.StateDir != "" && in.Scheduler != "truenas-cron" {
 		writeError(w, 400, "TrueNAS cron requires an absolute persistent state_dir")
 		return
+	}
+	if in.Scheduler == "truenas-cron" {
+		if err := agentmount.ValidateStatePath(in.StateDir); err != nil {
+			writeError(w, 400, err.Error())
+			return
+		}
 	}
 	if in.ReplaceSchedule != "" {
 		if in.Scheduler != "truenas-cron" || len(in.ReplaceSchedule) > 256 || strings.ContainsAny(in.ReplaceSchedule, "\r\n\x00") || strings.HasPrefix(in.ReplaceSchedule, "-") {
