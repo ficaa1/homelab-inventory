@@ -3,6 +3,7 @@
 package agenthealth
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -114,8 +115,9 @@ func Evaluate(dir, releaseDir string, invs []*inventory.Inventory, now time.Time
 	ledger := map[string]entry{}
 	stateDir := filepath.Join(dir, "agent-health")
 	path := filepath.Join(stateDir, "state.json")
-	if b, err := os.ReadFile(path); err == nil {
-		if err = json.Unmarshal(b, &ledger); err != nil {
+	stored, err := os.ReadFile(path)
+	if err == nil {
+		if err = json.Unmarshal(stored, &ledger); err != nil {
 			return Snapshot{}, err
 		}
 	} else if !os.IsNotExist(err) {
@@ -299,6 +301,10 @@ func Evaluate(dir, releaseDir string, invs []*inventory.Inventory, now time.Time
 	b, err := json.Marshal(ledger)
 	if err != nil {
 		return snap, err
+	}
+	// Every alert, Hosts and digest read evaluates; only a change is written.
+	if bytes.Equal(b, stored) {
+		return snap, nil
 	}
 	if err = fsx.WriteAtomic(path, b, 0600); err != nil {
 		return snap, err
