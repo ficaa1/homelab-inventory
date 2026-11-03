@@ -21,7 +21,7 @@ import (
 func TestAutofixThresholdCooldownReloadAndMuteSetting(t *testing.T) {
 	dir := t.TempDir()
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	on, directOK := false, false
+	on, directOK, skip := false, false, false
 	directCalls := 0
 	attempts, messages := 0, 0
 	byGateway := map[string]int{}
@@ -33,7 +33,7 @@ func TestAutofixThresholdCooldownReloadAndMuteSetting(t *testing.T) {
 			return errors.New("internet unavailable")
 		}
 		return nil
-	}, Now: func() time.Time { return now }, Settings: func() (bool, int) { return on, 10 }, Runner: &execallow.Runner{Inventory: func() (*inventory.Inventory, error) { return inv, nil }}, Inspect: func(context.Context, string) (vpnprobe.Container, error) {
+	}, Now: func() time.Time { return now }, Settings: func() (bool, int) { return on, 10 }, Skip: func(string) bool { return skip }, Runner: &execallow.Runner{Inventory: func() (*inventory.Inventory, error) { return inv, nil }}, Inspect: func(context.Context, string) (vpnprobe.Container, error) {
 		return vpnprobe.Container{}, errors.New("unavailable")
 	}, Reconnect: func(_ context.Context, n string) (actions.Entry, error) {
 		attempts++
@@ -64,7 +64,12 @@ func TestAutofixThresholdCooldownReloadAndMuteSetting(t *testing.T) {
 	if directCalls != 0 {
 		t.Fatal("direct check ran before an automatic attempt was due")
 	}
-	on = true
+	on, skip = true, true
+	check()
+	if attempts != 0 || directCalls != 0 || w.Snapshot("vpn").Autofix.State != "excluded" {
+		t.Fatal("autofix ran for an excluded gateway")
+	}
+	skip = false
 	check()
 	snap := w.Snapshot("vpn")
 	if attempts != 0 || messages != 0 || snap.Autofix.LastRun != nil || snap.Autofix.CooldownUntil != nil || !strings.Contains(snap.Autofix.Reason, "internet unreachable") {

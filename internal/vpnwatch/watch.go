@@ -54,7 +54,9 @@ type Options struct {
 	Runner   *execallow.Runner
 	Actions  *actions.Manager
 	Settings func() (bool, int)
-	Message  func(context.Context, notify.Message)
+	// Skip reports gateways that automatic recovery must leave alone.
+	Skip    func(container string) bool
+	Message func(context.Context, notify.Message)
 	// Probes and Now allow deterministic offline checks of cadence and cooldown.
 	WG        func(context.Context, string) (vpnprobe.Facts, error)
 	Exit      func(context.Context, string) (vpnprobe.Facts, error)
@@ -142,6 +144,9 @@ func (w *Watch) settings() (bool, int) {
 	}
 	return on, n
 }
+func (w *Watch) skipped(container string) bool {
+	return w.opts.Skip != nil && w.opts.Skip(container)
+}
 func (w *Watch) snapshot(g gateway, now time.Time) Snapshot {
 	s := g.snap
 	if s.Facts.LatestHandshake != nil {
@@ -150,7 +155,10 @@ func (w *Watch) snapshot(g gateway, now time.Time) Snapshot {
 	}
 	on, n := w.settings()
 	s.Autofix = Autofix{Enabled: on, AfterMinutes: n, State: "off", LastRun: g.saved.LastAuto}
-	if on {
+	excluded := on && w.skipped(s.Container)
+	if excluded {
+		s.Autofix.State, s.Autofix.Reason = "excluded", "left out of automatic reconnect in Admin"
+	} else if on {
 		s.Autofix.State = "watching"
 		if g.autofixReason != "" {
 			s.Autofix.State, s.Autofix.Reason = "skipped", g.autofixReason
@@ -159,7 +167,7 @@ func (w *Watch) snapshot(g gateway, now time.Time) Snapshot {
 	if g.saved.LastAuto != nil {
 		t := g.saved.LastAuto.Add(time.Hour)
 		s.Autofix.CooldownUntil = &t
-		if on && now.Before(t) {
+		if on && !excluded && now.Before(t) {
 			s.Autofix.State = "cooldown"
 		}
 	}
@@ -429,7 +437,7 @@ func (w *Watch) autofix(ctx context.Context, container string, now time.Time) er
 	g := w.gateways[container]
 	w.mu.Unlock()
 	on, n := w.settings()
-	if !on || (g.snap.Status != "down" && g.snap.Status != "cutoff") || g.saved.BadSince == nil || now.Sub(*g.saved.BadSince) < time.Duration(n)*time.Minute || (g.saved.LastAuto != nil && now.Sub(*g.saved.LastAuto) < time.Hour) {
+	if !on || w.skipped(container) || (g.snap.Status != "down" && g.snap.Status != "cutoff") || g.saved.BadSince == nil || now.Sub(*g.saved.BadSince) < time.Duration(n)*time.Minute || (g.saved.LastAuto != nil && now.Sub(*g.saved.LastAuto) < time.Hour) {
 		return nil
 	}
 	if w.opts.Actions != nil && w.opts.Actions.Busy() {
@@ -453,7 +461,7 @@ func (w *Watch) autofix(ctx context.Context, container string, now time.Time) er
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if on, _ := w.settings(); !on {
+	if on, _ := w.settings(); !on || w.skipped(container) {
 		return nil
 	}
 	// Reserve before execution, so a crash cannot cause an automatic retry loop.

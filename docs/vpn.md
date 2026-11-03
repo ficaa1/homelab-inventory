@@ -112,6 +112,12 @@ Use `PUT /settings` with normal administrator authentication to save these value
 An omitted field keeps its previous value. Explicit `false` disables recovery
 without changing the delay. Resetting settings restores off/10.
 
+To leave one gateway out (for example a reverse-proxy tunnel you would rather
+restart yourself), untick it under **Gateways it may reconnect**. That saves
+`vpn_autofix_skip`, a list of container names (at most 32); its card then reads
+**Off for this gateway**. Manual **Reconnect VPN** still works for it, and its
+health alerts are unchanged. `[]` puts every gateway back.
+
 Only persistent **Down** or **Cutoff** states trigger automatic recovery.
 Unknown evidence and an old handshake alone do not. Recovery shares the normal
 action lock and audit, records actor `auto`, and reserves a **one-hour cooldown**

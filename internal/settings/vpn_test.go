@@ -46,6 +46,15 @@ func TestVPNAutofixSettings(t *testing.T) {
 			t.Fatalf("non-atomic invalid delay %d", minutes)
 		}
 	}
+	names := []string{" gerbil", "gerbil", "", "gluetun"}
+	skipped, err := Apply(loaded, Update{VPNAutofixSkip: &names}, time.Now())
+	if err != nil || !reflect.DeepEqual(Resolve(skipped, defaults()).VPNAutofixSkip, []string{"gerbil", "gluetun"}) {
+		t.Fatal("skip list not cleaned", err)
+	}
+	bad := []string{"gerbil", "a b"}
+	if invalid, err := Apply(loaded, Update{VPNAutofixSkip: &bad}, time.Now()); err == nil || !reflect.DeepEqual(invalid, loaded) {
+		t.Fatal("invalid gateway name accepted")
+	}
 	for _, minutes := range []int{1, 1440} {
 		if _, err := Apply(base, Update{VPNAutofixAfterMinutes: &minutes}, time.Now()); err != nil {
 			t.Fatal(err)

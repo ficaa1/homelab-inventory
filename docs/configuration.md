@@ -32,7 +32,8 @@ Restarts and agent updates have their own pages: [restarts](restarts.md),
 [self-update](self-update.md), [VPN health and recovery](vpn.md).
 
 VPN automatic recovery is stored in Admin as `vpn_autofix` (default `false`) and
-`vpn_autofix_after_minutes` (default `10`, range `1–1440`). It requires the actions
+`vpn_autofix_after_minutes` (default `10`, range `1–1440`), with `vpn_autofix_skip`
+listing gateways it leaves alone (default none). It requires the actions
 configuration. `VPN_CHECK_URL` selects the server-side exit-check endpoint; see
 [VPN health and recovery](vpn.md).
 
