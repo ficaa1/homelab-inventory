@@ -91,6 +91,9 @@ func TestPageAPIFixedPathsAndBarriers(t *testing.T) {
 	if e := p.Configure(plugin.Config{"policy_url": s.URL}); e != nil {
 		t.Fatal(e)
 	}
+	if p.APITimeout("POST", "search") < time.Minute {
+		t.Fatal("a season search takes Sonarr about 30 seconds; search must outlast it")
+	}
 	call := func(method, path, body string) plugin.APIResponse {
 		r, e := p.API(context.Background(), plugin.APIRequest{Method: method, Path: path, Body: []byte(body), Actor: "owner@example.org"})
 		if e != nil {
