@@ -109,12 +109,14 @@ func checkMountBelow(dir string, mounts io.Reader, parent string) error {
 			}
 		}
 	}
-	return checkZFSMountpoints(dir)
+	return checkZFSMountpoints(dir, mount)
 }
 
 // A mounted parent does not prove that a locked/noauto child is mounted. Files
-// written into its empty mountpoint would be hidden when it later mounts.
-func checkZFSMountpoints(dir string) error {
+// written into its empty mountpoint would be hidden when it later mounts. Only
+// datasets below the mount actually covering dir matter: TrueNAS keeps inactive
+// boot environments as unmounted datasets whose mountpoint is /.
+func checkZFSMountpoints(dir, mount string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "zfs", "list", "-H", "-o", "name,mountpoint,mounted")
@@ -136,8 +138,8 @@ func checkZFSMountpoints(dir string) error {
 		if len(fields) != 3 {
 			return errors.New("invalid ZFS dataset mountpoint information")
 		}
-		point := fields[1]
-		if filepath.IsAbs(point) && beneath(dir, filepath.Clean(point)) && fields[2] != "yes" {
+		point := filepath.Clean(fields[1])
+		if filepath.IsAbs(point) && point != mount && beneath(point, mount) && beneath(dir, point) && fields[2] != "yes" {
 			return errors.New("state directory is at or below an unmounted ZFS dataset; mount it first or choose a new path")
 		}
 	}
