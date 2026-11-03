@@ -179,9 +179,9 @@ if [ "$mode" = binary ]; then
   verify "$work/$archive" "$archive" "$work/SHA256SUMS"
   mkdir "$work/unpack"
   # Extract only the fixed release members; never honor arbitrary archive paths.
-  tar -xzf "$work/$archive" -C "$work/unpack" homelab-inventory agent/linux-amd64/discover agent/linux-amd64/agentupdate agent/linux-arm64/discover agent/linux-arm64/agentupdate agent/SHA256SUMS
+  tar -xzf "$work/$archive" -C "$work/unpack" homelab-inventory agent/linux-amd64/discover agent/linux-amd64/agentupdate agent/linux-amd64/agentboot agent/linux-arm64/discover agent/linux-arm64/agentupdate agent/linux-arm64/agentboot agent/SHA256SUMS
   for target in linux-amd64 linux-arm64; do
-    for name in discover agentupdate; do
+    for name in discover agentupdate agentboot; do
       file=agent/$target/$name
       [ -f "$work/unpack/$file" ] && [ ! -L "$work/unpack/$file" ] || die 'invalid agent artifact'
       verify "$work/unpack/$file" "$target/$name" "$work/unpack/agent/SHA256SUMS"
@@ -232,7 +232,7 @@ else
   for target in linux-amd64 linux-arm64; do
     mkdir -p "$agents/$target"
     chmod 755 "$agents/$target"
-    for name in discover agentupdate; do install_binary "$work/unpack/agent/$target/$name" "$agents/$target/$name"; done
+    for name in discover agentupdate agentboot; do install_binary "$work/unpack/agent/$target/$name" "$agents/$target/$name"; done
   done
   cp "$work/unpack/agent/SHA256SUMS" "$agents/SHA256SUMS"
   chmod 644 "$agents/SHA256SUMS"
