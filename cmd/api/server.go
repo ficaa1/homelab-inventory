@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,7 +17,7 @@ import (
 	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/actions"
-	"github.com/ficaa1/homelab-inventory/internal/agentrelease"
+	"github.com/ficaa1/homelab-inventory/internal/agenthealth"
 	"github.com/ficaa1/homelab-inventory/internal/alert"
 	"github.com/ficaa1/homelab-inventory/internal/auth"
 	"github.com/ficaa1/homelab-inventory/internal/catalog"
@@ -120,6 +121,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /inventory", s.agentAuth(s.handleIngest))
 	mux.HandleFunc("GET /agent/manifest", s.agentAuth(s.handleAgentManifest))
 	mux.HandleFunc("GET /agent/artifacts/{sequence}/{name}", s.agentAuth(s.handleAgentArtifact))
+	mux.HandleFunc("POST /agent/status", s.agentAuth(s.handlePostAgentStatus))
 	mux.HandleFunc("GET /agent/status", s.auth(s.handleAgentStatus))
 	mux.HandleFunc("POST /agent/offers", s.handleAgentOffers)
 	mux.HandleFunc("GET /overview", s.auth(s.handleOverview))
@@ -274,6 +276,7 @@ func (s *server) handleIngest(w http.ResponseWriter, r *http.Request) {
 // than internal/ because, unlike portmap, nothing else needs it yet — if a
 // second consumer shows up, move it there.
 type hostSummary struct {
+	AgentHealth          agenthealth.Projection `json:"agent_health"`
 	Name                 string                 `json:"name"`
 	OS                   string                 `json:"os,omitempty"`
 	CollectedAt          time.Time              `json:"collected_at"`
@@ -298,11 +301,31 @@ func (s *server) handleHosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	health, err := s.agentHealth(time.Now())
+	if err != nil {
+		writeError(w, 503, "agent health unavailable")
+		return
+	}
+	for name := range health.Hosts {
+		found := false
+		for _, existing := range names {
+			if existing == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
 	out := make([]hostSummary, 0, len(names))
 	for _, name := range names {
 		inv, err := s.store.Latest(name)
 		if err != nil {
-			s.log.Printf("hosts: latest for %s: %v", name, err)
+			if p, ok := health.Hosts[name]; ok {
+				out = append(out, hostSummary{Name: name, AgentHealth: p, AgentUpdate: p.Update, AgentOfferedSequence: p.Offered})
+			}
 			continue
 		}
 		history, err := s.store.History(name)
@@ -320,12 +343,13 @@ func (s *server) handleHosts(w http.ResponseWriter, r *http.Request) {
 			AgentOutdated: inv.Tool.Revision < inventory.AgentRevision,
 			Runs:          len(history),
 		}
-		sum.AgentUpdate = inv.AgentUpdate
-		if m, _, c, e := agentrelease.Read(s.agentDir()); e == nil && s.agentOffered(name, m, c) {
-			sum.AgentOfferedRevision = m.Revision
-			sum.AgentOfferedSequence = m.Sequence
-			sum.AgentOutdated = inv.Tool.Revision < m.Revision || inv.AgentUpdate == nil || inv.AgentUpdate.Sequence < m.Sequence
+		sum.AgentHealth = health.Hosts[name]
+		sum.AgentUpdate = sum.AgentHealth.Update
+		sum.AgentOfferedSequence = sum.AgentHealth.Offered
+		if sum.AgentOfferedSequence != 0 {
+			sum.AgentOfferedRevision = health.Revision
 		}
+		sum.AgentOutdated = sum.AgentHealth.State == "behind" || sum.AgentHealth.Unhealthy
 		for _, d := range inv.Diagnostics {
 			switch d.Severity {
 			case inventory.SeverityWarn:

@@ -2,6 +2,7 @@ package agentupdate
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,9 +16,25 @@ func TestPlainPosterPreservesPartialAndRefusesFailures(t *testing.T) {
 	raw := `{"schema_version":"5","host":{"hostname":"host-a"},"docker":null,"diagnostics":[{"severity":"error","message":"partial"}]}`
 	calls := 0
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/agent/status" {
+			w.WriteHeader(204)
+			return
+		}
 		calls++
 		b, _ := io.ReadAll(r.Body)
-		if r.URL.Path != "/inventory" || r.Header.Get("Authorization") != "Bearer throwaway" || string(b) != raw {
+		var fields map[string]json.RawMessage
+		_ = json.Unmarshal(b, &fields)
+		var update struct {
+			Mode    string `json:"mode"`
+			Updater string `json:"updater"`
+		}
+		_ = json.Unmarshal(fields["agent_update"], &update)
+		delete(fields, "agent_update")
+		remaining, _ := json.Marshal(fields)
+		var expected map[string]json.RawMessage
+		_ = json.Unmarshal([]byte(raw), &expected)
+		want, _ := json.Marshal(expected)
+		if r.URL.Path != "/inventory" || r.Header.Get("Authorization") != "Bearer throwaway" || string(remaining) != string(want) || update.Mode != "unsigned" || update.Updater == "" {
 			t.Error("poster changed inventory or request")
 		}
 		w.WriteHeader(201)

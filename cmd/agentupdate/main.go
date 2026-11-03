@@ -10,6 +10,8 @@ import (
 	"github.com/ficaa1/homelab-inventory/internal/agentupdate"
 )
 
+var version = "dev"
+
 func main() {
 	dir := flag.String("dir", "/var/lib/homelab-agent", "private persistent state")
 	pub := flag.String("public", "/var/lib/homelab-agent/public.key", "pinned public key")
@@ -85,6 +87,7 @@ func main() {
 				fail(err)
 			}
 		}
+		r.Updater = version
 		if *post || *config != "" && !c.Signed {
 			err = r.Post(context.Background(), c.Discover)
 		} else {

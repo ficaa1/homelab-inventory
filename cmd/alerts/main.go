@@ -23,6 +23,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/ficaa1/homelab-inventory/internal/agenthealth"
 	"github.com/ficaa1/homelab-inventory/internal/alert"
 	"github.com/ficaa1/homelab-inventory/internal/inventory"
 	"github.com/ficaa1/homelab-inventory/internal/portmap"
@@ -70,6 +71,11 @@ func run() (int, error) {
 
 	now := time.Now()
 	rep := alert.Evaluate(invs, th, now)
+	health, err := agenthealth.Evaluate(*dir, os.Getenv("AGENT_RELEASE_DIR"), invs, now)
+	if err != nil {
+		return 0, err
+	}
+	rep.Add(health.Alerts()...)
 	oldest := oldestCollectedAt(invs)
 
 	if *hostFlag != "" {

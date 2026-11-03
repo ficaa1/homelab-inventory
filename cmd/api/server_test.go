@@ -445,8 +445,8 @@ func TestHostsAgentRevision(t *testing.T) {
 		revision int
 		outdated bool
 	}{
-		{"pre-revision", 0, true},
-		{"lower", inventory.AgentRevision - 1, true},
+		{"pre-revision", 0, false},
+		{"lower", inventory.AgentRevision - 1, false},
 		{"current", inventory.AgentRevision, false},
 		{"newer", inventory.AgentRevision + 1, false},
 	} {

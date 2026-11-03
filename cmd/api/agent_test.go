@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"github.com/ficaa1/homelab-inventory/internal/agentoffers"
 	"github.com/ficaa1/homelab-inventory/internal/agentrelease"
+	"github.com/ficaa1/homelab-inventory/internal/agentstatus"
 	"github.com/ficaa1/homelab-inventory/internal/inventory"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -56,6 +58,9 @@ func TestAgentRoutesReadOnlyAndAuthenticated(t *testing.T) {
 			t.Fatal(path, w.Code, w.Body.String())
 		}
 		for _, method := range []string{"POST", "PUT", "PATCH", "DELETE"} {
+			if path == "/agent/status" && method == "POST" {
+				continue
+			}
 			if w := agentRequest(s, method, path); w.Code != 405 && w.Code != 404 {
 				t.Fatal("write route exists", method, path, w.Code)
 			}
@@ -170,5 +175,52 @@ func TestForgedInventoriesCannotChangeAgentOffers(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestPostAgentStatusAuthenticatedBoundedAndLatestOnly(t *testing.T) {
+	s := testServer(t, "admin-test")
+	s.agentToken = strings.Repeat("a", 32)
+	body := `{"host":"host-a","update":{"mode":"signed","updater":"v1","sequence":5,"target":6,"result":"failed","failures":466,"stage":"download","code":"disk_full"}}`
+	send := func(token, body string) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest("POST", "/agent/status", strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		if token != "" {
+			r.Header.Set("Authorization", "Bearer "+token)
+		}
+		w := httptest.NewRecorder()
+		s.routes().ServeHTTP(w, r)
+		return w
+	}
+	if w := send("", body); w.Code != 401 {
+		t.Fatal(w.Code)
+	}
+	for _, bad := range []string{strings.Repeat(" ", agentstatus.MaxSize) + body, strings.Replace(body, `"disk_full"`, `"raw local text"`, 1)} {
+		if w := send(s.agentToken, bad); w.Code != 400 {
+			t.Fatal(w.Code)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		if w := send(s.agentToken, body); w.Code != 204 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+	}
+	files, err := os.ReadDir(filepath.Join(s.store.Dir(), "agent-status"))
+	if err != nil || len(files) != 1 {
+		t.Fatal(files, err)
+	}
+	receipt, err := agentstatus.Latest(s.store.Dir(), "host-a")
+	if err != nil || receipt.Received.IsZero() || receipt.Update.Target != 6 {
+		t.Fatal(receipt, err)
+	}
+	// A later inventory receipt wins even when the host's collection time is old.
+	u := inventory.AgentUpdate{Mode: "unsigned", Updater: "v2", Result: "ok"}
+	if _, err = s.store.Save(&inventory.Inventory{Host: inventory.Host{Hostname: "host-a"}, CollectedAt: time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), AgentUpdate: &u}); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err = agentstatus.Latest(s.store.Dir(), "host-a")
+	if err != nil || receipt.Update.Mode != "unsigned" {
+		t.Fatal(receipt, err)
 	}
 }

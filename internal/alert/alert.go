@@ -244,7 +244,6 @@ func Evaluate(invs []*inventory.Inventory, th Thresholds, now time.Time) *Report
 		e := &evaluator{host: host, th: th, now: now}
 		e.staleness(inv)
 		e.schema(inv)
-		e.agent(inv)
 		e.zfs(inv)
 		e.proxmox(inv)
 		e.systemd(inv)
@@ -395,25 +394,6 @@ func (e *evaluator) schema(inv *inventory.Inventory) {
 		Subject: e.host,
 		Message: fmt.Sprintf("inventory is schema v%s but this build expects v%s; re-run the agent",
 			inv.SchemaVersion, inventory.SchemaVersion),
-	})
-}
-
-// agent compares ordered revisions rather than git hashes because the API can
-// be rebuilt without any change to discover's collected output or behaviour.
-func (e *evaluator) agent(inv *inventory.Inventory) {
-	if inv.Tool.Revision >= inventory.AgentRevision {
-		return
-	}
-	revision := fmt.Sprintf("revision %d", inv.Tool.Revision)
-	if inv.Tool.Revision == 0 {
-		revision = fmt.Sprintf("unknown/pre-revision, version %q", inv.Tool.Version)
-	}
-	e.add(Alert{
-		Rule:    "agent.outdated",
-		Level:   LevelInfo,
-		Subject: "agent",
-		Message: fmt.Sprintf("discover is out of date (%s, latest %d); check the signed rollout in Hosts (pre-bootstrap hosts: re-run make install-agent)",
-			revision, inventory.AgentRevision),
 	})
 }
 

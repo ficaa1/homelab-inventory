@@ -43,7 +43,7 @@ func TestFleetAttentionAndSilences(t *testing.T) {
 	s.WriteState(seen.StateName, seen.Book{Entries: map[string]seen.Entry{seen.Key(alert.Alert{Host: "old", Rule: "host.stale", Subject: "old"}): {First: first, Last: now}}})
 	r := (Builder{Store: s}).Build(context.Background(), now)
 	f := r.Fleet.(Fleet)
-	if f.HostsTotal != 1 || f.HostsReporting != 0 || len(f.Stale) != 1 || f.Stale[0].Severity != "critical" || *f.Stale[0].AgeS != 10800 || len(f.AgentsOutdated) != 1 || f.Alerts.Silenced != 1 {
+	if f.HostsTotal != 1 || f.HostsReporting != 0 || len(f.Stale) != 1 || f.Stale[0].Severity != "critical" || *f.Stale[0].AgeS != 10800 || len(f.AgentsOutdated) != 0 || f.Alerts.Silenced != 1 {
 		t.Fatalf("fleet: %+v", f)
 	}
 	a := r.Attention.([]Attention)

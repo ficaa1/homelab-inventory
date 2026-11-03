@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/ficaa1/homelab-inventory/internal/auth"
 	"io"
 	"mime"
 	"net/http"
@@ -10,10 +9,15 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/ficaa1/homelab-inventory/internal/agenthealth"
 	"github.com/ficaa1/homelab-inventory/internal/agentoffers"
 	"github.com/ficaa1/homelab-inventory/internal/agentrelease"
+	"github.com/ficaa1/homelab-inventory/internal/agentstatus"
+	"github.com/ficaa1/homelab-inventory/internal/auth"
 	"github.com/ficaa1/homelab-inventory/internal/httpx"
+	"github.com/ficaa1/homelab-inventory/internal/store"
 )
 
 // The release tree stays read-only; browser decisions live in the API data dir.
@@ -60,21 +64,41 @@ func (s *server) handleAgentArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 	http.NotFound(w, r)
 }
-func (s *server) handleAgentStatus(w http.ResponseWriter, r *http.Request) {
-	m, _, c, e := agentrelease.Read(s.agentDir())
-	if e != nil {
-		writeError(w, 503, "agent release unavailable")
-		return
-	}
-	s.agentOffersMu.Lock()
-	state, _, err := agentoffers.Read(s.store.AgentOffersPath())
-	s.agentOffersMu.Unlock()
+func (s *server) agentHealth(now time.Time) (agenthealth.Snapshot, error) {
+	invs, err := s.store.LatestAll()
 	if err != nil {
-		writeError(w, 503, "agent offer state unavailable")
+		return agenthealth.Snapshot{}, err
+	}
+	return agenthealth.Evaluate(s.store.Dir(), s.agentDir(), invs, now)
+}
+func (s *server) handleAgentStatus(w http.ResponseWriter, r *http.Request) {
+	snap, err := s.agentHealth(time.Now())
+	if err != nil {
+		writeError(w, 503, "agent health unavailable")
 		return
 	}
-	mode := agentoffers.Effective(m, c, state)
-	writeJSON(w, 200, map[string]any{"sequence": m.Sequence, "revision": m.Revision, "version": m.Version, "control": c.Mode, "mode": mode, "ssh_hold": c.Mode == "hold", "promoted": mode == "promote", "canary_hosts": agentoffers.CanaryHosts()})
+	// Configuration absence is a normal, useful status, not an HTTP error.
+	writeJSON(w, 200, map[string]any{"sequence": snap.Sequence, "revision": snap.Revision, "version": snap.Version, "mode": snap.Mode, "control": snap.Control, "ssh_hold": snap.SSHHold, "promoted": snap.Mode == "promote", "configured": snap.Configured, "unavailable": snap.Unavailable, "canary_hosts": agentoffers.CanaryHosts(), "hosts": snap.Hosts})
+}
+func (s *server) handlePostAgentStatus(w http.ResponseWriter, r *http.Request) {
+	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || media != "application/json" {
+		writeError(w, 415, "application/json required")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, agentstatus.MaxSize)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	var d agentstatus.Document
+	if dec.Decode(&d) != nil || dec.Decode(new(any)) != io.EOF || (!agentstatus.Valid(d) || store.ValidateHost(d.Host) != nil) {
+		writeError(w, 400, "invalid agent status")
+		return
+	}
+	if err = agentstatus.Save(s.store.Dir(), d, "status", time.Now()); err != nil {
+		writeError(w, 500, "saving agent status")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // Operator credentials authorize only offers and restart execution.
