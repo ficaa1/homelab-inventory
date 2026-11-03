@@ -1039,7 +1039,8 @@ button.ops-tile { cursor:pointer; }
 .agent-controls .btn,.agent-fleet>a,.agent-host>.btn {min-height:44px}
 .host-open {display:grid;gap:12px;width:100%;min-width:0;padding:0;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
 .agent-host {display:flex;align-items:flex-start;gap:8px;border-top:1px solid var(--line);padding-top:8px}
-.agent-host details {flex:1;min-width:0}
+.agent-host details {flex:1 1 180px;min-width:0}
+.agent-host>[data-enable-updates] {flex:1 1 100%}
 .agent-host summary {min-height:44px;display:flex;align-items:center;gap:8px;cursor:pointer;flex-wrap:wrap;font-size:12px}
 .agent-host summary {position:relative;padding-right:14px}
 .agent-host summary::after {content:"⌄";position:absolute;right:0;top:12px;color:var(--text-3)}
@@ -8156,7 +8157,8 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       if (s.dead) return;
       var cmd = (r.commands && (r.commands[requestUser] || r.commands.linux)) || "";
       s.commands = r.commands || {};
-      s.q("label").textContent = (request.scheduler === "truenas-cron" ? "TrueNAS" : "Linux") + ", run as " + (requestUser === "root" ? "root" : "a user with sudo") + (r.signed_updates ? " · signed updates" : "");
+      s.signed = !!r.signed_updates;
+      s.q("label").textContent = (request.scheduler === "truenas-cron" ? "TrueNAS" : "Linux") + ", run as " + (requestUser === "root" ? "root" : "a user with sudo") + (s.signed ? " · signed updates" : "");
       s.code = r.code; s.id = r.id || ""; s.expires = new Date(r.expires_at).getTime();
       cmdEl.innerHTML = cmdBox(cmd, { shell: true, big: true, label: "Install command" });
       s.q("fresh").innerHTML = fresh ? ic("check", "sm") + "<span>" + esc(fresh) + "</span>" : "";
@@ -8207,7 +8209,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     if (!s || !e.target.closest || !e.target.closest('.enroll-options') || !s.root.contains(e.target)) return;
     if (e.target === s.q("user") && s.commands) {
       s.q("cmd").innerHTML = cmdBox(s.commands[e.target.value] || s.commands.linux || '', {shell:true,big:true,label:"Install command"});
-      s.q("label").textContent = (s.request.scheduler === "truenas-cron" ? "TrueNAS" : "Linux") + ", run as " + (e.target.value === "root" ? "root" : "a user with sudo");
+      s.q("label").textContent = (s.request.scheduler === "truenas-cron" ? "TrueNAS" : "Linux") + ", run as " + (e.target.value === "root" ? "root" : "a user with sudo") + (s.signed ? " · signed updates" : "");
       return;
     }
     s.q("cron").hidden = s.q("scheduler").value !== "truenas-cron";
