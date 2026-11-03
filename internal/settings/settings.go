@@ -1,7 +1,8 @@
 // Package settings is the configuration a human can change without a redeploy.
 //
-// Everything here already had an environment variable, and the environment
-// variable is still what a fresh install starts from. What this adds is the
+// Most fields already had an environment variable, and the environment
+// variable is still what a fresh install starts from. VPN automatic recovery
+// uses fixed safe defaults until explicitly configured. What this adds is the
 // same inversion the catalog Book applies to service names: the env is a
 // *seed*, and a value stored by a person is authoritative over it. Changing
 // the notification floor should not mean editing /opt/homelab-api/.env over
@@ -41,7 +42,7 @@ import (
 const StateName = "settings"
 
 // Stored is what a person has explicitly set. Absent means "never set", which
-// falls through to the environment — see the package comment.
+// falls through to the environment or fixed defaults — see the package comment.
 type Stored struct {
 	Auth           AuthStored `json:"auth"`
 	AuthGeneration uint64     `json:"auth_generation,omitempty"`

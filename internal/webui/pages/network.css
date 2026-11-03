@@ -162,3 +162,19 @@
   #panel-network .hn-chart, #panel-network .hn-seedbox { padding-left: 12px; padding-right: 12px; }
   #panel-network .hn-crow { grid-template-columns: minmax(0, 1fr) 60px 78px; padding: 10px 12px; }
 }
+
+#panel-network .hn-vpn-heading { margin:20px 0 10px; font-size:var(--fs-sm); font-weight:600; }
+#panel-network .hn-vpn-deps { list-style:none; margin:0; padding:0; }
+#panel-network .hn-vpn-deps li { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; padding:10px 0; border-bottom:1px solid var(--line); }
+#panel-network .hn-vpn-dep-name { flex:1; min-width:120px; overflow-wrap:anywhere; }
+#panel-network .hn-vpn-deps .ops-muted { flex-basis:100%; padding:0; }
+#panel-network .hn-vpn-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; margin-top:18px; }
+#panel-network .hn-vpn-actions .btn { min-height:44px; }
+#panel-network .hn-vpn-actions .ops-muted { padding:0; }
+#panel-network .net-vpn .protection-facts { grid-template-columns:minmax(100px,160px) minmax(0,1fr); }
+#panel-network .net-vpn-head { flex-wrap:wrap; }
+#panel-network .net-vpn-head .net-chips { min-width:0; }
+#panel-network .net-vpn-head .net-chip { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+@media (max-width:640px) {
+  #panel-network .net-vpn .protection-facts { grid-template-columns:100px minmax(0,1fr); gap:8px 12px; }
+}
