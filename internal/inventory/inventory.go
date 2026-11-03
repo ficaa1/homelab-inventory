@@ -33,7 +33,7 @@ const SchemaVersion = "5"
 // whenever the agent source changes, then refresh agentSourceHash as directed
 // by TestAgentSourceRevision. Older agents omit it and report revision zero.
 // Revision 1 starts the extracted project after the collector and module cut.
-const AgentRevision = 3
+const AgentRevision = 4
 
 // Inventory is the root document emitted by one run of the discovery binary on
 // one machine.
@@ -72,10 +72,26 @@ type Inventory struct {
 // Additive in schema v5. Sequence is the installed signed release; failures
 // counts consecutive failed update checks/trials. Result contains no remote text.
 type AgentUpdate struct {
-	Sequence    uint64    `json:"sequence"`
-	AttemptedAt time.Time `json:"attempted_at"`
-	Result      string    `json:"result"`
-	Failures    int       `json:"failures"`
+	Sequence     uint64         `json:"sequence"`
+	AttemptedAt  time.Time      `json:"attempted_at"`
+	Result       string         `json:"result"`
+	Failures     int            `json:"failures"`
+	Mode         string         `json:"mode,omitempty"`
+	Updater      string         `json:"updater,omitempty"`
+	Target       uint64         `json:"target,omitempty"`
+	Stage        string         `json:"stage,omitempty"`
+	Code         string         `json:"code,omitempty"`
+	FirstFailure *UpdateFailure `json:"firstFailure,omitempty"`
+	LastFailure  *UpdateFailure `json:"lastFailure,omitempty"`
+	Rejected     uint64         `json:"rejected,omitempty"`
+}
+
+// UpdateFailure contains only safe enums, never local error text.
+type UpdateFailure struct {
+	At       time.Time `json:"at"`
+	Sequence uint64    `json:"sequence"`
+	Stage    string    `json:"stage"`
+	Code     string    `json:"code"`
 }
 
 // Tool records provenance: which binary produced this document, how, and as
@@ -109,6 +125,7 @@ const (
 // Diagnostic is a machine-readable note about collection quality.
 type Diagnostic struct {
 	Collector string    `json:"collector"`
+	Code      string    `json:"code,omitempty"`
 	Severity  Severity  `json:"severity"`
 	Message   string    `json:"message"`
 	Detail    string    `json:"detail,omitempty"`

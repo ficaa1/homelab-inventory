@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ficaa1/homelab-inventory/internal/agentstatus"
 	"github.com/ficaa1/homelab-inventory/internal/fsx"
 	"github.com/ficaa1/homelab-inventory/internal/inventory"
 )
@@ -117,6 +118,11 @@ func (s *Store) Save(inv *inventory.Inventory) (Record, error) {
 		return Record{}, fmt.Errorf("store: writing %s: %w", path, err)
 	}
 
+	if inv.AgentUpdate != nil {
+		if err := agentstatus.Save(s.dir, agentstatus.Document{Host: host, Update: *inv.AgentUpdate}, "inventory", time.Now()); err != nil {
+			return Record{}, err
+		}
+	}
 	return Record{Host: host, ID: id, CollectedAt: at, SizeBytes: int64(len(data) + 1)}, nil
 }
 
@@ -360,7 +366,7 @@ func (s *Store) bumpRunEpoch(_ string) {
 // temporary files. Apply before either run or software ingest creates a directory.
 func reservedHost(host string) bool {
 	switch host {
-	case "manifest.json", "upload-audit.jsonl", "agent-offers.jsonl", "actions-audit.jsonl", "settings", "packagesets", "plugins":
+	case "agent-status", "agent-health", "manifest.json", "upload-audit.jsonl", "agent-offers.jsonl", "actions-audit.jsonl", "settings", "packagesets", "plugins":
 		return true
 	}
 	return strings.HasPrefix(host, "state-") || strings.HasPrefix(host, ".")
