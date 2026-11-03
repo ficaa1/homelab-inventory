@@ -8,7 +8,8 @@ unavailable; zero traffic is shown as zero.
 ## Discovery and live checks
 
 Discovery stays read-only. On Linux, the agent joins Docker metadata with tunnel
-interfaces and counters from `/proc/<pid>/net/dev`. It identifies namespace
+interfaces and counters from `/proc/<pid>/net/dev`. A candidate must either have a running `wg*` or `tun*` interface, or have
+`NET_ADMIN` with at least one configured namespace consumer. It identifies namespace
 consumers from Docker's `container:<name-or-id>` network mode and compares their
 network namespaces. It does not execute programs inside containers or read their
 environment. A gateway with `NET_ADMIN` and configured namespace consumers can
@@ -30,13 +31,15 @@ bounded time and output; no shell or arbitrary browser-supplied URL is accepted.
 The exit check uses `curl`, falling back to `wget` when curl is absent. The
 server-side `VPN_CHECK_URL` defaults to `https://ipinfo.io/json`. Set it to an
 HTTP(S) endpoint returning a plain IP address or JSON with `ip` and optional
-`country`, `city`, `org`. The endpoint is contacted from the VPN container;
-**the dashboard page makes no external requests** for VPN data.
+`country`, `city`, `org`. Each exit check makes one request from inside the tunnel. The selected provider
+sees the VPN exit IP and request; use your own endpoint if that matters.
+**The dashboard page makes no external requests** for VPN data.
 
-WireGuard observations refresh about once a minute. Successful exit checks are
-cached for five minutes; an old handshake prompts an exit check, and failures
-are retried at least 30 seconds apart. Opening the VPN panel uses that same
-cache. These checks supplement the usual inventory schedule.
+WireGuard observations refresh about once a minute. When the handshake is
+older than three minutes, exit checks run about once a minute, including after a
+successful check. Panel-triggered checks and checks without WireGuard evidence
+share a five-minute cache. Failed exit checks are retried at least 30 seconds
+apart. These checks supplement the usual inventory schedule.
 
 ## Read the panel
 
@@ -107,7 +110,24 @@ without changing the delay. Resetting settings restores off/10.
 Only persistent **Down** or **Cutoff** states trigger automatic recovery.
 Unknown evidence and an old handshake alone do not. Recovery shares the normal
 action lock and audit, records actor `auto`, and reserves a **one-hour cooldown**
-before executing. Both the failure timer and the last automatic attempt survive
+before executing. If another action is busy, the automatic attempt is skipped
+without consuming that cooldown window. Both the failure timer and the last automatic attempt survive
 API restarts, so restarting the API cannot bypass that cooldown. Success and
-failure outcomes use the configured notification delivery settings. Disabling
-actions or automatic recovery stops future automatic attempts.
+failure reports respect notification on/off and mute settings, but bypass the
+alert severity floor because they report an action outcome. Disabling actions
+or automatic recovery stops future automatic attempts.
+
+## Limitations
+
+- Discovery selects **one gateway per host**. Live probes and recovery operate
+  only on `ACTIONS_HOST`; there is no cross-host Docker execution.
+- When Docker collection succeeds but no gateway is found, `vpn` remains nil
+  (omitted from inventory JSON). It does not become an empty or healthy VPN.
+- The agent has no path to execute VPN probes or recovery. Discovery remains
+  read-only; privileged operations belong to the API executor and its separate
+  operator authorization. Enabling automatic recovery does not grant the agent
+  execution privileges.
+- A gateway's “exit on fatal” option is unnecessary for this recovery flow. Docker
+  restart policies can restart the gateway while leaving dependent containers
+  cut off from its new network namespace. The cutoff alert detects this state;
+  reconnect recovers the gateway and its dependents together.
