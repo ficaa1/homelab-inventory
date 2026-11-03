@@ -219,7 +219,7 @@ func TestRuntimeFaults(t *testing.T) {
 	for _, kind := range []string{"partial", "signature", "hash", "platform", "roles", "traversal", "space", "inode-space", "journal-space", "mirror-space", "fsync", "lock", "lost", "rejected", "current-delivery", "backward", "baseline-errors", "later", "dead-updater", "one-record", "both-records", "prune", "held"} {
 		cases = append(cases, scenario{kind, kind, "", "", 0})
 	}
-	for _, kind := range []string{"trial-host-errors", "trial-host-timeout", "trial-host-errors-bound", "trial-host-timeout-bound", "committed-host-errors", "committed-candidate-errors", "committed-host-timeout", "committed-candidate-timeout", "committed-host-exit", "committed-host-invalid", "committed-host-identity", "prepare-host-exit"} {
+	for _, kind := range []string{"trial-host-errors", "trial-host-timeout", "trial-fallback-exit", "trial-host-timeout-bound", "committed-host-errors", "committed-candidate-errors", "committed-host-timeout", "committed-candidate-timeout", "committed-host-exit", "committed-host-invalid", "committed-host-identity", "prepare-host-exit"} {
 		cases = append(cases, scenario{kind, kind, "", "", 0})
 	}
 	for _, tc := range cases {
@@ -253,6 +253,9 @@ func TestRuntimeFaults(t *testing.T) {
 			if tc.kind == "baseline-errors" {
 				baselineMode = "errors"
 			}
+			if tc.kind == "prepare-host-exit" {
+				baselineMode = "exit"
+			}
 			l.publish(1, baselineMode)
 			baseline := t.TempDir()
 			for role, data := range l.files {
@@ -269,6 +272,9 @@ func TestRuntimeFaults(t *testing.T) {
 			candidateMode := "good"
 			if tc.kind == "trial" {
 				candidateMode = tc.mode
+				if tc.mode == "errors" {
+					candidateMode = "trigger-extra-errors"
+				}
 			}
 			if tc.kind == "worker" {
 				candidateMode = "worker:" + tc.mode
@@ -286,8 +292,10 @@ func TestRuntimeFaults(t *testing.T) {
 				candidateMode = "exit"
 			}
 			switch tc.kind {
-			case "trial-host-errors", "trial-host-errors-bound":
+			case "trial-host-errors":
 				candidateMode = "trigger-errors"
+			case "trial-fallback-exit":
+				candidateMode = "trigger-fallback-exit"
 			case "trial-host-timeout", "trial-host-timeout-bound":
 				candidateMode = "trigger-timeout"
 			case "committed-candidate-errors":
@@ -388,6 +396,24 @@ func TestRuntimeFaults(t *testing.T) {
 					}
 					return
 				}
+				// Recover selection from a corrupt baseline bank without blaming
+				// the identical signed code in the other bank.
+				path := filepath.Join(l.r.slot(c.Active), "agentupdate")
+				if e = os.Chmod(path, 0755); e != nil {
+					t.Fatal(e)
+				}
+				if e = os.WriteFile(path, []byte("broken updater"), 0555); e != nil {
+					t.Fatal(e)
+				}
+				l.offer = false
+				if e = l.run("", "", 0); e != nil {
+					t.Fatal(e)
+				}
+				repaired := l.load()
+				if repaired.Active != c.Fallback || repaired.State != "committed" || repaired.Update.Rejected != 0 || repaired.Update.Result == "rollback" || repaired.Update.FirstFailure == nil || repaired.Update.Code != "hash_mismatch" || l.statuses[len(l.statuses)-1].Code != "hash_mismatch" {
+					t.Fatal("baseline bank corruption blamed signed code or hid failure")
+				}
+				l.offer = true
 			}
 			if tc.kind == "prune" {
 				for i := 0; i < 4; i++ {
@@ -406,14 +432,27 @@ func TestRuntimeFaults(t *testing.T) {
 			if tc.kind == "kill" && err == nil {
 				t.Fatal("fault boundary was not exercised")
 			}
-			if strings.HasPrefix(tc.kind, "trial-host-") {
+			if tc.kind == "prepare-host-exit" {
+				if err != nil || before.State != "committed" || before.Active.Sequence != 2 || before.Fallback.Sequence != 1 || before.Floor != 2 || before.Update.Rejected != 0 || before.Update.FirstFailure != nil || len(l.posts) != 1 || l.posts[0].Identity != before.Active.Identity {
+					t.Fatal("higher signed offer could not repair broken baseline in both banks")
+				}
+				return
+			}
+			if tc.kind == "trial-host-errors" || tc.kind == "trial-fallback-exit" {
+				if err != nil || before.State != "committed" || before.Active.Sequence != 2 || before.Floor != 2 || before.Update.Rejected != 0 || before.Confirmations != 0 || before.Update.FirstFailure != nil || len(before.Errors) != 1 || before.Errors[0] != "fixture\x00failed" || len(l.posts) != 1 || l.posts[0].Identity != before.Active.Identity {
+					t.Fatal("valid candidate did not commit with the new host baseline")
+				}
+				return
+			}
+			if strings.HasPrefix(tc.kind, "trial-host-timeout") {
+				if len(l.posts) != 0 {
+					t.Fatal("timed-out candidate produced inventory")
+				}
 				if before.Confirmations != 1 || before.State != "prepared" || before.Candidate == nil || before.Active.Sequence != 1 || before.Floor != 2 || before.Update.Rejected != 0 || before.Update.FirstFailure == nil {
 					t.Fatalf("host symptom consumed candidate: state=%s rejected=%d", before.State, before.Update.Rejected)
 				}
 				// Each invocation reloads the journal: retries must survive restarts.
-				if e = l.run("", "", 0); e != nil && strings.Contains(tc.kind, "errors") {
-					t.Fatal(e)
-				}
+				_ = l.run("", "", 0)
 				retry := l.load()
 				if retry.Confirmations != 2 || retry.State != "prepared" || retry.Update.Rejected != 0 {
 					t.Fatal("second host symptom quarantined")
@@ -439,7 +478,7 @@ func TestRuntimeFaults(t *testing.T) {
 				}
 				return
 			}
-			if strings.HasPrefix(tc.kind, "committed-") || tc.kind == "prepare-host-exit" {
+			if strings.HasPrefix(tc.kind, "committed-") {
 				if before.State != "committed" || before.Active.Sequence != 2 {
 					t.Fatal("trial did not commit")
 				}
@@ -447,7 +486,7 @@ func TestRuntimeFaults(t *testing.T) {
 				switch tc.kind {
 				case "committed-host-timeout", "committed-candidate-timeout":
 					symptom = "timeout"
-				case "committed-host-exit", "prepare-host-exit":
+				case "committed-host-exit":
 					symptom = "exit"
 				case "committed-host-invalid":
 					symptom = "malformed"
@@ -458,9 +497,6 @@ func TestRuntimeFaults(t *testing.T) {
 					os.WriteFile(filepath.Join(dir, "break-collector"), []byte("break"), 0600)
 				} else {
 					os.WriteFile(filepath.Join(dir, "host-symptom"), []byte(symptom), 0600)
-				}
-				if tc.kind == "prepare-host-exit" {
-					l.publish(3, "good")
 				}
 				_ = l.run("", "", 0)
 				failed := l.load()

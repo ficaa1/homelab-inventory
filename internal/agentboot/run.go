@@ -154,18 +154,15 @@ func (r Runner) prepare(ctx context.Context, c *Control, data []byte) error {
 	if m.Sequence <= c.Floor {
 		return nil
 	}
-	// Establish the actual last good pair before staging its successor. If a
-	// previously committed updater has died, retain the older recorded fallback.
+	// Collection supplies a diagnostic baseline, never a prerequisite for
+	// installing a higher signed runtime that can repair a broken baseline.
 	n, e := nonce()
 	if e != nil {
 		return e
 	}
-	if _, ids, err := r.collect(ctx, *c, c.Active, n); err == nil {
-		c.Errors = ids
-	} else {
-		if e = r.confirmFailure(ctx, c, err, nil, "prepare"); e != nil {
-			return e
-		}
+	_, ids, err := r.collect(ctx, *c, c.Active, n)
+	if _, e = r.resolveCollection(ctx, c, "prepare", ids, err); e != nil {
+		return e
 	}
 	if e = r.prune(*c); e != nil {
 		return e
@@ -200,9 +197,10 @@ func (r Runner) prepare(ctx context.Context, c *Control, data []byte) error {
 }
 func (r Runner) quarantine(c *Control, err error) error {
 	mark(c, "trial", err)
-	if c.Active == c.Fallback && c.Candidate == nil {
-		_ = r.save(c)
-		return err
+	if c.Active.Identity == c.Fallback.Identity && c.Candidate == nil {
+		// A bad bank does not reject the same signed runtime in another bank.
+		c.Active = c.Fallback
+		return r.save(c)
 	}
 	rejected := c.Active.Sequence
 	if c.Candidate != nil {
@@ -280,60 +278,90 @@ func newErrors(baseline, ids []string) bool {
 	return false
 }
 
-// confirmFailure runs the recorded fallback under the same worker deadline
-// before attributing a failure to code. Trial diagnostics are compared by ID;
-// committed diagnostics never reach this path. Posting is independent of proof.
-func (r Runner) confirmFailure(ctx context.Context, c *Control, err error, ids []string, phase string) error {
+// resolveCollection decides whether the caller may use its collection. Only
+// trial diagnostics and timeouts need comparison; committed execution failures
+// need a working fallback, and prepare can proceed without a usable baseline.
+// A stopped trial/committed path posts a valid fallback report from this tick.
+func (r Runner) resolveCollection(ctx context.Context, c *Control, phase string, ids []string, err error) (bool, error) {
+	if err == nil {
+		if phase != "trial" {
+			c.Errors = ids
+			return true, nil
+		}
+		c.Confirmations = 0
+		if !newErrors(c.Errors, ids) {
+			return true, nil
+		}
+		err = failure("trial", "trial_new_errors")
+	}
+	code := classify("trial", err).Code
+	if phase == "trial" && code != "trial_new_errors" && code != "trial_timeout" {
+		if e := r.quarantine(c, err); e != nil {
+			mark(c, "state", e)
+		}
+		return false, r.fallbackReport(ctx, c)
+	}
 	n, e := nonce()
 	if e != nil {
-		return e
+		return false, e
 	}
 	data, fallbackIDs, fallbackErr := r.collect(ctx, *c, c.Fallback, n)
-	confirmed := fallbackErr == nil
-	for _, id := range ids {
-		if !newErrors(c.Errors, []string{id}) {
-			continue
-		}
-		for _, fallbackID := range fallbackIDs {
-			if id == fallbackID {
-				confirmed = false
+	if phase == "trial" && code == "trial_new_errors" {
+		// Only candidate errors absent from both the old baseline and this
+		// tick's fallback implicate the candidate. A valid C also beats a dead F.
+		regression := false
+		if fallbackErr == nil {
+			for _, id := range ids {
+				if newErrors(c.Errors, []string{id}) && newErrors(fallbackIDs, []string{id}) {
+					regression = true
+					break
+				}
 			}
 		}
+		if !regression {
+			if fallbackErr == nil {
+				c.Errors = fallbackIDs
+			}
+			return true, nil
+		}
 	}
-	trial := phase == "trial"
-	if trial && !confirmed {
-		c.Confirmations++
-	}
-	if confirmed && (trial || c.Active != c.Fallback) || trial && c.Confirmations >= 3 {
+	if phase == "trial" {
+		if code == "trial_timeout" && fallbackErr != nil {
+			c.Confirmations++
+			if c.Confirmations < 3 {
+				// Only consecutive shared timeouts consume this restart-safe budget.
+				mark(c, "trial", err)
+				c.State = "prepared"
+				if e = r.save(c); e != nil {
+					return false, e
+				}
+				return false, err
+			}
+		}
+		e = r.quarantine(c, err)
+	} else if fallbackErr == nil {
+		c.Errors = fallbackIDs
+		// quarantine compares identities: a working duplicate bank changes
+		// selection and records the failure without rejecting running code.
 		e = r.quarantine(c, err)
 	} else {
 		mark(c, "trial", err)
-		if trial {
-			// The reserved floor still forbids replay from an offer; only this
-			// exact journalled candidate may retry after a host-wide symptom.
-			c.State = "prepared"
+		if phase == "prepare" {
+			c.Errors = nil
 		}
 		e = r.save(c)
 	}
 	if e != nil {
-		return e
-	}
-	if !confirmed && !trial {
-		return err
+		return false, e
 	}
 	if phase == "prepare" {
-		return nil
-	}
-	if fallbackErr == nil {
-		_, e = r.post(ctx, *c, data, c.Fallback.Identity, n)
-		if e != nil {
-			return e
-		}
+		return true, nil
 	}
 	if fallbackErr != nil {
-		return err
+		return false, err
 	}
-	return nil
+	_, e = r.post(ctx, *c, data, c.Fallback.Identity, n)
+	return false, e
 }
 
 // Run holds one stable lock inode. Status can still be read or sent when that
@@ -425,19 +453,8 @@ func (r Runner) Run(ctx context.Context) (runErr error) {
 			return r.fallbackReport(ctx, &c)
 		}
 		data, ids, err := r.collect(ctx, c, *c.Candidate, c.Nonce)
-		if err == nil && newErrors(c.Errors, ids) {
-			err = failure("trial", "trial_new_errors")
-		}
-		if err != nil {
-			code := classify("trial", err).Code
-			if code == "trial_new_errors" || code == "trial_timeout" {
-				return r.confirmFailure(ctx, &c, err, ids, "trial")
-			}
-			e = r.quarantine(&c, err)
-			if e != nil {
-				mark(&c, "state", e)
-			}
-			return r.fallbackReport(ctx, &c)
+		if proceed, e := r.resolveCollection(ctx, &c, "trial", ids, err); !proceed || e != nil {
+			return e
 		}
 		if e = r.write(filepath.Join(r.Dir, "report.json"), data, 0600, "report"); e != nil {
 			_ = r.quarantine(&c, classify("stage_write", e))
@@ -462,8 +479,8 @@ func (r Runner) Run(ctx context.Context) (runErr error) {
 		return e
 	}
 	data, ids, err := r.collect(ctx, c, c.Active, n)
-	if err != nil {
-		return r.confirmFailure(ctx, &c, err, nil, "committed")
+	if proceed, e := r.resolveCollection(ctx, &c, "committed", ids, err); !proceed || e != nil {
+		return e
 	}
 	if _, e = r.post(ctx, c, data, c.Active.Identity, n); e != nil {
 		mark(&c, "post", e)

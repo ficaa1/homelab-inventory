@@ -248,7 +248,7 @@ The transaction moves through these states:
 
 | State | Meaning |
 | --- | --- |
-| prepared | Both artifacts passed signature, hash, size, space and self-test checks. The candidate, floor reservation and known-good fallback are durable. Execution has not started or a shared host symptom permits a bounded retry. |
+| prepared | Both artifacts passed signature, hash, size, space and self-test checks. The candidate, floor reservation and known-good fallback are durable. Execution has not started or a shared timeout permits a bounded retry. |
 | pending | Execution may have started. An interrupted pending trial falls back and quarantines its sequence. |
 | report-pending | A valid trial report is durable. The launcher retries those exact bytes once per scheduled tick, with a journalled continuation count. Network and API failures leave it here and the known-good pair keeps reporting. |
 | committed | The launcher witnessed a durable API receipt for the exact nonce, manifest, pair and report hash, then wrote the local commit. |
@@ -256,11 +256,13 @@ The transaction moves through these states:
 
 A prepared transaction can resume because the pending record always precedes
 each execution. A process exit or worker-written health file never commits a trial.
-New error-level collector/code pairs fail the trial; existing diagnostic IDs
-remain the baseline. During a trial, new errors or a timeout must be confirmed
-against the fallback; a shared host symptom retries at most three times before
-quarantine. After commit, diagnostics update the baseline; execution failures
-restore the recorded fallback only if it succeeds in the same tick. It independently
+Preparation can stage a higher signed runtime even when both baseline banks fail.
+A valid trial report proceeds unless the fallback lacks one of its new error IDs;
+shared errors become the baseline, a failed fallback does not block a valid trial,
+and only shared timeouts retry before quarantine on the third confirmation.
+After commit, execution failures switch to a working fallback in the same tick,
+rejecting code only when its identity differs; duplicate-bank failures stay visible
+without rejecting the running release. The launcher independently
 fetches a higher offered runtime if the worker fails, hangs, emits invalid output
 or cannot plan its successor. Hold and canary policy still apply.
 
