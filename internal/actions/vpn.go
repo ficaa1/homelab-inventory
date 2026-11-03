@@ -159,6 +159,9 @@ func (m *Manager) reconnect(ctx context.Context, p Preview, e Entry) Entry {
 			}
 		}
 	}
+	if e.Result == "ok" {
+		e.Reason = "VPN tunnel and dependent containers verified"
+	}
 	if e.Result == "partial" && e.Reason == "" {
 		e.Reason = "VPN dependent recovery incomplete"
 	}

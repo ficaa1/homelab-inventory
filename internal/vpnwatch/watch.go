@@ -77,7 +77,7 @@ type Watch struct {
 }
 
 func Open(dir string, opts Options) (*Watch, error) {
-	w := &Watch{opts: opts, path: filepath.Join(dir, "vpn-watch.json")}
+	w := &Watch{opts: opts, path: filepath.Join(dir, "state-vpn-watch.json")}
 	if opts.Now == nil {
 		w.opts.Now = time.Now
 	}
@@ -177,6 +177,12 @@ func (w *Watch) Check(ctx context.Context, panel bool) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	now := w.opts.Now().UTC()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if w.opts.Actions != nil && w.opts.Actions.Busy() {
+		return nil
+	}
 	if w.opts.Runner == nil || w.opts.Runner.Inventory == nil {
 		return nil
 	}
@@ -191,6 +197,15 @@ func (w *Watch) Check(ctx context.Context, panel bool) error {
 	}
 	v := inv.VPN
 	if w.snap.Host != inv.Host.Hostname || w.snap.Container != v.Container {
+		w.verifiedAt = time.Time{}
+		if w.opts.Actions != nil {
+			for _, e := range w.opts.Actions.Log(100) {
+				if e.Kind == "vpn_reconnect" && e.Target == v.Container && e.Result == "ok" {
+					w.verifiedAt = e.At
+					break
+				}
+			}
+		}
 		w.snap = Snapshot{Host: inv.Host.Hostname, Container: v.Container, Status: "unknown", Reason: "waiting for a tunnel check", Since: now}
 		w.lastWG = time.Time{}
 		w.lastExit = time.Time{}
@@ -211,7 +226,18 @@ func (w *Watch) Check(ctx context.Context, panel bool) error {
 	if now.Sub(w.lastInspect) >= 60*time.Second {
 		w.lastInspect = now
 		c, e := w.opts.Inspect(ctx, v.Container)
+		if ctx.Err() != nil {
+			w.lastInspect = time.Time{}
+			return ctx.Err()
+		}
 		if e == nil {
+			if !w.startedAt.IsZero() && !c.StartedAt.Equal(w.startedAt) {
+				w.lastWG = time.Time{}
+				w.lastExit = time.Time{}
+				w.failures = 0
+				w.exitOK = false
+				w.snap.Facts = vpnprobe.Facts{}
+			}
 			state = c.State
 			w.liveState = c.State
 			w.liveHealth = c.Health
@@ -236,6 +262,10 @@ func (w *Watch) Check(ctx context.Context, panel bool) error {
 		if now.Sub(w.lastWG) >= 60*time.Second {
 			w.lastWG = now
 			f, e := w.opts.WG(ctx, v.Container)
+			if ctx.Err() != nil {
+				w.lastWG = time.Time{}
+				return ctx.Err()
+			}
 			if e == nil {
 				w.snap.Facts.LatestHandshake = f.LatestHandshake
 				w.snap.Facts.Endpoint = f.Endpoint
@@ -249,6 +279,9 @@ func (w *Watch) Check(ctx context.Context, panel bool) error {
 		due := (w.failures > 0 && now.Sub(w.lastExit) >= 30*time.Second) || (h != nil && now.Sub(*h) > 180*time.Second && now.Sub(w.lastExit) >= 60*time.Second) || ((h == nil || panel) && now.Sub(w.lastExit) >= 5*time.Minute)
 		if due {
 			f, e := w.opts.Exit(ctx, v.Container)
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			w.lastExit = now
 			if e != nil {
 				w.failures++
@@ -274,6 +307,9 @@ func (w *Watch) Check(ctx context.Context, panel bool) error {
 				cut := d.State == "running" && d.Attached != nil && !*d.Attached && !inv.CollectedAt.Before(w.verifiedAt)
 				if inspectOK {
 					c, e := w.opts.Inspect(ctx, d.Name)
+					if ctx.Err() != nil {
+						return ctx.Err()
+					}
 					if e == nil {
 						w.snap.Dependents[i].State = c.State
 						w.snap.Dependents[i].StartedAt = &c.StartedAt
@@ -292,6 +328,9 @@ func (w *Watch) Check(ctx context.Context, panel bool) error {
 	}
 	if status != w.snap.Status {
 		w.snap.Since = now
+		if (status == "down" || status == "cutoff") && w.saved.BadSince != nil {
+			w.snap.Since = *w.saved.BadSince
+		}
 	}
 	w.snap.Status, w.snap.Reason = status, reason
 	bad := status == "down" || status == "cutoff"
@@ -300,7 +339,7 @@ func (w *Watch) Check(ctx context.Context, panel bool) error {
 			t := now
 			w.saved.BadSince = &t
 		}
-	} else {
+	} else if status == "ok" {
 		w.saved.BadSince = nil
 	}
 	if err = w.save(); err != nil {
@@ -313,7 +352,7 @@ func (w *Watch) Check(ctx context.Context, panel bool) error {
 }
 func (w *Watch) autofix(ctx context.Context, now time.Time) error {
 	on, n := w.settings()
-	if !on || w.saved.BadSince == nil || now.Sub(*w.saved.BadSince) < time.Duration(n)*time.Minute || (w.saved.LastAuto != nil && now.Sub(*w.saved.LastAuto) < time.Hour) {
+	if !on || (w.snap.Status != "down" && w.snap.Status != "cutoff") || w.saved.BadSince == nil || now.Sub(*w.saved.BadSince) < time.Duration(n)*time.Minute || (w.saved.LastAuto != nil && now.Sub(*w.saved.LastAuto) < time.Hour) {
 		return nil
 	}
 	if w.opts.Actions != nil && w.opts.Actions.Busy() {
@@ -331,10 +370,12 @@ func (w *Watch) autofix(ctx context.Context, now time.Time) error {
 	}
 	container, status, badSince := w.snap.Container, w.snap.Status, *w.saved.BadSince
 	w.mu.Unlock()
+	actionCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 300*time.Second)
+	defer cancel()
 	var e actions.Entry
 	var err error
 	if w.opts.Reconnect != nil {
-		e, err = w.opts.Reconnect(ctx, container)
+		e, err = w.opts.Reconnect(actionCtx, container)
 	} else {
 		inv, x := w.opts.Runner.Inventory()
 		err = x
@@ -342,7 +383,7 @@ func (w *Watch) autofix(ctx context.Context, now time.Time) error {
 			p, x := actions.Resolve(inv, "vpn_reconnect", container, w.opts.Runner.Policy)
 			err = x
 			if err == nil {
-				e, err = w.opts.Actions.TryExecute(ctx, "vpn_reconnect", container, "auto", p.ContainerSetHash)
+				e, err = w.opts.Actions.TryExecute(actionCtx, "vpn_reconnect", container, "auto", p.ContainerSetHash)
 			}
 		}
 	}
@@ -373,7 +414,7 @@ func (w *Watch) autofix(ctx context.Context, now time.Time) error {
 		msg.Body = fmt.Sprintf("Automatic VPN reconnect failed: %s. Next automatic attempt after %s UTC.", reason, now.Add(time.Hour).Format("15:04"))
 	}
 	if w.opts.Message != nil {
-		w.opts.Message(ctx, msg)
+		w.opts.Message(actionCtx, msg)
 	}
 	w.mu.Lock()
 	if err == nil && e.Result == "ok" {

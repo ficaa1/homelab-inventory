@@ -49,7 +49,7 @@ func TestAutofixThresholdCooldownReloadAndMuteSetting(t *testing.T) {
 	if attempts != 1 || messages != 1 {
 		t.Fatalf("threshold attempt/message %d/%d", attempts, messages)
 	}
-	info, err := os.Stat(filepath.Join(dir, "vpn-watch.json"))
+	info, err := os.Stat(filepath.Join(dir, "state-vpn-watch.json"))
 	if err != nil || info.Mode().Perm() != 0600 {
 		t.Fatal("state is not private", err)
 	}
