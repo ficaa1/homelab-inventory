@@ -248,17 +248,19 @@ The transaction moves through these states:
 
 | State | Meaning |
 | --- | --- |
-| prepared | Both artifacts passed signature, hash, size, space and self-test checks. The candidate, floor reservation and known-good fallback are durable. Execution has not started. |
+| prepared | Both artifacts passed signature, hash, size, space and self-test checks. The candidate, floor reservation and known-good fallback are durable. Execution has not started or a shared host symptom permits a bounded retry. |
 | pending | Execution may have started. An interrupted pending trial falls back and quarantines its sequence. |
 | report-pending | A valid trial report is durable. The launcher retries those exact bytes once per scheduled tick, with a journalled continuation count. Network and API failures leave it here and the known-good pair keeps reporting. |
 | committed | The launcher witnessed a durable API receipt for the exact nonce, manifest, pair and report hash, then wrote the local commit. |
 | quarantined | The candidate failed or execution was ambiguous. Only the recorded fallback runs; repair requires a higher sequence. |
 
 A prepared transaction can resume because the pending record always precedes
-execution. A process exit or worker-written health file never commits a trial.
+each execution. A process exit or worker-written health file never commits a trial.
 New error-level collector/code pairs fail the trial; existing diagnostic IDs
-remain the baseline. The launcher checks ordinary committed runs too, so a later
-collector or updater failure restores the recorded fallback. It independently
+remain the baseline. During a trial, new errors or a timeout must be confirmed
+against the fallback; a shared host symptom retries at most three times before
+quarantine. After commit, diagnostics update the baseline; execution failures
+restore the recorded fallback only if it succeeds in the same tick. It independently
 fetches a higher offered runtime if the worker fails, hangs, emits invalid output
 or cannot plan its successor. Hold and canary policy still apply.
 
