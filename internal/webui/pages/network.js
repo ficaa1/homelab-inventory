@@ -48,7 +48,7 @@
   }
   function clock(t) { return new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
   function state(status) {
-    return status === "not configured" ? "Not configured" : status === "unavailable" ? "Unavailable" : status ? status.charAt(0).toUpperCase() + status.slice(1) : "Unavailable";
+    return status === "not configured" ? "Not configured" : status === "unavailable" ? "Unavailable" : status === "cutoff" ? "Cut off" : status ? status.charAt(0).toUpperCase() + status.slice(1) : "Unavailable";
   }
 
   // ------------------------------------------------------------ building blocks
@@ -205,7 +205,7 @@
     var chips = [];
     if (v.status) chips.push(chip(state(v.status), stale ? "" : tone, v.reason || "VPN status"));
     if (many) chips.push(chip(v.host, "", "Host"));
-    if (d && d.interfaceUp) chips.push(chip(age(hs), stale ? "" : handshakeTone, "Handshake", "refresh"));
+    if (d && d.interfaceUp) { if (hs != null) chips.push(chip(age(hs), stale ? "" : handshakeTone, "Handshake", "refresh")); }
     else if (d) chips.push(chip("down", stale ? "" : "crit", "Interface"));
     if (v.live) chips.push(chip("Live", "", "API tunnel checks"));
     if (inventoryStale) chips.push(ageChip(vpnAge));
@@ -225,6 +225,7 @@
       flow.appendChild(qb);
     }
     var where = d ? [d.country ? h("b", { text: d.country }) : null, d.city ? h("span", { text: d.city }) : null] : [];
+    if (!(d && d.exitIp) && (v.status === "down" || v.status === "cutoff") && v.reason) where = [h("span", { text: v.reason })];
     var summary = [
       h("span", { class: "net-vpn-head" }, [dot, h("span", { class: "ops-label" }, [HI.iconNode("shield", "sm"), v.container || "VPN"]), h("span", { class: "net-chips" }, chips)]),
       h("span", { class: "net-ip", text: d && d.exitIp || "—" }),

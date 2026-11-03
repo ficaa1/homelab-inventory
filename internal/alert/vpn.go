@@ -29,7 +29,7 @@ func VPNAlerts(host string, v *inventory.VPN, live *VPNHealth, now time.Time) []
 	} else {
 		for _, d := range v.Dependents {
 			if d.State == "running" && d.Attached != nil && !*d.Attached {
-				status, reason = "cutoff", "a running dependent is attached to a different network namespace"
+				status, reason = "cutoff", d.Name+" is not using the gateway's current network"
 				break
 			}
 		}

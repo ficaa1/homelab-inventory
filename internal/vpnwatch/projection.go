@@ -1,6 +1,7 @@
 package vpnwatch
 
 import (
+	"strings"
 	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/actions"
@@ -16,11 +17,11 @@ func Project(inv *inventory.Inventory, v *inventory.VPN, watch *Watch, manager *
 	for _, a := range alert.VPNAlerts(h.Host, v, nil, time.Now()) {
 		if a.Rule == "vpn.down" {
 			h.Status = "down"
-			h.Reason = a.Message
+			h.Reason = strings.TrimPrefix(a.Message, "VPN "+v.Container+": ")
 		}
 		if a.Rule == "vpn.cutoff" {
 			h.Status = "cutoff"
-			h.Reason = a.Message
+			h.Reason = strings.TrimPrefix(a.Message, "VPN "+v.Container+": ")
 		}
 	}
 	if watch != nil {

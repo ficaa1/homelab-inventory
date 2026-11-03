@@ -52,7 +52,7 @@ background and read the last published observations without waiting for Docker.
 | --- | --- |
 | OK | A recent handshake or successful exit check verifies connectivity. |
 | Down | The gateway is stopped, or repeated exit checks confirm a failure. |
-| Cutoff | A running dependent is still using the gateway's previous network namespace. |
+| Cut off | A running dependent is not using the gateway's current network: it started before the gateway, or the agent saw it in a different network namespace. The reason names the container. |
 | Unknown | There is not enough evidence to diagnose connectivity. |
 
 The reason and status age explain the verdict. A **Live** label identifies API

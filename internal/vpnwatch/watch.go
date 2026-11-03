@@ -397,8 +397,8 @@ func (w *Watch) probe(ctx context.Context, panel bool, now time.Time, inv *inven
 						}
 					}
 				}
-				if cut {
-					status, reason = "cutoff", "a running dependent uses the gateway's previous network namespace"
+				if cut && status != "cutoff" {
+					status, reason = "cutoff", d.Name+" is not using the gateway's current network"
 				}
 			}
 		}
