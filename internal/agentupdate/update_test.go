@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"github.com/ficaa1/homelab-inventory/internal/agentrelease"
 	"github.com/ficaa1/homelab-inventory/internal/inventory"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -117,6 +119,10 @@ func TestInterruptedTrialRollsBackDespiteAPIOutage(t *testing.T) {
 	if e := r.Activate(&s, m); e != nil {
 		t.Fatal(e)
 	}
+	s.TrialStarted = true
+	if e := r.save(s); e != nil {
+		t.Fatal(e)
+	}
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(503) }))
 	defer api.Close()
 	r.URL = api.URL
@@ -151,7 +157,7 @@ func TestNextReportFailureRollsBack(t *testing.T) {
 		t.Fatal("old bundle failed", e)
 	}
 }
-func TestReportPostsCompleteInventoryAndRejectsFatalTrial(t *testing.T) {
+func TestReportPostsCompletePartialInventory(t *testing.T) {
 	r, s, _, _ := setup(t)
 	inv := inventory.Inventory{SchemaVersion: inventory.SchemaVersion, Host: inventory.Host{Hostname: "host-a"}, Tool: inventory.Tool{Version: "new", Revision: 5}, Diagnostics: []inventory.Diagnostic{{Severity: inventory.SeverityError}}}
 	data, _ := json.Marshal(inv)
@@ -167,10 +173,6 @@ func TestReportPostsCompleteInventoryAndRejectsFatalTrial(t *testing.T) {
 	}))
 	defer api.Close()
 	r.URL = api.URL
-	s.Pending = true
-	if e := r.report(context.Background(), s); e == nil || posts != 1 {
-		t.Fatal("fatal trial not posted and refused")
-	}
 	s.Pending = false
 	if e := r.report(context.Background(), s); e != nil {
 		t.Fatal("ordinary partial inventory refused", e)
@@ -219,6 +221,10 @@ func TestRecoveryPointerFailureStillReportsPrevious(t *testing.T) {
 		t.Fatal(e)
 	}
 	if e := r.Activate(&s, m); e != nil {
+		t.Fatal(e)
+	}
+	s.TrialStarted = true
+	if e := r.save(s); e != nil {
 		t.Fatal(e)
 	}
 	// Simulate a filesystem refusing the recovery rename (as ENOSPC can).
@@ -299,6 +305,10 @@ func signedOffer(t *testing.T, r *Runner, m agentrelease.Manifest, files map[str
 	payload, _ := json.Marshal(m)
 	envelope, _ := json.Marshal(agentrelease.Signed{Manifest: payload, Signature: base64.StdEncoding.EncodeToString(ed25519.Sign(key, payload))})
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path == "/agent/status" {
+			w.WriteHeader(204)
+			return
+		}
 		if req.URL.Path == "/agent/manifest" {
 			w.Write(envelope)
 			return
@@ -377,4 +387,152 @@ func TestOutputLimitAppliesDuringCopy(t *testing.T) {
 	if err == nil || len(out.Bytes()) > 16<<20 {
 		t.Fatal("output limit bypassed", len(out.Bytes()), err)
 	}
+}
+
+func TestRetryQuarantineMigrationAndDiagnosticBaseline(t *testing.T) {
+	ctx := context.Background()
+	t.Run("download and disk failure retry without reservation", func(t *testing.T) {
+		for _, code := range []error{fault("download", "network_unreachable", nil), syscall.ENOSPC} {
+			r, s, m, files := setup(t)
+			for i := 0; i < 2; i++ {
+				err := r.Stage(ctx, m, func(agentrelease.Artifact) ([]byte, error) { return nil, code })
+				if err == nil || s.High != 1 {
+					t.Fatal(s, err)
+				}
+			}
+			var posts []uint64
+			signedOffer(t, &r, m, files, &posts)
+			if err := r.Run(ctx); err != nil {
+				t.Fatal(err)
+			}
+			s, _ = r.load()
+			if s.Current != 2 {
+				t.Fatal(s)
+			}
+		}
+	})
+
+	t.Run("download retry and healthy trial delivery retry", func(t *testing.T) {
+		for _, path := range []string{"/agent/artifacts/", "/inventory"} {
+			r, _, m, files := setup(t)
+			var posts []uint64
+			signedOffer(t, &r, m, files, &posts)
+			transport := &failOnceTransport{path: path}
+			r.Client = &http.Client{Transport: transport}
+			err := r.Run(ctx)
+			s, _ := r.load()
+			if path == "/agent/artifacts/" {
+				if err != nil || s.High != 1 || s.Current != 1 || s.Update.LastFailure.Stage != "download" {
+					t.Fatal(s, err)
+				}
+			} else if err == nil || !s.Pending || !s.TrialHealthy || s.Update.Rejected != 0 {
+				t.Fatal(s, err)
+			}
+			if err = r.Run(ctx); err != nil {
+				t.Fatal(err)
+			}
+			s, _ = r.load()
+			if s.Current != 2 || s.Pending || s.Update.Rejected != 0 || s.Update.FirstFailure != nil || transport.calls != 2 {
+				t.Fatal(s, transport.calls)
+			}
+			// Same sequence with different signed bytes cannot silently become current.
+			m.Version = "different"
+			signedOffer(t, &r, m, files, &posts)
+			r.Client = nil
+			if err = r.Run(ctx); err != nil {
+				t.Fatal(err)
+			}
+			s, _ = r.load()
+			if s.Current != 2 || s.Update.Code != "manifest_conflict" {
+				t.Fatal(s)
+			}
+		}
+	})
+	t.Run("rejected stays quiet and higher release repairs", func(t *testing.T) {
+		r, _, m, files := setup(t)
+		original := files["discover-"+platform()]
+		files["discover-"+platform()] = []byte("#!/bin/sh\nif [ \"$1\" = -list ]; then exit 0; fi\nexit 2\n")
+		var posts []uint64
+		signedOffer(t, &r, m, files, &posts)
+		if err := r.Run(ctx); err != nil {
+			t.Fatal(err)
+		}
+		s, _ := r.load()
+		first := s.Update.FirstFailure
+		count := s.Update.Failures
+		for i := 0; i < 3; i++ {
+			if err := r.Run(ctx); err != nil {
+				t.Fatal(err)
+			}
+		}
+		s, _ = r.load()
+		if s.Update.Rejected != 2 || s.Update.Result != "blocked" || s.Update.Failures != count || s.Update.FirstFailure.Code != first.Code || !s.Update.FirstFailure.At.Equal(first.At) {
+			t.Fatal(s)
+		}
+		files = map[string][]byte{"discover-" + platform(): original}
+		m.Sequence = 3
+		signedOffer(t, &r, m, files, &posts)
+		if err := r.Run(ctx); err != nil {
+			t.Fatal(err)
+		}
+		s, _ = r.load()
+		if s.Current != 3 || s.High != 3 || s.Update.FirstFailure != nil || s.Update.Rejected != 0 {
+			t.Fatal(s)
+		}
+	})
+	t.Run("old replay trap migrates once", func(t *testing.T) {
+		r := Runner{Dir: t.TempDir()}
+		write(t, filepath.Join(r.Dir, "state.json"), []byte(`{"high":6,"current":5,"update":{"sequence":5,"result":"failed","failures":466}}`))
+		s, err := r.load()
+		if err != nil || s.Update.Rejected != 6 || s.Update.FirstFailure.Code != "unknown" || s.Update.Result != "blocked" {
+			t.Fatal(s, err)
+		}
+		again, err := r.load()
+		if err != nil || again.Update.Failures != s.Update.Failures {
+			t.Fatal(again, err)
+		}
+	})
+	for _, newError := range []bool{false, true} {
+		t.Run(fmt.Sprintf("diagnostic regression %v", newError), func(t *testing.T) {
+			r, s, m, files := setup(t)
+			inv := inventory.Inventory{SchemaVersion: inventory.SchemaVersion, Host: inventory.Host{Hostname: "host-a"}, Tool: inventory.Tool{Version: "new", Revision: 5}, Diagnostics: []inventory.Diagnostic{{Collector: "storage", Code: "unavailable", Severity: inventory.SeverityError, Message: "ignored local text"}}}
+			script := func(inv inventory.Inventory) []byte {
+				b, _ := json.Marshal(inv)
+				return []byte("#!/bin/sh\nif [ \"$1\" = -list ]; then exit 0; fi\ncat <<'JSON'\n" + string(b) + "\nJSON\n")
+			}
+			write(t, filepath.Join(r.bundle(s.Current), "discover"), script(inv))
+			if newError {
+				inv.Diagnostics = append(inv.Diagnostics, inventory.Diagnostic{Collector: "network", Code: "failed", Severity: inventory.SeverityError})
+			}
+			files["discover-"+platform()] = script(inv)
+			var posts []uint64
+			signedOffer(t, &r, m, files, &posts)
+			if err := r.Run(ctx); err != nil {
+				t.Fatal(err)
+			}
+			s, _ = r.load()
+			if newError {
+				if s.Update.Rejected != 2 || s.Update.FirstFailure.Code != "trial_new_errors" {
+					t.Fatal(s)
+				}
+			} else if s.Current != 2 || s.Pending {
+				t.Fatal(s)
+			}
+		})
+	}
+}
+
+type failOnceTransport struct {
+	path  string
+	calls int
+}
+
+func (f *failOnceTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	if strings.HasPrefix(r.URL.Path, f.path) {
+		f.calls++
+		if f.calls == 1 {
+			return &http.Response{StatusCode: 503, Body: io.NopCloser(strings.NewReader("")), Header: make(http.Header)}, nil
+		}
+	}
+	return http.DefaultTransport.RoundTrip(r)
 }

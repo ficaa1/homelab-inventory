@@ -1,6 +1,7 @@
 package agentupdate
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/fsx"
 	"github.com/ficaa1/homelab-inventory/internal/inventory"
@@ -90,9 +92,43 @@ func ReadToken(path string) (string, error) {
 }
 
 // Post runs a read-only collector, validates its output, and posts the exact
-// bytes, including partial sections and diagnostics. A failed command never posts.
+// discover fields, merging only agent_update. A failed command never posts inventory.
 // A private temporary file bounds memory use and is removed on every outcome.
-func (r Runner) Post(ctx context.Context, discover string) error {
+func (r Runner) Post(ctx context.Context, discover string) (postErr error) {
+	u := inventory.AgentUpdate{Result: "ok"}
+	writable := false
+	var release func()
+	// Lock/state failures can still use the last safe status for first-failure
+	// continuity, but only the lock owner may persist a new local status.
+	if b, e := os.ReadFile(filepath.Join(r.Dir, "post-status.json")); e == nil {
+		var old inventory.AgentUpdate
+		if json.Unmarshal(b, &old) == nil {
+			u = old
+		}
+	}
+	r.stamp(&u, "unsigned")
+	u.AttemptedAt = time.Now().UTC()
+	defer func() {
+		if postErr != nil {
+			failed(&u, "state", postErr)
+		} else {
+			resolved(&u)
+		}
+		r.stamp(&u, "unsigned")
+		if writable {
+			if b, e := json.Marshal(u); e == nil {
+				if e = fsx.WriteAtomic(filepath.Join(r.Dir, "post-status.json"), b, 0600); e != nil {
+					failed(&u, "state", e)
+				}
+			}
+		}
+		if release != nil {
+			release()
+		}
+		if e := r.postStatus(ctx, u); postErr == nil && e != nil {
+			postErr = e
+		}
+	}()
 	if r.Token == "" {
 		return errors.New("bearer token required")
 	}
@@ -104,9 +140,13 @@ func (r Runner) Post(ctx context.Context, discover string) error {
 	}
 	unlock, err := fsx.LockDir(r.Dir)
 	if err != nil {
-		return errors.New("another run holds the lock or state is unavailable")
+		if errors.Is(err, fsx.ErrLocked) {
+			return fault("lock", "lock_busy", nil)
+		}
+		return classify("lock", err)
 	}
-	defer unlock()
+	release = unlock
+	writable = true
 	f, err := os.CreateTemp(r.Dir, ".inventory-*")
 	if err != nil {
 		return err
@@ -117,7 +157,7 @@ func (r Runner) Post(ctx context.Context, discover string) error {
 		return err
 	}
 	if err = command(ctx, discover, []string{"-compact"}, &limitedFile{file: f, left: 16 << 20}); err != nil {
-		return errors.New("discover failed; inventory not posted")
+		return executionError("trial", err)
 	}
 	if _, err = f.Seek(0, io.SeekStart); err != nil {
 		return err
@@ -125,13 +165,33 @@ func (r Runner) Post(ctx context.Context, discover string) error {
 	var inv inventory.Inventory
 	dec := json.NewDecoder(f)
 	if dec.Decode(&inv) != nil || inv.Host.Hostname == "" || inv.SchemaVersion != inventory.SchemaVersion || dec.Decode(new(any)) != io.EOF {
-		return errors.New("invalid discover output; inventory not posted")
+		return trialFault("trial_invalid_output", nil)
+	}
+	if r.Host == "" {
+		r.Host = inv.Host.Hostname
+	}
+	if inv.Host.Hostname != r.Host {
+		return trialFault("trial_invalid_output", nil)
 	}
 	if _, err = f.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
-	_, _, err = r.request(ctx, "POST", "/inventory", f, 65536)
-	return err
+	raw, err := io.ReadAll(f)
+	if err != nil {
+		return err
+	}
+	data, err := mergeUpdate(raw, u)
+	if err != nil {
+		return err
+	}
+	if json.Unmarshal(data, &inv) != nil || inv.Host.Hostname != r.Host || inv.SchemaVersion != inventory.SchemaVersion {
+		return trialFault("trial_invalid_output", nil)
+	}
+	_, _, err = r.request(ctx, "POST", "/inventory", bytes.NewReader(data), 65536)
+	if err != nil {
+		return fault("post", "post_rejected", err)
+	}
+	return nil
 }
 
 type limitedFile struct {
@@ -141,7 +201,7 @@ type limitedFile struct {
 
 func (w *limitedFile) Write(p []byte) (int, error) {
 	if len(p) > w.left {
-		return 0, errors.New("discover output too large")
+		return 0, errOutputTooLarge
 	}
 	n, err := w.file.Write(p)
 	w.left -= n
