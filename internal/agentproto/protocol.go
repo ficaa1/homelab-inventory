@@ -1,6 +1,6 @@
 // Package agentproto is the versioned launcher/worker contract. It deliberately
-// contains no Inventory schema. Protocol 1 accepts schema 5 and passes unknown
-// inventory fields through. Protocol changes require a compatible launcher.
+// validates only the stable envelope. Protocol 1 accepts schema 5 and passes
+// unknown inventory fields through. Protocol changes require a compatible launcher.
 package agentproto
 
 import (
@@ -10,6 +10,8 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/ficaa1/homelab-inventory/internal/inventory"
 )
 
 const Version = 1
@@ -19,14 +21,8 @@ const Product = "homelab-inventory"
 
 var ErrOutput = errors.New("trial_invalid_output")
 
-type Identity struct {
-	Sequence uint64 `json:"sequence"`
-	Digest   string `json:"digest"`
-	Version  string `json:"version"`
-	Revision int    `json:"revision"`
-	Discover string `json:"discover"`
-	Updater  string `json:"agentupdate"`
-}
+type Identity = inventory.AgentIdentity
+
 type Runtime struct {
 	Protocol int    `json:"protocol"`
 	Nonce    string `json:"nonce"`
