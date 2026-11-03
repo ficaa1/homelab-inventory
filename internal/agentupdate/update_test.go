@@ -100,7 +100,7 @@ func TestCorruptDownloadLeavesCurrent(t *testing.T) {
 	}
 }
 func TestFailedJournalLeavesCurrent(t *testing.T) {
-	r, s, m, _ := setup(t)
+	r, s, m, files := setup(t)
 	os.Remove(filepath.Join(r.Dir, "state.json"))
 	os.Mkdir(filepath.Join(r.Dir, "state.json"), 0700)
 	if e := r.Activate(&s, m); e == nil {
@@ -110,6 +110,38 @@ func TestFailedJournalLeavesCurrent(t *testing.T) {
 	if current != "releases/1" || s.Current != 1 {
 		t.Fatal("state failure mutated active bundle")
 	}
+	// A failed rollback journal must still leave a coherent fallback in memory.
+	if err := os.Remove(filepath.Join(r.Dir, "state.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.save(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Stage(context.Background(), m, func(a agentrelease.Artifact) ([]byte, error) { return files[a.Name], nil }); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Activate(&s, m); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(r.Dir, "state.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(r.Dir, "state.json"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Rollback(&s); err == nil || s.Pending || s.Current != 1 || s.High != 2 || s.Update.Rejected != 2 {
+		t.Fatal(s, err)
+	}
+	if err := os.Remove(filepath.Join(r.Dir, "state.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.save(s); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.load(); err != nil {
+		t.Fatal("fallback journal invalid", err)
+	}
+
 }
 func TestInterruptedTrialRollsBackDespiteAPIOutage(t *testing.T) {
 	r, s, m, files := setup(t)

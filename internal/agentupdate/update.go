@@ -259,6 +259,9 @@ func (r Runner) Rollback(s *State) error {
 		next.Update.Result = "rollback"
 	}
 	if err := r.save(next); err != nil {
+		// Preserve a coherent in-memory fallback for emergency reporting. A later
+		// best-effort save must never write pending=true with current=previous.
+		*s = next
 		return classify("state", err)
 	}
 	*s = next

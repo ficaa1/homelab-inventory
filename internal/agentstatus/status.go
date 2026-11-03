@@ -30,7 +30,14 @@ type Receipt struct {
 	Received time.Time `json:"received"`
 }
 
-func member(s, values string) bool { return strings.Contains("|"+values+"|", "|"+s+"|") }
+func member(s, values string) bool {
+	for _, value := range strings.Split(values, "|") {
+		if s == value {
+			return true
+		}
+	}
+	return false
+}
 func ValidStage(s string) bool {
 	return member(s, "check|download|verify|stage_write|selftest|activate|trial|post|lock|state")
 }
