@@ -83,8 +83,12 @@ func (p *Integration) API(ctx context.Context, req plugin.APIRequest) (plugin.AP
 
 // APITimeout allows a cycle to hold an action
 // for up to 20 seconds, and a seeding preview reads every file of a torrent.
+// A tracker search for a whole season can take Sonarr half a minute, and the
+// service drops the result when the request is cut off, so search waits longer.
 func (*Integration) APITimeout(method, path string) time.Duration {
 	switch {
+	case path == "search":
+		return 2 * time.Minute
 	case strings.HasPrefix(path, "seeding"):
 		return 60 * time.Second
 	case path == "status":
