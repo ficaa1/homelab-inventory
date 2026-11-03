@@ -57,10 +57,12 @@ type Stored struct {
 	DigestAppriseURL *string `json:"digest_apprise_url,omitempty"`
 	// NotifyEnabled turns delivery off without discarding the URL, so muting
 	// for an afternoon does not mean re-entering a credential afterwards.
-	NotifyEnabled *bool     `json:"notify_enabled,omitempty"`
-	DashboardName *string   `json:"dashboard_name,omitempty"`
-	IconsFetch    *bool     `json:"icons_fetch,omitempty"`
-	UpdatedAt     time.Time `json:"updated_at,omitempty"`
+	NotifyEnabled          *bool     `json:"notify_enabled,omitempty"`
+	DashboardName          *string   `json:"dashboard_name,omitempty"`
+	IconsFetch             *bool     `json:"icons_fetch,omitempty"`
+	VPNAutofix             *bool     `json:"vpn_autofix,omitempty"`
+	VPNAutofixAfterMinutes *int      `json:"vpn_autofix_after_minutes,omitempty"`
+	UpdatedAt              time.Time `json:"updated_at,omitempty"`
 }
 
 // Defaults are the values from the environment, used wherever Stored is
@@ -79,29 +81,32 @@ type Defaults struct {
 
 // Effective is the resolved configuration: what the notifier actually uses.
 type Effective struct {
-	RunRetention     store.Policy
-	NotifyLevel      alert.Level
-	NotifyInterval   time.Duration
-	DigestInterval   time.Duration
-	AppriseURL       string
-	DigestAppriseURL string
-	NotifyEnabled    bool
-	DashboardName    string
-	IconsFetch       bool
+	RunRetention           store.Policy
+	NotifyLevel            alert.Level
+	NotifyInterval         time.Duration
+	DigestInterval         time.Duration
+	AppriseURL             string
+	DigestAppriseURL       string
+	NotifyEnabled          bool
+	DashboardName          string
+	IconsFetch             bool
+	VPNAutofix             bool
+	VPNAutofixAfterMinutes int
 }
 
 // Resolve layers Stored over Defaults.
 func Resolve(s Stored, d Defaults) Effective {
 	e := Effective{
-		NotifyLevel:      d.NotifyLevel,
-		NotifyInterval:   d.NotifyInterval,
-		DigestInterval:   d.DigestInterval,
-		AppriseURL:       d.AppriseURL,
-		DigestAppriseURL: d.DigestAppriseURL,
-		NotifyEnabled:    true,
-		DashboardName:    d.DashboardName,
-		IconsFetch:       d.IconsFetch,
-		RunRetention:     ResolveRetention(s.RunRetention, d.RunRetention),
+		NotifyLevel:            d.NotifyLevel,
+		NotifyInterval:         d.NotifyInterval,
+		DigestInterval:         d.DigestInterval,
+		AppriseURL:             d.AppriseURL,
+		DigestAppriseURL:       d.DigestAppriseURL,
+		NotifyEnabled:          true,
+		DashboardName:          d.DashboardName,
+		IconsFetch:             d.IconsFetch,
+		RunRetention:           ResolveRetention(s.RunRetention, d.RunRetention),
+		VPNAutofixAfterMinutes: 10,
 	}
 	if s.NotifyLevel != nil {
 		if lv, ok := alert.ParseLevel(*s.NotifyLevel); ok {
@@ -138,6 +143,12 @@ func Resolve(s Stored, d Defaults) Effective {
 	if s.IconsFetch != nil {
 		e.IconsFetch = *s.IconsFetch
 	}
+	if s.VPNAutofix != nil {
+		e.VPNAutofix = *s.VPNAutofix
+	}
+	if s.VPNAutofixAfterMinutes != nil && *s.VPNAutofixAfterMinutes >= 1 && *s.VPNAutofixAfterMinutes <= 1440 {
+		e.VPNAutofixAfterMinutes = *s.VPNAutofixAfterMinutes
+	}
 	return e
 }
 
@@ -148,15 +159,17 @@ func (e Effective) Sending() bool { return e.NotifyEnabled && e.AppriseURL != ""
 // stored. Validation is all-or-nothing so a typo in the interval cannot leave
 // the level changed and the interval not.
 type Update struct {
-	RunRetention     *Retention `json:"run_retention,omitempty"`
-	NotifyLevel      *string    `json:"notify_level,omitempty"`
-	NotifyInterval   *string    `json:"notify_interval,omitempty"`
-	DigestInterval   *string    `json:"digest_interval,omitempty"`
-	AppriseURL       *string    `json:"apprise_url,omitempty"`
-	DigestAppriseURL *string    `json:"digest_apprise_url,omitempty"`
-	NotifyEnabled    *bool      `json:"notify_enabled,omitempty"`
-	DashboardName    *string    `json:"dashboard_name,omitempty"`
-	IconsFetch       *bool      `json:"icons_fetch,omitempty"`
+	RunRetention           *Retention `json:"run_retention,omitempty"`
+	NotifyLevel            *string    `json:"notify_level,omitempty"`
+	NotifyInterval         *string    `json:"notify_interval,omitempty"`
+	DigestInterval         *string    `json:"digest_interval,omitempty"`
+	AppriseURL             *string    `json:"apprise_url,omitempty"`
+	DigestAppriseURL       *string    `json:"digest_apprise_url,omitempty"`
+	NotifyEnabled          *bool      `json:"notify_enabled,omitempty"`
+	DashboardName          *string    `json:"dashboard_name,omitempty"`
+	IconsFetch             *bool      `json:"icons_fetch,omitempty"`
+	VPNAutofix             *bool      `json:"vpn_autofix,omitempty"`
+	VPNAutofixAfterMinutes *int       `json:"vpn_autofix_after_minutes,omitempty"`
 }
 
 // Apply validates an update and merges it into the stored settings.
@@ -260,6 +273,18 @@ func Apply(s Stored, u Update, now time.Time, defaults ...Defaults) (Stored, err
 	if u.IconsFetch != nil {
 		v := *u.IconsFetch
 		out.IconsFetch = &v
+	}
+
+	if u.VPNAutofix != nil {
+		v := *u.VPNAutofix
+		out.VPNAutofix = &v
+	}
+	if u.VPNAutofixAfterMinutes != nil {
+		v := *u.VPNAutofixAfterMinutes
+		if v < 1 || v > 1440 {
+			return s, fmt.Errorf("vpn_autofix_after_minutes must be between 1 and 1440")
+		}
+		out.VPNAutofixAfterMinutes = &v
 	}
 
 	out.UpdatedAt = now
