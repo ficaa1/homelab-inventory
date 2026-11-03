@@ -302,3 +302,18 @@ func (r Runner) Initialize(ctx context.Context, data []byte, input string) error
 	c := Control{Floor: a.Sequence, FloorDigest: a.Digest, State: "committed", Active: a, Fallback: b, Update: agentproto.Update{Mode: "signed", Sequence: a.Sequence, Result: "installed"}}
 	return r.save(&c)
 }
+
+// VerifyInstalled revalidates both durable runtime selections without mutation.
+// Installer resumption must never trust only a saved successful self-test.
+func (r Runner) VerifyInstalled() error {
+	c, e := r.Load()
+	if e != nil {
+		return e
+	}
+	for _, s := range []Slot{c.Active, c.Fallback} {
+		if _, e := r.checkSlot(s); e != nil {
+			return e
+		}
+	}
+	return nil
+}

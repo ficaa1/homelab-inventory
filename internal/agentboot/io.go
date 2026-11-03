@@ -27,6 +27,7 @@ type Config struct {
 	URL       string `json:"api_url"`
 	TokenFile string `json:"token_file"`
 	AllowHTTP bool   `json:"allow_http,omitempty"`
+	Dataset   string `json:"dataset,omitempty"`
 }
 type Runner struct {
 	Config

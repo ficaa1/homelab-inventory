@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/ficaa1/homelab-inventory/internal/agentmount"
 	"github.com/ficaa1/homelab-inventory/internal/agentproc"
 	"github.com/ficaa1/homelab-inventory/internal/agentproto"
 	"github.com/ficaa1/homelab-inventory/internal/agentrelease"
@@ -367,6 +368,11 @@ func (r Runner) resolveCollection(ctx context.Context, c *Control, phase string,
 // Run holds one stable lock inode. Status can still be read or sent when that
 // lock is busy or the control records are corrupt. Only Run writes the floor.
 func (r Runner) Run(ctx context.Context) (runErr error) {
+	if r.Dataset != "" {
+		if e := agentmount.CheckDataset(r.Dataset); e != nil {
+			return failure("state", "state_corrupt")
+		}
+	}
 	aggregate, cancel := context.WithTimeout(ctx, 12*time.Minute)
 	defer cancel()
 	statusParent := ctx
