@@ -100,6 +100,11 @@ if [ "$updates" = slots ]; then
     if [ "$scheduler" = truenas-cron ]; then
       case $state in /mnt/*) ;; *) die 'choose a mounted dataset directory under /mnt';; esac
       case $state in *[!a-zA-Z0-9/_.-]*|*/../*|*/..|*/./*|*/.|*//*|*/) die 'state directory must be an absolute plain path without traversal';; esac
+      zfs_mounts=$(zfs list -H -o name,mountpoint,mounted) || die 'cannot inspect configured ZFS dataset mountpoints'
+      printf '%s\n' "$zfs_mounts" | awk -F '\t' -v path="$state" '
+        NF != 3 { exit 1 }
+        $2 ~ /^\// && $3 != "yes" && ($2 == "/" || path == $2 || index(path, $2 "/") == 1) { exit 1 }
+      ' || die 'state directory is at or below an unmounted ZFS dataset; mount it first or choose a new path'
       probe=$state
       while [ ! -d "$probe" ]; do probe=${probe%/*}; [ -n "$probe" ] || die 'dataset is not mounted'; done
       mount_info=$(findmnt -n -T "$probe" -o TARGET,FSTYPE,OPTIONS) || die 'dataset mount cannot be read'
@@ -109,23 +114,22 @@ if [ "$updates" = slots ]; then
       [ "$state" != "$1" ] || die 'state directory must be a dedicated subdirectory, not a pool or dataset mountpoint'
       case $state/ in "$1"/*) ;; *) die 'state directory is outside mounted dataset';; esac
     fi
+    if [ "$scheduler" = truenas-cron ]; then bootstrap_parent=$1; fi
     # Refuse symlink ancestors before touching directory permissions.
     probe=$state
     while [ "$probe" != / ]; do
       [ ! -L "$probe" ] || die 'state path must contain only real directories'
       probe=${probe%/*}; [ -n "$probe" ] || probe=/
     done
-    if [ "$scheduler" = truenas-cron ] && [ -d "$state" ]; then
-      if [ ! -f "$state/.homelab-inventory" ] || [ -L "$state/.homelab-inventory" ] || [ "$(cat "$state/.homelab-inventory")" != homelab-inventory ]; then
-        [ -z "$(find "$state" -mindepth 1 -maxdepth 1 -print -quit)" ] || die 'state directory must be new, empty, or marked by homelab-inventory; choose a dedicated subdirectory'
-      fi
-    fi
-    mkdir -p "$state"
     if [ "$scheduler" = truenas-cron ]; then
-      printf 'homelab-inventory\n' > "$state/.homelab-inventory"
+      # Leave state untouched for Go's authoritative ownership/marker check.
+      # Execute bootstrap on the already validated dataset, even if /tmp is noexec.
+      bootstrap_dir=$(mktemp -d "$bootstrap_parent/.bootstrap-XXXXXX")
+    else
+      mkdir -p "$state"
+      chmod 700 "$state"
+      bootstrap_dir=$(mktemp -d "$state/.bootstrap-XXXXXX")
     fi
-    chmod 700 "$state"
-    bootstrap_dir=$(mktemp -d "$state/.bootstrap-XXXXXX")
     trap 'rm -rf "$bootstrap_dir"' 0
     trap 'exit 1' HUP INT TERM
     for file in SHA256SUMS linux-$arch/agentboot; do

@@ -3,12 +3,15 @@ package agentmount
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
+	"time"
 )
 
 // Set only by the explicitly tagged integration executable.
@@ -106,6 +109,44 @@ func checkMountBelow(dir string, mounts io.Reader, parent string) error {
 			}
 		}
 	}
+	return checkZFSMountpoints(dir)
+}
+
+// A mounted parent does not prove that a locked/noauto child is mounted. Files
+// written into its empty mountpoint would be hidden when it later mounts.
+func checkZFSMountpoints(dir string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "zfs", "list", "-H", "-o", "name,mountpoint,mounted")
+	pipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return errors.New("cannot inspect configured ZFS dataset mountpoints")
+	}
+	if err = cmd.Start(); err != nil {
+		return errors.New("cannot inspect configured ZFS dataset mountpoints")
+	}
+	// Always reap the bounded read-only command, including on parse failures.
+	defer func() { cancel(); _ = cmd.Wait() }()
+	limited := &io.LimitedReader{R: pipe, N: 4 << 20}
+	scanner := bufio.NewScanner(limited)
+	rows := 0
+	for scanner.Scan() {
+		rows++
+		fields := strings.Split(scanner.Text(), "\t")
+		if len(fields) != 3 {
+			return errors.New("invalid ZFS dataset mountpoint information")
+		}
+		point := fields[1]
+		if filepath.IsAbs(point) && beneath(dir, filepath.Clean(point)) && fields[2] != "yes" {
+			return errors.New("state directory is at or below an unmounted ZFS dataset; mount it first or choose a new path")
+		}
+	}
+	if scanner.Err() != nil || limited.N == 0 || rows == 0 {
+		return errors.New("cannot read ZFS dataset mountpoints")
+	}
+	if err := cmd.Wait(); err != nil {
+		return errors.New("cannot inspect configured ZFS dataset mountpoints")
+	}
 	return nil
 }
 
@@ -145,8 +186,15 @@ const Marker = ".homelab-inventory"
 
 // ValidateStatePath is also used by the API, which cannot inspect a remote host.
 func ValidateStatePath(dir string) error {
-	if !filepath.IsAbs(dir) || filepath.Clean(dir) != dir || !strings.HasPrefix(dir, "/mnt/") || len(strings.Split(strings.Trim(dir, "/"), "/")) < 3 || strings.ContainsAny(dir, " \t\r\n\x00%\"'\\") {
-		return errors.New("TrueNAS state_dir must be a dedicated subdirectory below /mnt/POOL, never a pool or dataset root; existing directories must be empty or marked by homelab-inventory")
+	plain := true
+	for _, c := range dir {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || strings.ContainsRune("/_.-", c)) {
+			plain = false
+			break
+		}
+	}
+	if !plain || !filepath.IsAbs(dir) || filepath.Clean(dir) != dir || !strings.HasPrefix(dir, "/mnt/") || len(strings.Split(strings.Trim(dir, "/"), "/")) < 3 {
+		return errors.New("TrueNAS state_dir must be a dedicated plain path below /mnt/POOL, never a pool or dataset root; choose a new path or an existing root-owned 0700 empty directory")
 	}
 	return nil
 }
@@ -161,7 +209,13 @@ func CheckDedicated(dir string) error {
 		return errors.New("cannot inspect dedicated state directory")
 	}
 	if len(entries) == 0 {
-		return nil
+		st, err := os.Lstat(dir)
+		if err == nil && st.IsDir() && st.Mode()&(os.ModePerm|os.ModeSetuid|os.ModeSetgid|os.ModeSticky) == 0700 {
+			if owner, ok := st.Sys().(*syscall.Stat_t); ok && owner.Uid == 0 {
+				return nil
+			}
+		}
+		return errors.New("existing empty state directory must already be root-owned with mode 0700; give a new path")
 	}
 	st, err := os.Lstat(filepath.Join(dir, Marker))
 	if err == nil && st.Mode().IsRegular() {
@@ -170,7 +224,7 @@ func CheckDedicated(dir string) error {
 			return nil
 		}
 	}
-	return errors.New("state directory must be new, empty, or marked by homelab-inventory; choose a dedicated subdirectory")
+	return errors.New("state directory must be new, root-owned 0700 and empty, or marked by homelab-inventory; give a new path")
 }
 
 // IsTrueNAS avoids invoking middleware just to identify the host.

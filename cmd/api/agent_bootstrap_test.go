@@ -204,7 +204,7 @@ func TestSignedEnrollmentCommandsBindingAndStatus(t *testing.T) {
 
 	// Invalid options and pre-promotion non-canaries must not mint codes.
 	before := len(s.setup.List())
-	for _, body := range []string{`{"hostname":"host-b"}`, `{"scheduler":"other"}`, `{"scheduler":"truenas-cron"}`, `{"scheduler":"truenas-cron","state_dir":"relative"}`, `{"scheduler":"truenas-cron","state_dir":"/mnt/pool/agent","replace_schedule":"-1"}`, `{"hostname":"../escape"}`} {
+	for _, body := range []string{`{"hostname":"host-b"}`, `{"scheduler":"other"}`, `{"scheduler":"truenas-cron"}`, `{"scheduler":"truenas-cron","state_dir":"relative"}`, `{"scheduler":"truenas-cron","state_dir":"/mnt/pool/agent","replace_schedule":"-1"}`, `{"hostname":"../escape"}`, `{"scheduler":"truenas-cron","state_dir":"/mnt/tank/agent$"}`, `{"scheduler":"truenas-cron","state_dir":"/mnt/tank/agent;"}`} {
 		if w := request(body); w.Code != 400 && w.Code != 409 {
 			t.Fatal("invalid enrollment accepted")
 		}

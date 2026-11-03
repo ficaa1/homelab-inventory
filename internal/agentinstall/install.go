@@ -52,6 +52,10 @@ type intent struct {
 	TimerActive  bool              `json:"timer_active"`
 }
 
+func waitingForAgent() {
+	fmt.Fprintln(os.Stderr, "agentboot: waiting for the running agent to finish (up to 3 minutes)")
+}
+
 func safe(msg string) error { return errors.New(msg) }
 func privateDir(path string) error {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path || strings.ContainsAny(path, " \t\r\n'\"\\") {
@@ -312,9 +316,6 @@ func Install(ctx context.Context, o Options) (retErr error) {
 		return safe("TrueNAS requires --scheduler truenas-cron with a dedicated --state-dir")
 	}
 	if o.Scheduler == "truenas-cron" {
-		if e := agentmount.CheckDedicated(o.Dir); e != nil {
-			return e
-		}
 		if e := agentmount.CheckDataset(o.Dir); e != nil {
 			return e
 		}
@@ -322,14 +323,21 @@ func Install(ctx context.Context, o Options) (retErr error) {
 		return safe("--replace-schedule requires truenas-cron")
 	}
 	if o.Scheduler == "truenas-cron" {
-		if e := os.MkdirAll(o.Dir, 0700); e != nil {
+		if e := agentmount.CheckDedicated(o.Dir); e != nil {
 			return e
+		}
+		_, statErr := os.Lstat(o.Dir)
+		_, markerErr := os.Lstat(filepath.Join(o.Dir, agentmount.Marker))
+		// Only new or previously marked directories may change ownership/mode.
+		if os.IsNotExist(statErr) || markerErr == nil {
+			if e := privateDir(o.Dir); e != nil {
+				return e
+			}
 		}
 		if e := fsx.WriteAtomic(filepath.Join(o.Dir, agentmount.Marker), []byte("homelab-inventory\n"), 0600); e != nil {
 			return e
 		}
-	}
-	if e := privateDir(o.Dir); e != nil {
+	} else if e := privateDir(o.Dir); e != nil {
 		return e
 	}
 	migration := filepath.Join(o.Dir, ".migration")
@@ -356,9 +364,9 @@ func Install(ctx context.Context, o Options) (retErr error) {
 			return e
 		}
 	}
-	oldUnlock, e := fsx.LockDir(o.Dir)
+	oldUnlock, e := agentboot.LockDirWait(ctx, o.Dir, 3*time.Minute, waitingForAgent)
 	if e != nil {
-		return safe("agent is running; retry after it finishes")
+		return safe("cannot acquire agent lock within the installation wait")
 	}
 	defer func() {
 		if oldUnlock != nil {
@@ -703,7 +711,10 @@ func Install(ctx context.Context, o Options) (retErr error) {
 	fmt.Fprintln(os.Stderr, "agentboot: sending first signed report; this may take several minutes")
 	// A real accepted report, independently witnessed by the launcher, precedes
 	// schedule adoption. Exit zero from a worker is never sufficient.
-	if e = r.Run(ctx); e != nil {
+	if e = r.RunWithLockWait(ctx, 3*time.Minute, waitingForAgent); e != nil {
+		if o.Scheduler == "systemd" && !in.HadSchedule {
+			return safe("first signed report failed; the new schedule will retry")
+		}
 		return safe("first signed report failed; restoring previous schedule")
 	}
 	if o.Scheduler == "truenas-cron" {

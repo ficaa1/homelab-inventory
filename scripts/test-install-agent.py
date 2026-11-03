@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Disposable installer/poster/update integration check; no root or systemd."""
 import json
+import fcntl
 import os
 from pathlib import Path
 import platform
@@ -49,6 +50,7 @@ def main():
         payload = json.dumps(raw)
         collector_script = ("#!/bin/sh\nif [ \"${1:-}\" = -list ]; then exit 0; fi\nprintf '%s' '" + payload
                             + "' | sed \"s/__TIME__/$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)/\"\n")
+        collector_script = collector_script.replace("fi\nprintf", 'fi\n[ ! -e "' + str(tmp/'collect-fail') + '" ] || exit 1\nprintf')
         for target in ("amd64", "arm64"):
             binary = artifacts / f"discover-linux-{target}"
             binary.write_text(collector_script)
@@ -252,13 +254,21 @@ def main():
                 fakebin.mkdir()
                 fake_systemd = fakebin / "systemctl"
                 fake_systemd.write_text("""#!/usr/bin/env python3
-import json, os, pathlib, shlex, signal, subprocess, sys
+import json, os, pathlib, shlex, signal, subprocess, sys, time
 root = pathlib.Path(os.environ['TEST_SCHEDULE_ROOT'])
 log = root / 'systemd.log'
 with log.open('a') as f: f.write(' '.join(sys.argv[1:]) + '\\n')
 mode = root / 'interrupt'
 if mode.exists() and sys.argv[1:] == ['enable', '--now', 'homelab-discover.timer']:
  sig=int(mode.read_text()); mode.unlink(); os.kill(os.getppid(), sig)
+lock_request = root/'report-lock'
+if lock_request.exists() and sys.argv[1:]==['enable', '--now', 'homelab-discover.timer']:
+ lock_path=lock_request.read_text(); lock_request.unlink()
+ ready=root/'lock-ready'
+ child="import fcntl,pathlib,sys,time; f=open(sys.argv[1],'w'); pathlib.Path(sys.argv[2]).touch(); fcntl.flock(f,fcntl.LOCK_EX); time.sleep(2)"
+ subprocess.Popen([sys.executable,'-c',child,lock_path,str(ready)], stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+ while not ready.exists(): time.sleep(.01)
+ ready.unlink()
 active=root/'timer-active'
 if sys.argv[1:2]==['stop'] and sys.argv[-1]=='homelab-discover.timer': active.unlink(missing_ok=True)
 if sys.argv[1:2] in (['enable'], ['start']) and sys.argv[-1]=='homelab-discover.timer': active.touch()
@@ -295,7 +305,17 @@ sys.exit(0)
                 assert (migrated / "etc/systemd/system/homelab-discover.service").read_bytes() == old_service
                 assert json.loads((ms / ".migration/intent.json").read_text())["phase"] == "prepared"
                 # Already redeemed token resumes even if enrollment would fail.
-                run(*conversion)
+                # A legacy report holding the shared lock must finish without
+                # making the paste fail. Keep the lock until the wait is visible.
+                with (ms / 'lock').open('w') as held:
+                    fcntl.flock(held, fcntl.LOCK_EX)
+                    paste = subprocess.Popen(conversion, cwd=ROOT, env=env,
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    line = paste.stderr.readline()
+                    assert b'waiting for the running agent to finish' in line, line
+                    fcntl.flock(held, fcntl.LOCK_UN)
+                    _, error = paste.communicate(timeout=60)
+                    assert paste.returncode == 0, error[:500]
                 assert json.loads((ms / "control.0").read_text())["payload"]["floor"] == 4
                 # Existing-slots rollback must restart its old launcher without
                 # recursively resuming the installer under its own lock.
@@ -305,7 +325,9 @@ sys.exit(0)
                 result = subprocess.run(reinstall, cwd=ROOT, env=env, capture_output=True, timeout=60)
                 assert result.returncode != 0
                 assert json.loads((ms / '.migration/intent.json').read_text())['phase'] == 'prepared'
-                run(*reinstall)
+                (tmp/'report-lock').write_text(str(ms/'lock'))
+                result = run(*reinstall)
+                assert b'waiting for the running agent to finish' in result.stderr
                 # A fresh code recovers an obsolete installed credential without
                 # changing the installed token during preparation.
                 (ms / 'token').write_text(secrets.token_hex(32)+'\n')
@@ -334,6 +356,22 @@ sys.exit(0)
                     if death == signal.SIGKILL:
                         assert json.loads((ins / ".migration/intent.json").read_text())["phase"] == "committed"
                     run(str(fake_systemd), 'tick')  # working scheduled report after recovery
+                # A fresh host has nothing to restore. Its retained schedule
+                # must finish the migration once the collector recovers.
+                fresh = tmp/'fresh-retry'
+                fresh_install = [installer, '--prefix', str(fresh), '--api-url', origin,
+                    '--download', '--updates', 'slots', '--token-file', str(token_file)]
+                (tmp/'collect-fail').touch()
+                result = subprocess.run(fresh_install, cwd=ROOT, env=env, capture_output=True, timeout=60)
+                assert result.returncode != 0
+                assert b'first signed report failed; the new schedule will retry' in result.stderr
+                fresh_state = fresh/'var/lib/homelab-agent'
+                assert json.loads((fresh_state/'.migration/intent.json').read_text())['phase']=='switching'
+                (tmp/'collect-fail').unlink()
+                env['TEST_TIMER_UNIT'] = str(fresh/'etc/systemd/system/homelab-discover.service')
+                run(str(fake_systemd), 'tick')
+                assert json.loads((fresh_state/'.migration/intent.json').read_text())['phase']=='committed'
+                run(str(fake_systemd), 'tick')
                 env.pop('AGENTINSTALL_TEST_SYSTEMD')
 
                 # TrueNAS config-DB fixture: real signed launcher/report, fake
@@ -346,6 +384,12 @@ sys.exit(0)
                 mounts = tmp / 'mountinfo'
                 mounts.write_text(f"1 0 0:1 / / rw - rootfs rootfs rw\n2 1 0:2 / {dataset} rw - zfs pool/agents rw\n")
                 env['AGENTINSTALL_TEST_MOUNTINFO'] = str(mounts)
+                zfsfile = tmp / 'zfs-list'
+                zfsfile.write_text(f'tank/agents\t{dataset}\tyes\n')
+                env['TEST_ZFS_LIST'] = str(zfsfile)
+                zfs = fakebin / 'zfs'
+                zfs.write_text("#!/usr/bin/env python3\nimport os, pathlib, sys\nassert sys.argv[1:]==['list', '-H', '-o', 'name,mountpoint,mounted']\nsys.stdout.write(pathlib.Path(os.environ['TEST_ZFS_LIST']).read_text())\n")
+                zfs.chmod(0o755)
                 jobsfile = tmp / 'cron.json'
                 predecessor = {'id': 7, 'user': 'root', 'command': '/mnt/example/previous/agent',
                     'description': 'previous-agent', 'enabled': True, 'stdout': False, 'stderr': False,
@@ -379,16 +423,41 @@ print(json.dumps(result))
                     '--replace-schedule', 'previous-agent', '--binary-dir', str(artifacts),
                     '--token-file', str(token_file), '--public-key', str(public),
                     '--manifest', str(release_tree / '4/runtime.json'), '--artifacts', str(artifacts)]
+                # Exercise served bootstrap too, with only its /mnt prefix
+                # redirected to the disposable synthetic mount fixture.
+                cron_installer = tmp/'install-cron.sh'
+                cron_installer.write_text(installer_copy.read_text().replace(
+                    'case $state in /mnt/*)', f'case $state in {dataset}/*)'))
+                cron_installer.chmod(0o755)
+                findmnt = fakebin/'findmnt'
+                findmnt.write_text(f'#!/bin/sh\nprintf "%s zfs rw\\n" "{dataset}"\n')
+                findmnt.chmod(0o755)
+                served_cronargs = list(cronargs)
+                served_cronargs[0] = str(cron_installer)
+                served_cronargs.append('--download')
                 # Mount roots and non-dedicated share directories retain mode/data.
                 shared = dataset/'share'
                 shared.mkdir(mode=0o755)
                 (shared/'unrelated').write_text('keep')
-                for refused in (dataset, shared):
-                    mode = refused.stat().st_mode
-                    bad = list(cronargs); bad[bad.index(str(cronstate))] = str(refused)
-                    result = subprocess.run(bad, cwd=ROOT, env=env, capture_output=True, timeout=60)
-                    assert result.returncode != 0 and refused.stat().st_mode == mode
-                    assert not (refused/'.migration').exists()
+                empty = dataset/'existing-empty'
+                empty.mkdir(mode=0o755)
+                malformed = dataset/'malformed'
+                malformed.mkdir(mode=0o755)
+                (malformed/'.homelab-inventory').write_text('homelab-inventory\n\n')
+                child = dataset/'locked'
+                child.mkdir(mode=0o700)
+                zfsfile.write_text(f'tank/agents\t{dataset}\tyes\ntank/locked\t{child}\tno\n')
+                for refused in (dataset, shared, empty, malformed, child, child/'agent'):
+                    mode = refused.stat().st_mode if refused.exists() else None
+                    for command in (cronargs, served_cronargs):
+                        bad = list(command); bad[bad.index(str(cronstate))] = str(refused)
+                        result = subprocess.run(bad, cwd=ROOT, env=env, capture_output=True, timeout=60)
+                        assert result.returncode != 0
+                        assert (refused.stat().st_mode if refused.exists() else None) == mode
+                        assert not (refused/'.migration').exists()
+                        if refused != malformed:
+                            assert not (refused/'.homelab-inventory').exists()
+                zfsfile.write_text(f'tank/agents\t{dataset}\tyes\n')
                 # Failure after the predecessor was disabled must re-enable it
                 # and remove the newly created replacement job.
                 Path(str(jobsfile)+'.fail').touch()
@@ -418,7 +487,7 @@ print(json.dumps(result))
                 assert own['user']=='root' and own['enabled'] and own['schedule']['minute']=='*/15'
                 assert own['stdout'] and own['stderr'] and own['command'].endswith(' -log')
                 assert str(cronstate / 'agentboot') in own['command']
-                run(*cronargs)  # stable ID, exactly one owned job
+                run(*served_cronargs)  # stable ID, exactly one owned job
                 assert len(json.loads(jobsfile.read_text())) == 2
                 assert (cronstate / 'token').stat().st_mode & 0o777 == 0o600
                 assert not (cronstate / 'usr').exists() and not (cronstate / 'etc').exists()
