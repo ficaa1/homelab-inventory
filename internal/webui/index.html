@@ -1151,6 +1151,16 @@ button.ops-tile { cursor:pointer; }
 .result:empty { display: none; }
 
 /* The add-a-host panel: shared by the wizard and Admin's drawer. */
+.enroll-options { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:20px; }
+.enroll-options label { display:grid;gap:6px;min-width:0;font-size:14px;color:var(--text-2); }
+.enroll-options input,.enroll-options select { width:100%;min-width:0;min-height:44px;box-sizing:border-box;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:4px;padding:10px;font:inherit; }
+.enroll-options .enroll-cron { grid-column:1/-1;display:grid;gap:12px; }
+.enroll-options .enroll-cron[hidden] { display:none; }
+.enroll-status { width:100%;font-size:13px;line-height:1.6;overflow-wrap:anywhere; }
+.enroll-status dl { display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;margin:8px 0 16px; }
+.enroll-status dt { color:var(--text-3); }.enroll-status dd { margin:0;overflow-wrap:anywhere; }
+.agent-host { flex-wrap:wrap; }.agent-host>.btn { max-width:100%;white-space:normal; }
+@media(max-width:600px){.enroll-options{grid-template-columns:1fr}.enroll-status dl{grid-template-columns:1fr}.enroll-status dd{margin-bottom:6px}}
 .enroll-meta { display: flex; align-items: center; gap: 8px 16px; flex-wrap: nowrap; font-size: 15px; color: var(--text-2); margin: 0 0 24px; }
 .enroll-meta b { font-family: var(--mono); font-weight: 600; color: var(--text); letter-spacing: 0.02em; }
 .enroll-meta .left { font-variant-numeric: tabular-nums; }
@@ -1183,6 +1193,7 @@ button.ops-tile { cursor:pointer; }
 .drawer .enroll .btn:hover:not(:disabled) { background: color-mix(in srgb, var(--surface-3) 88%, var(--text)); }
 .drawer .enroll .btn:active:not(:disabled) { transform: scale(0.97); }
 .drawer .enroll .cmd .btn { background: var(--surface); }
+.drawer .enroll-options .btn { min-height:44px; }
 .drawer .enroll .enroll-meta, .drawer .enroll .enroll-note, .drawer .enroll .enroll-fresh, .drawer .enroll .arrivals li, .drawer .enroll-label { font-size: 14px; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2448,6 +2459,14 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     var c = agentCanary();
     return {auto: c ? c.charAt(0).toUpperCase() + c.slice(1) + " only" : "Initial rollout", promote: "All hosts", hold: "Hold"}[mode] || "Unavailable";
   }
+  function signedEnrollmentHTML(a) {
+    if (!a) return '';
+    var release = a.release, row = function(k,v) { return '<dt>' + esc(k) + '</dt><dd>' + esc(v || '—') + '</dd>'; };
+    return '<div class="enroll-status"><b>' + esc(a.ready ? 'Signed enrollment ready' : a.configured ? 'Signed enrollment needs attention' : 'Unsigned installation') + '</b><div>' + esc(a.reason || '') + '</div><dl>' +
+      row('Key fingerprint (SHA-256)', a.key_fingerprint) + row('Canaries', (a.canary_hosts || []).join(', ') || 'None configured') +
+      row('Release', release ? '#' + release.sequence + ' · ' + release.version + ' · r' + release.revision + ' · ' + release.mode : '') +
+      row('Enrollment baseline', a.baseline_sequence ? '#' + a.baseline_sequence : '') + '</dl></div>';
+  }
   function renderAgentFleet() {
     var a = agentStatus, c = agentCanary();
     // A sign-in can change offers; without one, the buttons wait for it, as the original does.
@@ -2455,7 +2474,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     $("agent-fleet").innerHTML = '<div class="agent-heading">' + ic("box") + '<b>Agents</b><span class="pill ' + (!a || !a.configured ? "" : a.unavailable || a.mode === "hold" ? "warning" : "good") + '">' + esc(a ? !a.configured ? "Signed updates not set up" : a.unavailable ? "Release unavailable" : agentModeLabel(a.mode) : "Unavailable") + '</span>' + (a && a.sequence ? '<span class="muted">#' + a.sequence + '</span>' : '') + '</div>' +
       (a && a.configured && !a.unavailable && offersEnabled() ? '<div class="agent-controls">' + [ ["promote","Promote all"], ["hold","Hold"], ["auto", c ? "Back to " + c + "-only" : "Initial rollout"] ].map(function(x) {
         return '<button class="btn" type="button" data-agent-action="' + x[0] + '"' + (needsSession || a.ssh_hold || agentBusy ? ' disabled' : '') + '>' + esc(x[1]) + '</button>';
-      }).join('') + '</div>' + (a.ssh_hold ? '<span class="pill warning">SSH hold</span>' : needsSession ? '<a class="btn" href="/auth/login">' + ic("lock","sm") + esc("Sign in with " + str((auth.status && auth.status.provider) || "your account")) + '</a>' : '') : '') + (!offersEnabled() ? '<div class="sub">' + esc(PROMOTION_HINT) + '</div>' : '');
+      }).join('') + '</div>' + (a.ssh_hold ? '<span class="pill warning">SSH hold</span>' : needsSession ? '<a class="btn" href="/auth/login">' + ic("lock","sm") + esc("Sign in with " + str((auth.status && auth.status.provider) || "your account")) + '</a>' : '') : '') + (!offersEnabled() ? '<div class="sub">' + esc(PROMOTION_HINT) + '</div>' : '') + signedEnrollmentHTML(a && a.signed_updates);
   }
   function refreshAgents() {
     return api("/agent/status").catch(function(err) { if (err.unauthorized) showGate(true); return null; }).then(function(status) {
@@ -2481,7 +2500,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     var row=function(k,v){return '<dt>'+k+'</dt><dd>'+esc(v||'—')+'</dd>';};
     return '<div class="agent-host"><details'+(detail?' open':'')+'><summary aria-label="Agent details for '+esc(h.name)+'">' + ic('box','sm') + '<span class="agent-seq" title="Running → offered">'+seq+' → '+offered+'</span><span class="pill '+(bad?'warning':p.state==='current'?'good':'')+'">'+esc(p.label || 'Update status not reported')+(p.paused?' · paused':'')+'</span></summary>' +
       '<dl>'+row('Running',seq)+row('Offered',offered)+row('Rejected',p.rejected?'#'+p.rejected:'—')+row('Updater',p.updater)+row('Discover',h.agent_version)+row('Revision',h.agent_revision?'r'+h.agent_revision:'—')+row('First failure',p.reason)+row('Failures',u ? String(u.failures) : '—')+row('Attempt',u && u.attempted_at && !/^0001-/.test(u.attempted_at) ? new Date(u.attempted_at).toLocaleString() : '—')+'</dl></details>' +
-      (detail?'':'<button type="button" class="btn" data-agent-action="update" data-agent-host="'+esc(h.name)+'"'+(disabled?' disabled':'')+'>Update</button>')+'</div>';
+      (detail?'':'<button type="button" class="btn" data-agent-action="update" data-agent-host="'+esc(h.name)+'"'+(disabled?' disabled':'')+'>Update</button>')+(agentStatus && agentStatus.configured && !p.active ? '<button type="button" class="btn" data-enable-updates="'+esc(h.name)+'">Enable signed updates</button>' : '')+'</div>';
   }
   function renderHosts() {
     var hosts = data.hosts, rep = data.alerts;
@@ -8071,7 +8090,14 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   function enrollPanelHTML() {
     return '<div class="enroll">' +
       '<div class="enroll-fresh" data-enroll-fresh role="status"></div>' +
-      '<div class="enroll-label">Linux, run as a user with sudo</div>' +
+      '<div class="enroll-options"><label>Hostname (optional)<input data-enroll-host autocomplete="off" spellcheck="false" maxlength="128" placeholder="Use this machine’s hostname"></label>' +
+      '<label>Schedule<select data-enroll-scheduler><option value="systemd">Linux · systemd</option><option value="truenas-cron">TrueNAS · cron</option></select></label>' +
+      '<div class="enroll-cron" data-enroll-cron hidden><label>Persistent dataset directory<input data-enroll-state placeholder="/mnt/pool/agent" autocomplete="off" spellcheck="false"></label>' +
+      '<label>Replace cron job ID or description (optional)<input data-enroll-replace autocomplete="off"></label><span class="sub">The selected job is disabled only after the new agent reports successfully.</span></div>' +
+      '<label>Run command as<select data-enroll-user><option value="linux">User with sudo</option><option value="root">Root</option></select></label>' +
+      '<button class="btn" type="button" data-enroll-new>Generate command</button></div>' +
+      '<div data-enroll-status role="status"></div>' +
+      '<div class="enroll-label" data-enroll-label>Linux, run as a user with sudo</div>' +
       '<div data-enroll-cmd>' + cmdBox("Getting a code…", { shell: true, big: true, label: "Install command" }) + '</div>' +
       '<div class="enroll-meta" data-enroll-meta></div>' +
       '<div data-enroll-note></div>' +
@@ -8082,14 +8108,20 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 
   // baseline: hostnames already known (Admin), so only new arrivals show.
   // null in the wizard, where every host reporting is news.
-  function startEnroll(root, baseline) {
+  function startEnroll(root, baseline, host, scheduler) {
     stopEnroll();
     var s = enrollSession = { root: root, baseline: baseline, code: "", expires: 0, stopCount: null,
       poll: 0, enrolled: {}, reporting: {}, order: [], minting: false, dead: false, baselineSet: {} };
     (baseline || []).forEach(function (name) { s.baselineSet[name] = true; });
     function q(sel) { return root.querySelector("[data-enroll-" + sel + "]"); }
     s.q = q;
-    mintCode(s, "");
+    q("host").value = host || "";
+    q("scheduler").value = scheduler || "systemd";
+    q("cron").hidden = q("scheduler").value !== "truenas-cron";
+    q("user").value = scheduler === "truenas-cron" ? "root" : "linux";
+    if (host) q("host").readOnly = true;
+    if (scheduler !== "truenas-cron") mintCode(s, "");
+    else q("cmd").textContent = "Choose a persistent dataset directory, then generate the command.";
     s.poll = setInterval(function () { pollEnroll(s); }, 3000);
     pollEnroll(s);
   }
@@ -8106,12 +8138,25 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   function mintCode(s, fresh) {
     if (s.minting || s.dead) return;
     s.minting = true;
+    s.commands = null;
+    if (s.stopCount) s.stopCount();
+    Array.prototype.forEach.call(s.root.querySelectorAll(".enroll-options input,.enroll-options select,.enroll-options button"), function(el) { el.disabled = true; });
     var cmdEl = s.q("cmd"), meta = s.q("meta");
     meta.innerHTML = "Getting a code…";
-    write("/setup/enroll", "POST", {}).then(function (r) {
+    var request = {hostname:s.q("host").value.trim(), scheduler:s.q("scheduler").value};
+    if (request.scheduler === "truenas-cron") {
+      request.state_dir = s.q("state").value.trim(); request.replace_schedule = s.q("replace").value.trim();
+    }
+    var requestUser = s.q("user").value;
+    s.request = request;
+    cmdEl.textContent = "Generating command…";
+    write("/setup/enroll", "POST", request).then(function (r) {
       s.minting = false;
+      Array.prototype.forEach.call(s.root.querySelectorAll(".enroll-options input,.enroll-options select,.enroll-options button"), function(el) { el.disabled = false; });
       if (s.dead) return;
-      var cmd = (r.commands && r.commands.linux) || "";
+      var cmd = (r.commands && (r.commands[requestUser] || r.commands.linux)) || "";
+      s.commands = r.commands || {};
+      s.q("label").textContent = (request.scheduler === "truenas-cron" ? "TrueNAS" : "Linux") + ", run as " + (requestUser === "root" ? "root" : "a user with sudo") + (r.signed_updates ? " · signed updates" : "");
       s.code = r.code; s.id = r.id || ""; s.expires = new Date(r.expires_at).getTime();
       cmdEl.innerHTML = cmdBox(cmd, { shell: true, big: true, label: "Install command" });
       s.q("fresh").innerHTML = fresh ? ic("check", "sm") + "<span>" + esc(fresh) + "</span>" : "";
@@ -8135,6 +8180,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
         el.classList.toggle("low", left <= 60);
         if (left <= 60 && left > 0 && !warned) { warned = true; announce("The install code expires in one minute."); }
       }, function () {
+        s.commands = null;
         var box = cmdEl.querySelector(".cmd");
         if (box) { box.classList.add("dead"); box.querySelector("[data-copy]").disabled = true; }
         s.q("fresh").innerHTML = ic("clock", "sm") + "<span>This code expired. Get a new code to add another host.</span>";
@@ -8142,8 +8188,10 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       });
     }, function (err) {
       s.minting = false;
+      Array.prototype.forEach.call(s.root.querySelectorAll(".enroll-options input,.enroll-options select,.enroll-options button"), function(el) { el.disabled = false; });
       if (s.dead) return;
       if (err.unauthorized) { stopEnroll(); showGate(true); return; }
+      cmdEl.textContent = "Command unavailable. Review the enrollment status and options above.";
       meta.innerHTML = '<span class="setup-msg bad">Could not get a code: ' + esc(err.message) + '</span>' +
         '<button class="btn" type="button" data-enroll-new>' + ic("refresh", "sm") + 'Try again</button>';
     });
@@ -8154,12 +8202,30 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     if (b && enrollSession) mintCode(enrollSession, "");
   });
 
+  document.addEventListener("change", function(e) {
+    var s = enrollSession;
+    if (!s || !e.target.closest || !e.target.closest('.enroll-options') || !s.root.contains(e.target)) return;
+    if (e.target === s.q("user") && s.commands) {
+      s.q("cmd").innerHTML = cmdBox(s.commands[e.target.value] || s.commands.linux || '', {shell:true,big:true,label:"Install command"});
+      s.q("label").textContent = (s.request.scheduler === "truenas-cron" ? "TrueNAS" : "Linux") + ", run as " + (e.target.value === "root" ? "root" : "a user with sudo");
+      return;
+    }
+    s.q("cron").hidden = s.q("scheduler").value !== "truenas-cron";
+    if (e.target === s.q("scheduler") && s.q("scheduler").value === "truenas-cron") s.q("user").value = "root";
+    s.q("cmd").textContent = "Options changed. Generate a new command.";
+    s.commands = null;
+    s.q("meta").textContent = '';
+    if (s.stopCount) s.stopCount();
+    pollEnroll(s);
+  });
+
   // Two reads per tick: who has redeemed a code (GET /setup/enroll) and who
   // has reported (GET /hosts). A host is "enrolled" between the two.
   function pollEnroll(s) {
-    Promise.all([api("/hosts"), api("/setup/enroll").catch(function () { return { outstanding: [] }; })]).then(function (r) {
+    Promise.all([api("/hosts"), api("/setup/enroll?host=" + encodeURIComponent(s.q("host").value.trim())).catch(function () { return { outstanding: [] }; })]).then(function (r) {
       if (s.dead) return;
       var hosts = r[0] || [], codes = (r[1] && r[1].outstanding) || [];
+      s.q("status").innerHTML = signedEnrollmentHTML(r[1] && r[1].status && r[1].status.signed_updates);
       if (!s.polled) {
         s.polled = true;
         // In Admin, codes redeemed before the panel opened are old news;
@@ -8174,7 +8240,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
         // Match by the opaque id when the server sends one, else by the hint.
         var hint = String(c.code_hint || "").replace(/[….\s]+$/, "");
         var mine = c.id && s.id ? c.id === s.id : !!hint && s.code.indexOf(hint) === 0;
-        if (mine) mintCode(s, "Code used by " + c.used_by + ". Here is a new one for the next host.");
+        if (mine && !s.q("host").readOnly) mintCode(s, "Code used by " + c.used_by + ". Here is a new one for the next host.");
       });
       hosts.forEach(function (h) {
         if (s.baselineSet[h.name] || s.reporting[h.name]) return;
@@ -8226,12 +8292,14 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     if (list.dataset.last !== key) { list.innerHTML = html; list.dataset.last = key; }
   }
 
-  function openAddHost() {
+  function openAddHost(host) {
     var known = (data.hosts || []).map(function (h) { return h.name; });
-    openDrawer('<h3>Add a host</h3>' +
+    openDrawer('<h3>' + esc(host ? 'Enable signed updates · ' + host : 'Add a host') + '</h3>' +
       '<p class="enroll-intro">Run this on the machine you want to watch. It installs the read-only agent, which reports right away.</p>' +
       enrollPanelHTML());
-    startEnroll($("drawer-body"), known);
+    var selected = (data.hosts || []).filter(function(h) { return h.name === host; })[0];
+    var scheduler = selected && /truenas/i.test(selected.os || '') ? 'truenas-cron' : 'systemd';
+    startEnroll($("drawer-body"), known, host, scheduler);
     enrollSession.fromAdmin = true;
   }
 
@@ -8344,6 +8412,9 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 
     var forgetSvc = t.closest ? t.closest("[data-forget]") : null;
     if (forgetSvc) { e.preventDefault(); forget(forgetSvc.dataset.forget); return; }
+
+    var enableUpdates = t.closest ? t.closest("[data-enable-updates]") : null;
+    if (enableUpdates) { openAddHost(enableUpdates.dataset.enableUpdates); return; }
 
     if (t.closest && t.closest("[data-add-host]")) { openAddHost(); return; }
 
