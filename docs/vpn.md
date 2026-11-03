@@ -11,8 +11,8 @@ Discovery stays read-only. On Linux, the agent joins Docker metadata with tunnel
 interfaces and counters from `/proc/<pid>/net/dev`. It identifies namespace
 consumers from Docker's `container:<name-or-id>` network mode and compares their
 network namespaces. It does not execute programs inside containers or read their
-environment. A gateway with `NET_ADMIN` can still be reported when it is stopped
-or its proc files cannot be read. When several candidates exist, discovery
+environment. A gateway with `NET_ADMIN` and configured namespace consumers can
+still be reported when it is stopped or its proc files cannot be read. When several candidates exist, discovery
 prefers one with dependent containers, then orders by name and ID; additional
 candidates produce diagnostics.
 
