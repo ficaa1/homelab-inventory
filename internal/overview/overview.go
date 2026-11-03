@@ -142,7 +142,7 @@ func (b Builder) local(ctx context.Context, out *Report, now time.Time) {
 	f := Fleet{HostsTotal: len(invs), Stale: []Stale{}, AgentsOutdated: []string{}, Alerts: Counts{Critical: rep.Counts.Critical, Warning: rep.Counts.Warning, Info: rep.Counts.Info, Silenced: rep.Silenced, Recent: recentAlerts(rep.Alerts, le, now)}}
 	attention := []Attention{}
 	for _, a := range rep.Alerts {
-		if a.Rule == "agent.outdated" {
+		if a.Rule == "agent.update.unhealthy" {
 			f.AgentsOutdated = append(f.AgentsOutdated, a.Host)
 		}
 		if a.Rule == "host.stale" {

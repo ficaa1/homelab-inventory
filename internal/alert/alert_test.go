@@ -836,50 +836,6 @@ func TestStaleWordingDoesNotClaimAScheduleThatDoesNotExist(t *testing.T) {
 	}
 }
 
-func TestAgentOutdated(t *testing.T) {
-	t.Parallel()
-	for _, tt := range []struct {
-		name     string
-		revision int
-		outdated bool
-	}{
-		{"pre-revision", 0, true},
-		{"lower", inventory.AgentRevision - 1, true},
-		{"negative", -1, true},
-		{"current", inventory.AgentRevision, false},
-		{"newer", inventory.AgentRevision + 1, false},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			inv := base()
-			inv.Tool = inventory.Tool{Version: "57a6815-dirty", Revision: tt.revision}
-			alerts := evalOne(inv)
-			if !tt.outdated {
-				absent(t, alerts, "agent.outdated", "agent")
-				return
-			}
-			a := find(t, alerts, "agent.outdated", "agent")
-			if a.Level != LevelInfo || a.Host != inv.Host.Hostname {
-				t.Errorf("agent alert = %+v, want info for %s", a, inv.Host.Hostname)
-			}
-			if !strings.Contains(a.Message, "latest ") || !strings.Contains(a.Message, "re-run make install-agent") {
-				t.Errorf("message lacks latest revision or upgrade command: %s", a.Message)
-			}
-			if tt.revision == 0 && (!strings.Contains(a.Message, "unknown/pre-revision") || !strings.Contains(a.Message, inv.Tool.Version)) {
-				t.Errorf("pre-revision message lacks provenance: %s", a.Message)
-			}
-			count := 0
-			for _, a := range alerts {
-				if a.Rule == "agent.outdated" {
-					count++
-				}
-			}
-			if count != 1 {
-				t.Errorf("got %d agent alerts, want one", count)
-			}
-		})
-	}
-}
-
 func TestKeyBytesArePersisted(t *testing.T) {
 	a := Alert{Host: "host-a", Rule: "zfs.pool.scrub", Subject: "media"}
 	if got, want := a.Key(), "host-a\x00zfs.pool.scrub\x00media"; got != want {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"testing"
@@ -382,5 +383,31 @@ func TestKeyIgnoresMessageWording(t *testing.T) {
 	c := crit("host-b", "zfs.pool.capacity", "secure", "pool secure is 91% full")
 	if Key(a) == Key(c) {
 		t.Error("different subjects collapsed to one key")
+	}
+}
+
+func TestAgentHealthTransitionsStayQuiet(t *testing.T) {
+	st, cap := newMemState(), &capture{}
+	n := newNotifier(st, cap, alert.LevelWarning)
+	now := time.Now()
+	ctx := context.Background()
+	if _, err := n.Run(ctx, nil, now); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 100; i++ {
+		// Changing counts, reason and targets must not change the incident key.
+		fire := []alert.Alert{warn("host-a", "agent.update.unhealthy", "agent", fmt.Sprintf("Failed target %d, failures %d", i+6, i+466))}
+		if _, err := n.Run(ctx, fire, now.Add(time.Duration(i)*time.Minute)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(cap.msgs) != 1 {
+		t.Fatal("repeated evaluations notified", len(cap.msgs))
+	}
+	if _, err := n.Run(ctx, nil, now.Add(2*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if len(cap.msgs) != 2 || cap.msgs[1].Type != "success" {
+		t.Fatal("missing recovery", cap.msgs)
 	}
 }

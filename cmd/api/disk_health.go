@@ -1,8 +1,10 @@
 package main
 
 import (
+	"github.com/ficaa1/homelab-inventory/internal/agenthealth"
 	"github.com/ficaa1/homelab-inventory/internal/alert"
 	"github.com/ficaa1/homelab-inventory/internal/inventory"
+	"sort"
 	"time"
 )
 
@@ -23,6 +25,24 @@ func (s *server) evaluateAlerts(invs []*inventory.Inventory, now time.Time) (*al
 		return nil, err
 	}
 	rep := alert.Evaluate(effective, alert.DefaultThresholds(), now)
+	health, err := agenthealth.Evaluate(s.store.Dir(), s.agentDir(), invs, now)
+	if err != nil {
+		return nil, err
+	}
+	rep.Add(health.Alerts()...)
+	for host := range health.Hosts {
+		found := false
+		for _, name := range rep.Hosts {
+			if name == host {
+				found = true
+				break
+			}
+		}
+		if !found {
+			rep.Hosts = append(rep.Hosts, host)
+		}
+	}
+	sort.Strings(rep.Hosts)
 	if s.plugins != nil {
 		rep.Add(s.plugins.Alerts()...)
 	}
