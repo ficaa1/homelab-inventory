@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"mime"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/actions"
 )
@@ -80,7 +82,15 @@ func (s *server) handleActionExecute(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "restart execution unavailable")
 		return
 	}
-	e, err := s.actions.Execute(r.Context(), in.Kind, in.Target, actor, in.ContainerSetHash)
+	ctx := r.Context()
+	if in.Kind == "vpn_reconnect" {
+		_ = http.NewResponseController(w).SetReadDeadline(time.Time{})
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(310 * time.Second))
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), 300*time.Second)
+		defer cancel()
+	}
+	e, err := s.actions.Execute(ctx, in.Kind, in.Target, actor, in.ContainerSetHash)
 	if err != nil {
 		var changed *actions.PreviewChanged
 		if errors.As(err, &changed) {
@@ -92,6 +102,10 @@ func (s *server) handleActionExecute(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if in.Kind == "vpn_reconnect" && s.vpnWatch != nil {
+		s.vpnWatch.Reconnected(e)
+		_ = s.vpnWatch.Check(ctx, true)
 	}
 	status := http.StatusOK
 	if e.Result != "ok" {
@@ -168,6 +182,10 @@ func (s *server) handleExec(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Command == "" {
 		writeError(w, 400, "command is required")
+		return
+	}
+	if in.Command == "vpn-wg-dump" || in.Command == "vpn-exit-check" || in.Command == "container-state" {
+		writeError(w, 400, "VPN probes are available only through the VPN watch")
 		return
 	}
 	args := map[string]string{"compose_file": in.ComposeFile, "service": in.Service, "container": in.Container, "old_image": in.OldImage, "new_image": in.NewImage}

@@ -23,6 +23,16 @@ func (s *server) evaluateAlerts(invs []*inventory.Inventory, now time.Time) (*al
 		return nil, err
 	}
 	rep := alert.Evaluate(effective, alert.DefaultThresholds(), now)
+	if s.vpnWatch != nil {
+		if live := s.vpnWatch.Health(); live != nil {
+			for _, inv := range effective {
+				if inv.Host.Hostname == live.Host && inv.VPN != nil && inv.VPN.Container == live.Container {
+					rep.ApplyVPN(inv.VPN, *live, now)
+					break
+				}
+			}
+		}
+	}
 	if s.plugins != nil {
 		rep.Add(s.plugins.Alerts()...)
 	}
