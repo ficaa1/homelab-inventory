@@ -258,6 +258,9 @@ func (w *Watch) Check(ctx context.Context, panel bool) error {
 	}
 	if state != "running" {
 		status, reason = "down", "gateway is not running"
+		for i := range w.snap.Dependents {
+			w.snap.Dependents[i].Attached = nil
+		}
 	} else {
 		if now.Sub(w.lastWG) >= 60*time.Second {
 			w.lastWG = now
@@ -313,6 +316,10 @@ func (w *Watch) Check(ctx context.Context, panel bool) error {
 					if e == nil {
 						w.snap.Dependents[i].State = c.State
 						w.snap.Dependents[i].StartedAt = &c.StartedAt
+						if c.State != "running" {
+							cut = false
+							w.snap.Dependents[i].Attached = nil
+						}
 						if c.State == "running" && !c.StartedAt.IsZero() && !w.startedAt.IsZero() {
 							cut = cut || c.StartedAt.Before(w.startedAt)
 							a := !cut
@@ -339,7 +346,7 @@ func (w *Watch) Check(ctx context.Context, panel bool) error {
 			t := now
 			w.saved.BadSince = &t
 		}
-	} else if status == "ok" {
+	} else {
 		w.saved.BadSince = nil
 	}
 	if err = w.save(); err != nil {
@@ -414,7 +421,9 @@ func (w *Watch) autofix(ctx context.Context, now time.Time) error {
 		msg.Body = fmt.Sprintf("Automatic VPN reconnect failed: %s. Next automatic attempt after %s UTC.", reason, now.Add(time.Hour).Format("15:04"))
 	}
 	if w.opts.Message != nil {
-		w.opts.Message(actionCtx, msg)
+		messageCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+		w.opts.Message(messageCtx, msg)
+		stop()
 	}
 	w.mu.Lock()
 	if err == nil && e.Result == "ok" {
