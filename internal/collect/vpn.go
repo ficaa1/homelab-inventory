@@ -63,16 +63,11 @@ func parseVPNNetDev(raw string) (*vpnTunnel, error) {
 }
 
 func vpnInterfaceName(name string) bool {
-	for _, prefix := range []string{"wg", "tun", "tap"} {
-		if strings.HasPrefix(name, prefix) && len(name) > len(prefix) {
-			return true
-		}
-	}
-	return false
+	return strings.HasPrefix(name, "wg") || strings.HasPrefix(name, "tun")
 }
 
 func vpnProcessRunning(ct *inventory.Container) bool {
-	return ct.PID > 0 && (ct.State == "running" || ct.State == "paused" || ct.State == "restarting")
+	return ct.PID > 0 && ct.State == "running"
 }
 
 func vpnNetNS(env *Env, ct *inventory.Container) string {

@@ -47,8 +47,8 @@ func correlate(env *Env, inv *inventory.Inventory) {
 }
 
 // correlateVPN joins Docker's namespace configuration with read-only proc
-// observations. Capability-only candidates remain visible when stopped or
-// when proc is inaccessible; no interface, peer or exit facts are invented.
+// observations. NET_ADMIN providers with configured dependents remain visible
+// when stopped or proc is inaccessible; no peer or exit facts are invented.
 func correlateVPN(env *Env, inv *inventory.Inventory) {
 	if inv.Docker == nil || !inv.Docker.Available {
 		return
@@ -69,7 +69,7 @@ func correlateVPN(env *Env, inv *inventory.Inventory) {
 		capable := false
 		for _, cap := range ct.CapAdd {
 			switch strings.TrimPrefix(strings.ToUpper(cap), "CAP_") {
-			case "NET_ADMIN", "ALL":
+			case "NET_ADMIN":
 				capable = true
 			}
 		}
@@ -90,6 +90,9 @@ func correlateVPN(env *Env, inv *inventory.Inventory) {
 				d.Attached = &attached
 			}
 			c.dependents = append(c.dependents, d)
+		}
+		if tunnel == nil && len(c.dependents) == 0 {
+			continue
 		}
 		sort.Slice(c.dependents, func(i, j int) bool { return c.dependents[i].Name < c.dependents[j].Name })
 		candidates = append(candidates, c)

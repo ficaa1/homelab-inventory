@@ -68,11 +68,12 @@ func TestVPNProcCountersAndAttachment(t *testing.T) {
 		t.Fatal(err)
 	}
 	inv := &inventory.Inventory{Docker: &inventory.Docker{Available: true, Containers: []inventory.Container{
-		{Name: "alpha", State: "exited", CapAdd: []string{"NET_ADMIN"}},
+		{Name: "zeta", State: "exited", CapAdd: []string{"NET_ADMIN"}},
 		{Name: "gateway", State: "running", PID: 101, Health: "healthy"}, // Interface alone detects it.
 		{Name: "attached", State: "running", PID: 102, NetworkMode: "container:gateway"},
 		{Name: "detached", State: "running", PID: 103, NetworkMode: "container:gateway"},
 		{Name: "unknown", State: "running", PID: 104, NetworkMode: "container:gateway"},
+		{Name: "zeta-worker", State: "exited", NetworkMode: "container:zeta"},
 	}}}
 	env := &Env{RootFS: root, diags: &inv.Diagnostics, name: "correlate"}
 	correlate(env, inv)
@@ -83,18 +84,55 @@ func TestVPNProcCountersAndAttachment(t *testing.T) {
 	if len(v.Dependents) != 3 || v.Dependents[0].Attached == nil || !*v.Dependents[0].Attached || v.Dependents[1].Attached == nil || *v.Dependents[1].Attached || v.Dependents[2].Attached != nil {
 		t.Fatalf("namespace identity not preserved: %+v", v.Dependents)
 	}
-	if len(inv.Diagnostics) != 1 || inv.Diagnostics[0].Severity != inventory.SeverityInfo || !strings.Contains(inv.Diagnostics[0].Message, "alpha") {
+	if len(inv.Diagnostics) != 1 || inv.Diagnostics[0].Severity != inventory.SeverityInfo || !strings.Contains(inv.Diagnostics[0].Message, "zeta") {
 		t.Fatalf("other gateway candidate not diagnosed: %+v", inv.Diagnostics)
 	}
+	for _, state := range []string{"paused", "restarting"} {
+		inv.Docker.Containers[2].State = state
+		correlate(env, inv)
+		if inv.VPN.Dependents[0].Attached != nil {
+			t.Fatalf("%s dependent attachment must be unknown", state)
+		}
+		inv.Docker.Containers[2].State = "running"
+		inv.Docker.Containers[1].CapAdd = []string{"NET_ADMIN"}
+		inv.Docker.Containers[1].State = state
+		correlate(env, inv)
+		if inv.VPN.InterfaceUp {
+			t.Fatalf("%s provider must not expose tunnel observations", state)
+		}
+		for _, dep := range inv.VPN.Dependents {
+			if dep.Attached != nil {
+				t.Fatalf("%s provider attachment must be unknown", state)
+			}
+		}
+		inv.Docker.Containers[1].State = "running"
+	}
+	provider := inv.Docker.Containers[1]
 	// Equal dependency preference is resolved by name, regardless of order.
-	inv.Docker.Containers[0].Name = "zeta"
 	inv.Docker.Containers = []inventory.Container{
 		inv.Docker.Containers[0],
 		{Name: "beta", CapAdd: []string{"CAP_NET_ADMIN"}},
+		{Name: "zeta-worker", NetworkMode: "container:zeta"},
+		{Name: "beta-worker", NetworkMode: "container:beta"},
 	}
 	correlate(env, inv)
-	if inv.VPN.Container != "beta" || inv.VPN.Dependents == nil || len(inv.VPN.Dependents) != 0 {
-		t.Fatal("candidate name ordering or empty dependent semantics changed")
+	if inv.VPN.Container != "beta" || len(inv.VPN.Dependents) != 1 {
+		t.Fatal("candidate name ordering changed")
+	}
+	// A running tunnel needs no dependent or explicit NET_ADMIN capability.
+	provider.CapAdd = nil
+	inv.Docker.Containers = []inventory.Container{provider}
+	correlate(env, inv)
+	if inv.VPN.Container != "gateway" || !inv.VPN.InterfaceUp || inv.VPN.Dependents == nil || len(inv.VPN.Dependents) != 0 {
+		t.Fatal("standalone tunnel or empty dependent semantics changed")
+	}
+	for _, state := range []string{"paused", "restarting", "exited"} {
+		inv.VPN = nil
+		inv.Docker.Containers[0].State = state
+		correlate(env, inv)
+		if inv.VPN != nil {
+			t.Fatalf("%s container without NET_ADMIN and dependents was detected", state)
+		}
 	}
 }
 
@@ -111,8 +149,15 @@ func TestParseVPNNetDev(t *testing.T) {
 			t.Fatal("accepted invalid counters")
 		}
 	}
-	if tunnel, err := parseVPNNetDev(strings.Replace(vpnNetDevFixture, "wg0", "eth0", 1)); err != nil || tunnel != nil {
-		t.Fatal("ordinary interfaces were reported as a tunnel")
+	for _, name := range []string{"eth0", "tap0"} {
+		if tunnel, err := parseVPNNetDev(strings.Replace(vpnNetDevFixture, "wg0", name, 1)); err != nil || tunnel != nil {
+			t.Fatalf("%s was reported as a tunnel", name)
+		}
+	}
+	for _, name := range []string{"wg", "tun", "tun0"} {
+		if tunnel, err := parseVPNNetDev(strings.Replace(vpnNetDevFixture, "wg0", name, 1)); err != nil || tunnel == nil || tunnel.name != name {
+			t.Fatalf("%s tunnel prefix was not recognized", name)
+		}
 	}
 }
 
@@ -135,6 +180,12 @@ func TestVPNCapableProviderWithNoTunnel(t *testing.T) {
 		if inv.VPN == nil || inv.VPN.InterfaceUp || inv.VPN.RXBytes != nil || len(inv.VPN.Dependents) != 1 || inv.VPN.Dependents[0].Attached != nil {
 			t.Fatalf("missing interface lost provider or invented facts: %+v", inv.VPN)
 		}
+	}
+	inv.VPN = nil
+	inv.Docker.Containers = inv.Docker.Containers[:1]
+	correlate(&Env{RootFS: root}, inv)
+	if inv.VPN != nil {
+		t.Fatal("NET_ADMIN without a tunnel or dependent was detected")
 	}
 }
 
