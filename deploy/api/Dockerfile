@@ -7,7 +7,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /api ./cmd/api
 RUN set -eu; mkdir -p /agent; \
     for arch in amd64 arm64; do \
       mkdir -p /agent/linux-$arch; \
-      for name in discover agentupdate; do \
+      for name in discover agentupdate agentboot; do \
         CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags='-s -w' -o /agent/linux-$arch/$name ./cmd/$name; \
       done; \
     done; \

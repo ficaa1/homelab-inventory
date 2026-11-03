@@ -11,6 +11,7 @@
 package store
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -78,13 +79,23 @@ func Open(dir string) (*Store, error) {
 // Stored runs always omit Software; API ingest saves it separately in softstore
 // before calling Save, so run retention never duplicates package lists.
 func (s *Store) Save(inv *inventory.Inventory) (Record, error) {
+	return s.saveAt(inv, inv.CollectedAt, false)
+}
+
+// SaveReceived indexes a slot report by its durable server receipt, preserving
+// the original collection timestamp in the inventory itself. Retried reports
+// use the same index key; a backward host clock cannot collide with fallback.
+func (s *Store) SaveReceived(inv *inventory.Inventory, received time.Time) (Record, error) {
+	return s.saveAt(inv, received, true)
+}
+
+func (s *Store) saveAt(inv *inventory.Inventory, at time.Time, receipt bool) (Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	host, err := sanitizeHost(inv.Host.Hostname)
 	if err != nil {
 		return Record{}, err
 	}
-	at := inv.CollectedAt
 	if at.IsZero() {
 		at = time.Now()
 	}
@@ -105,21 +116,31 @@ func (s *Store) Save(inv *inventory.Inventory) (Record, error) {
 	id := at.Format(timeFormat)
 	path := filepath.Join(hostDir, id+".json")
 
-	// A run that lands in the same nanosecond as a previous one (unlikely,
-	// but a misconfigured poster could retry fast) must not clobber it: fail
-	// loudly rather than silently discarding a run.
-	if _, err := os.Stat(path + ".gz"); err == nil {
-		return Record{}, fmt.Errorf("store: %s already has a compressed run at %s", host, at.Format(time.RFC3339Nano))
+	// Receipt retries may repeat the exact accepted projection. Ordinary
+	// inventory posts retain their append-only duplicate rejection behavior.
+	exists := false
+	for _, candidate := range []string{path, path + ".gz"} {
+		if _, e := os.Stat(candidate); e == nil {
+			exists = true
+		} else if !os.IsNotExist(e) {
+			return Record{}, e
+		}
 	}
-	if _, err := os.Stat(path); err == nil {
-		return Record{}, fmt.Errorf("store: %s already has a run at %s", host, at.Format(time.RFC3339Nano))
-	}
-	if err := fsx.WriteAtomic(path, append(data, '\n'), 0o600); err != nil {
+	if exists {
+		prior, e := readRun(path)
+		if !receipt || e != nil || !bytes.Equal(prior, append(data, '\n')) {
+			return Record{}, fmt.Errorf("store: %s already has a different run at %s", host, at.Format(time.RFC3339Nano))
+		}
+	} else if err = fsx.WriteAtomic(path, append(data, '\n'), 0600); err != nil {
 		return Record{}, fmt.Errorf("store: writing %s: %w", path, err)
+	}
+	statusAt := time.Now()
+	if receipt {
+		statusAt = at
 	}
 
 	if inv.AgentUpdate != nil {
-		if err := agentstatus.Save(s.dir, agentstatus.Document{Host: host, Update: *inv.AgentUpdate}, "inventory", time.Now()); err != nil {
+		if err := agentstatus.Save(s.dir, agentstatus.Document{Host: host, Update: *inv.AgentUpdate}, "inventory", statusAt); err != nil {
 			return Record{}, err
 		}
 	}
@@ -366,7 +387,7 @@ func (s *Store) bumpRunEpoch(_ string) {
 // temporary files. Apply before either run or software ingest creates a directory.
 func reservedHost(host string) bool {
 	switch host {
-	case "agent-status", "agent-health", "manifest.json", "upload-audit.jsonl", "agent-offers.jsonl", "actions-audit.jsonl", "settings", "packagesets", "plugins":
+	case "agent-receipts", "agent-status", "agent-health", "manifest.json", "upload-audit.jsonl", "agent-offers.jsonl", "actions-audit.jsonl", "settings", "packagesets", "plugins":
 		return true
 	}
 	return strings.HasPrefix(host, "state-") || strings.HasPrefix(host, ".")

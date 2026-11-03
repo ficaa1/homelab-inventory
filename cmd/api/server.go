@@ -118,6 +118,7 @@ func (s *server) routes() http.Handler {
 	s.pluginRoutes(mux)
 	s.duskRoutes(mux)
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
+	mux.HandleFunc("POST /agent/report", s.agentAuth(s.handleAgentReport))
 	mux.HandleFunc("POST /inventory", s.agentAuth(s.handleIngest))
 	mux.HandleFunc("GET /agent/manifest", s.agentAuth(s.handleAgentManifest))
 	mux.HandleFunc("GET /agent/artifacts/{sequence}/{name}", s.agentAuth(s.handleAgentArtifact))

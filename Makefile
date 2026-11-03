@@ -1,6 +1,6 @@
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
-COMMANDS := discover api alerts portmap mcpbridge agentupdate agentsign mediapolicy
+COMMANDS := discover api alerts portmap mcpbridge agentboot agentupdate agentsign mediapolicy
 AGENT_PLATFORMS ?= linux/amd64,linux/arm64
 export AGENT_PLATFORMS
 
@@ -19,11 +19,11 @@ build:
 dist: build
 	@for platform in $$(./bin/agentsign -platforms); do \
 	  os=$${platform%-*}; arch=$${platform#*-}; \
-	  for name in discover agentupdate; do \
+	  for name in discover agentupdate agentboot; do \
 	    CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "$(LDFLAGS)" -o bin/$$name-$$platform ./cmd/$$name || exit; \
 	  done; \
 	done
-	@cd bin && sha256sum discover-* agentupdate-* > SHA256SUMS
+	@cd bin && sha256sum discover-* agentupdate-* agentboot-* > SHA256SUMS
 agent-dist: dist
 api-linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/api-linux-amd64 ./cmd/api
@@ -56,7 +56,7 @@ release-artifacts: dist
 	@set -eu; mkdir -p dist; rm -f dist/homelab-inventory_*_linux_*.tar.gz dist/SHA256SUMS dist/get.sh; stage=$$(mktemp -d); trap 'rm -rf "$$stage"' EXIT HUP INT TERM; \
 	  mkdir -p "$$stage/agent/linux-amd64" "$$stage/agent/linux-arm64"; \
 	  for arch in amd64 arm64; do \
-	    for name in discover agentupdate; do \
+	    for name in discover agentupdate agentboot; do \
 	      cp "bin/$$name-linux-$$arch" "$$stage/agent/linux-$$arch/$$name"; \
 	    done; \
 	  done; \
@@ -67,7 +67,8 @@ release-artifacts: dist
 	    CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build -trimpath -ldflags "$(LDFLAGS)" -o "$$stage/mcpbridge" ./cmd/mcpbridge; \
 	    cp "bin/discover-linux-$$arch" "$$stage/discover"; \
 	    cp "bin/agentupdate-linux-$$arch" "$$stage/agentupdate"; \
-	    tar -czf "dist/homelab-inventory_$(VERSION)_linux_$$arch.tar.gz" -C "$$stage" homelab-inventory discover agentupdate mcpbridge LICENSE README.md agent; \
+	    cp "bin/agentboot-linux-$$arch" "$$stage/agentboot"; \
+	    tar -czf "dist/homelab-inventory_$(VERSION)_linux_$$arch.tar.gz" -C "$$stage" homelab-inventory discover agentupdate agentboot mcpbridge LICENSE README.md agent; \
 	  done
 	@cp scripts/get.sh dist/get.sh
 	@cd dist && sha256sum homelab-inventory_$(VERSION)_linux_*.tar.gz get.sh > SHA256SUMS

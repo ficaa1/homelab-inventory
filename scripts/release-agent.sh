@@ -13,7 +13,7 @@ AGENT_PLATFORMS=${AGENT_PLATFORMS:-linux/amd64,linux/arm64}
 export AGENT_PLATFORMS
 case $command_name in
  keygen) set -- -keygen;;
- release) [ "$#" -eq 1 ] || { echo 'release requires VERSION' >&2; exit 1; }; set -- -input "$SIGNER_INPUT" -version "$1";;
+ release) [ "$#" -eq 1 ] || { echo 'release requires VERSION' >&2; exit 1; }; set -- -input "$SIGNER_INPUT" -version "$1" -runtime;;
  hold|promote|auto) set -- -control "$command_name";;
  resign) set -- -resign;;
  *) echo 'usage: release-agent.sh keygen|release VERSION|hold|promote|auto|resign' >&2; exit 1;;
@@ -39,9 +39,11 @@ if [ "$command_name" = release ]; then
  case $remote_input in *[!a-zA-Z0-9/._-]*) exit 1;; esac
  # The local signer parses exactly the same contract as the build and manifest.
  for platform in $("$LOCAL_SIGNER_BIN" -platforms); do
-  scp -P "$SIGNER_PORT" "$SIGNER_INPUT/discover-$platform" "$SIGNER_HOST:$remote_input/"
+  for component in discover agentupdate; do
+   scp -P "$SIGNER_PORT" "$SIGNER_INPUT/$component-$platform" "$SIGNER_HOST:$remote_input/"
+  done
  done
- set -- -input "$remote_input" -version "$version"
+ set -- -input "$remote_input" -version "$version" -runtime
 fi
 remote_command="AGENT_PLATFORMS='$AGENT_PLATFORMS' '$SIGNER_BIN' -key '$SIGNER_KEY' -dir '$SIGNER_DIR'"
 for arg do remote_command="$remote_command '$arg'"; done
