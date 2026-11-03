@@ -298,7 +298,7 @@ func (s *server) handleAgentReport(w http.ResponseWriter, r *http.Request) {
 		// or same-time fallback report cannot collide with a different transaction.
 		if inv.Software != nil {
 			if err := s.packageStore().Ingest(&inv); err != nil {
-				return err
+				s.log.Printf("ingest: software for %s: %v", inv.Host.Hostname, err)
 			}
 			inv.Software = nil
 		}

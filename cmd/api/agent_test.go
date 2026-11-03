@@ -326,12 +326,20 @@ func TestRuntimeMigrationRetainedArtifactsAndReceipts(t *testing.T) {
 	if e != nil || json.Unmarshal(stored, &accepted) != nil || !bytes.Equal(accepted.Report, raw) {
 		t.Fatal("exact report bytes not retained")
 	}
-	for _, tc := range []string{"body", "nonce", "digest", "role", "build", "schema", "folded"} {
+	for _, tc := range []string{"body", "nonce", "digest", "role", "build", "schema", "folded", "package-store"} {
 		t.Run(tc, func(t *testing.T) {
 			changed := map[string]any{}
 			json.Unmarshal(raw, &changed)
 			want := 400
 			switch tc {
+			case "package-store":
+				// Block package blobs without affecting inventory or receipt storage.
+				if e := os.WriteFile(filepath.Join(s.store.Dir(), "packagesets"), []byte("blocked"), 0600); e != nil {
+					t.Fatal(e)
+				}
+				changed["agent_runtime"].(map[string]any)["nonce"] = strings.Repeat("b", 32)
+				changed["software"] = inventory.Software{Host: inventory.PackageSet{Packages: []inventory.Package{}}}
+				want = 201
 			case "body":
 				changed["future_field"] = true
 				want = 409
@@ -352,8 +360,19 @@ func TestRuntimeMigrationRetainedArtifactsAndReceipts(t *testing.T) {
 				changed["HOST"] = map[string]string{"hostname": "other"}
 			}
 			body, _ := json.Marshal(changed)
-			if w := post(body); w.Code != want {
+			w := post(body)
+			if w.Code != want {
 				t.Fatal(w.Code, want)
+			}
+			if tc == "package-store" {
+				var receipt agentproto.Receipt
+				if json.Unmarshal(w.Body.Bytes(), &receipt) != nil || receipt.Body != agentrelease.Digest(body) || receipt.Nonce != strings.Repeat("b", 32) {
+					t.Fatal("package fault lost exact receipt")
+				}
+				latest, e := s.store.Latest("host-a")
+				if e != nil || latest.Software != nil || latest.Tool.Version != id.Version {
+					t.Fatal("package fault lost run")
+				}
 			}
 		})
 	}
