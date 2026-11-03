@@ -5,6 +5,7 @@ import "time"
 type Update struct {
 	Transaction  string    `json:"transaction,omitempty"`
 	Active       *Identity `json:"active,omitempty"`
+	Candidate    *Identity `json:"candidate,omitempty"`
 	Fallback     *Identity `json:"fallback,omitempty"`
 	Launcher     string    `json:"launcher,omitempty"`
 	Sequence     uint64    `json:"sequence"`

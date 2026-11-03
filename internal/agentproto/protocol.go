@@ -14,7 +14,7 @@ import (
 
 const Version = 1
 const MaxReport = 16 << 20
-const MaxMessage = MaxReport + 65536
+const MaxMessage = (MaxReport+2)/3*4 + 131072
 const Product = "homelab-inventory"
 
 var ErrOutput = errors.New("trial_invalid_output")
@@ -48,11 +48,11 @@ type Input struct {
 // by the worker, fetched with credentials by the parent, then planned by the
 // worker. The parent re-verifies the resulting envelope before staging.
 type Message struct {
-	Protocol  int             `json:"protocol"`
-	Operation string          `json:"operation"`
-	Envelope  json.RawMessage `json:"envelope,omitempty"`
-	Report    json.RawMessage `json:"report,omitempty"`
-	Code      string          `json:"code,omitempty"`
+	Protocol  int    `json:"protocol"`
+	Operation string `json:"operation"`
+	Envelope  []byte `json:"envelope,omitempty"`
+	Report    []byte `json:"report,omitempty"`
+	Code      string `json:"code,omitempty"`
 }
 type Receipt struct {
 	Protocol int       `json:"protocol"`
@@ -97,7 +97,7 @@ func Object(data []byte) (map[string]json.RawMessage, error) {
 	}
 	return out, nil
 }
-func exactObject(data []byte, names ...string) (map[string]json.RawMessage, error) {
+func ExactObject(data []byte, names ...string) (map[string]json.RawMessage, error) {
 	o, e := Object(data)
 	if e != nil {
 		return nil, e
@@ -118,7 +118,7 @@ func ValidateReport(data []byte, host, nonce string, id Identity) (Runtime, erro
 	if len(data) == 0 || len(data) > MaxReport {
 		return rt, ErrOutput
 	}
-	o, e := exactObject(data, "schema_version", "host", "tool", "agent_runtime", "agent_update", "diagnostics")
+	o, e := ExactObject(data, "schema_version", "host", "tool", "agent_runtime", "agent_update", "diagnostics")
 	if e != nil {
 		return rt, e
 	}
@@ -126,7 +126,7 @@ func ValidateReport(data []byte, host, nonce string, id Identity) (Runtime, erro
 	if json.Unmarshal(o["schema_version"], &schema) != nil || schema != "5" {
 		return rt, ErrOutput
 	}
-	h, e := exactObject(o["host"], "hostname")
+	h, e := ExactObject(o["host"], "hostname")
 	if e != nil {
 		return rt, e
 	}
@@ -134,7 +134,7 @@ func ValidateReport(data []byte, host, nonce string, id Identity) (Runtime, erro
 	if json.Unmarshal(h["hostname"], &name) != nil || name != host || name == "" {
 		return rt, ErrOutput
 	}
-	t, e := exactObject(o["tool"], "version", "revision")
+	t, e := ExactObject(o["tool"], "version", "revision")
 	if e != nil {
 		return rt, e
 	}
@@ -143,7 +143,7 @@ func ValidateReport(data []byte, host, nonce string, id Identity) (Runtime, erro
 	if json.Unmarshal(t["version"], &ver) != nil || json.Unmarshal(t["revision"], &rev) != nil || ver != id.Version || rev != id.Revision {
 		return rt, ErrOutput
 	}
-	if _, e = Object(o["agent_runtime"]); e != nil {
+	if _, e = ExactObject(o["agent_runtime"], "protocol", "nonce", "sequence", "digest", "version", "revision", "discover", "agentupdate"); e != nil {
 		return rt, e
 	}
 	d := json.NewDecoder(bytes.NewReader(o["agent_runtime"]))
@@ -177,7 +177,7 @@ func ErrorIDs(data []byte) ([]string, error) {
 	out := []string{}
 	for _, d := range v.Diagnostics {
 		if d.Severity == "error" {
-			if len(out) >= 256 || len(d.Collector) > 128 || len(d.Code) > 128 {
+			if len(out) >= 64 || len(d.Collector) > 128 || len(d.Code) > 128 {
 				return nil, ErrOutput
 			}
 			out = append(out, d.Collector+"\x00"+d.Code)

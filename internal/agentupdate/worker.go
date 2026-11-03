@@ -13,6 +13,12 @@ import (
 // Worker has no credential, lock, floor writer or POST path. The launcher
 // brokers credential-bearing fetches on its private pipe and verifies the plan.
 func Worker(ctx context.Context, in io.Reader, out io.Writer) error {
+	if err := worker(ctx, in, out); err != nil {
+		return json.NewEncoder(out).Encode(agentproto.Message{Protocol: agentproto.Version, Operation: "error", Code: "trial_invalid_output"})
+	}
+	return nil
+}
+func worker(ctx context.Context, in io.Reader, out io.Writer) error {
 	dec := json.NewDecoder(io.LimitReader(in, 131072))
 	enc := json.NewEncoder(out)
 	var req agentproto.Input

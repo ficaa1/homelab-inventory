@@ -53,7 +53,7 @@ func Verify(data, public []byte) (Manifest, error) {
 	if len(data) > 65536 {
 		return m, errors.New("manifest too large")
 	}
-	if _, err := agentproto.Object(data); err != nil {
+	if _, err := agentproto.ExactObject(data, "manifest", "signature"); err != nil {
 		return m, errors.New("invalid envelope")
 	}
 	if err := json.Unmarshal(data, &s); err != nil {
@@ -64,11 +64,21 @@ func Verify(data, public []byte) (Manifest, error) {
 	if err != nil || e != nil || len(key) != ed25519.PublicKeySize || !ed25519.Verify(key, s.Manifest, sig) {
 		return m, errors.New("invalid manifest signature")
 	}
-	if _, err = agentproto.Object(s.Manifest); err != nil {
+	if _, err = agentproto.ExactObject(s.Manifest, "platforms", "sequence", "revision", "version", "created", "artifacts", "product", "launcher_protocol", "runtime_compatibility"); err != nil {
 		return m, errors.New("invalid manifest")
 	}
 	if err = json.Unmarshal(s.Manifest, &m); err != nil {
 		return m, errors.New("invalid manifest")
+	}
+	fields, _ := agentproto.Object(s.Manifest)
+	artifacts, e := agentproto.Object(fields["artifacts"])
+	if e != nil {
+		return m, errors.New("invalid artifacts")
+	}
+	for _, raw := range artifacts {
+		if _, e = agentproto.ExactObject(raw, "name", "sha256", "size", "role"); e != nil {
+			return m, errors.New("invalid artifact")
+		}
 	}
 	components := []string{"discover"}
 	if m.LauncherProtocol != 0 {
@@ -79,7 +89,7 @@ func Verify(data, public []byte) (Manifest, error) {
 	} else if m.Product != "" || m.RuntimeCompatibility != 0 {
 		return m, errors.New("incomplete runtime contract")
 	}
-	if m.Sequence == 0 || m.Revision < 1 || m.Version == "" || m.Created.IsZero() || len(m.Platforms) == 0 || len(m.Artifacts) != len(m.Platforms)*len(components) {
+	if m.Sequence == 0 || m.Revision < 1 || (m.Version == "" || len(m.Version) > 128) || m.Created.IsZero() || len(m.Platforms) == 0 || len(m.Artifacts) != len(m.Platforms)*len(components) {
 		return m, errors.New("incomplete manifest")
 	}
 	if err := validatePlatforms(m.Platforms); err != nil {
