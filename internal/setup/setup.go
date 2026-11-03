@@ -4,6 +4,7 @@ package setup
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -23,6 +24,9 @@ var (
 )
 
 const Window = 10 * time.Minute
+
+// RedemptionRetryWindow bounds recovery of an interrupted installation.
+const RedemptionRetryWindow = 30 * time.Minute
 const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
 
 type Tokens struct {
@@ -31,11 +35,14 @@ type Tokens struct {
 	Operator string `json:"-"`
 }
 type Enrollment struct {
-	ID      string    `json:"id"`
-	Hash    string    `json:"hash"`
-	Hint    string    `json:"code_hint"`
-	Expires time.Time `json:"expires_at"`
-	UsedBy  *string   `json:"used_by"`
+	ID         string    `json:"id"`
+	Hash       string    `json:"hash"`
+	Hint       string    `json:"code_hint"`
+	Expires    time.Time `json:"expires_at"`
+	UsedBy     *string   `json:"used_by"`
+	Host       string    `json:"hostname,omitempty"`
+	NonceHash  string    `json:"nonce_hash,omitempty"`
+	RetryUntil time.Time `json:"retry_until,omitempty"`
 }
 type diskState struct {
 	Tokens
@@ -161,14 +168,14 @@ func hash(code string) string { h := sha256.Sum256([]byte(code)); return hex.Enc
 func (m *Manager) live() []Enrollment {
 	out := make([]Enrollment, 0)
 	for _, c := range m.state.Codes {
-		if m.now().Before(c.Expires) {
+		if m.now().Before(c.Expires) || c.NonceHash != "" && m.now().Before(c.RetryUntil) {
 			out = append(out, c)
 		}
 	}
 	// Bound redeemed history as well as outstanding credentials.
 	used := 0
 	for i := len(out) - 1; i >= 0; i-- {
-		if out[i].UsedBy != nil {
+		if out[i].UsedBy != nil && !(out[i].NonceHash != "" && m.now().Before(out[i].RetryUntil)) {
 			used++
 			if used > 100 {
 				out = append(out[:i], out[i+1:]...)
@@ -181,6 +188,11 @@ func (m *Manager) live() []Enrollment {
 // Enroll returns a new code and its opaque id. The id is random, not derived
 // from the code, so listing it never narrows a brute-force search.
 func (m *Manager) Enroll() (code, id string, expires time.Time, err error) {
+	return m.EnrollHost("")
+}
+
+// EnrollHost binds a code to the requested inventory hostname when supplied.
+func (m *Manager) EnrollHost(host string) (code, id string, expires time.Time, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.tokens().API == "" {
@@ -219,7 +231,7 @@ func (m *Manager) Enroll() (code, id string, expires time.Time, err error) {
 		return "", "", time.Time{}, err
 	}
 	id = hex.EncodeToString(idBytes)
-	codes = append(codes, Enrollment{ID: id, Hash: hash(code), Hint: code[:3] + "-…", Expires: expires})
+	codes = append(codes, Enrollment{ID: id, Hash: hash(code), Hint: code[:3] + "-…", Expires: expires, Host: host})
 	next := m.state
 	next.Codes = codes
 	// A manual API-only configuration can still add hosts without distributing
@@ -238,19 +250,44 @@ func (m *Manager) Enroll() (code, id string, expires time.Time, err error) {
 }
 func (m *Manager) List() []Enrollment { m.mu.Lock(); defer m.mu.Unlock(); return m.live() }
 func (m *Manager) Redeem(code, host string) (Tokens, error) {
+	return m.RedeemNonce(code, host, "")
+}
+
+// RedeemNonce grants a code once. A persisted installation nonce permits only
+// that installation and hostname to recover a lost response, even across restarts.
+// Empty nonces preserve the original strictly single-use behavior.
+func (m *Manager) RedeemNonce(code, host, nonce string) (Tokens, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if host == "" || len(nonce) > 256 || nonce != "" && len(nonce) < 16 {
+		return Tokens{}, ErrCode
+	}
 	codes := m.live()
+	codeHash, nonceHash := hash(code), hash(nonce)
 	for i, c := range codes {
-		if c.Hash == hash(code) && c.UsedBy == nil {
-			codes[i].UsedBy = &host
-			next := m.state
-			next.Codes = codes
-			if err := m.save(next); err != nil {
-				return Tokens{}, err
-			}
-			return m.tokens(), nil
+		if subtle.ConstantTimeCompare([]byte(c.Hash), []byte(codeHash)) != 1 || c.Host != "" && c.Host != host {
+			continue
 		}
+		if c.UsedBy != nil {
+			if nonce != "" && subtle.ConstantTimeCompare([]byte(c.NonceHash), []byte(nonceHash)) == 1 && *c.UsedBy == host && m.now().Before(c.RetryUntil) {
+				return m.tokens(), nil
+			}
+			return Tokens{}, ErrCode
+		}
+		if !m.now().Before(c.Expires) {
+			return Tokens{}, ErrCode
+		}
+		codes[i].UsedBy = &host
+		if nonce != "" {
+			codes[i].NonceHash = nonceHash
+			codes[i].RetryUntil = m.now().UTC().Add(RedemptionRetryWindow)
+		}
+		next := m.state
+		next.Codes = codes
+		if err := m.save(next); err != nil {
+			return Tokens{}, err
+		}
+		return m.tokens(), nil
 	}
 	return Tokens{}, ErrCode
 }

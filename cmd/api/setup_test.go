@@ -146,7 +146,7 @@ func TestSetupOriginAndInstaller(t *testing.T) {
 	if w.Code != 200 || !strings.Contains(w.Body.String(), "INSTALL_API_URL='https://public.example.org'") {
 		t.Fatal("installer origin not prefilled/quoted")
 	}
-	for _, path := range []string{"/agent/bin/SHA256SUMS", "/agent/bin/linux-amd64/discover", "/agent/bin/linux-arm64/agentupdate"} {
+	for _, path := range []string{"/agent/bin/SHA256SUMS", "/agent/bin/linux-amd64/discover", "/agent/bin/linux-arm64/agentupdate", "/agent/bin/linux-amd64/agentboot"} {
 		if w := doRequest(t, s.routes(), "GET", path, nil); w.Code != 200 {
 			t.Fatalf("download %s: %d", path, w.Code)
 		}
@@ -163,7 +163,7 @@ func testAgentBinDir(t *testing.T) string {
 		if err := os.Mkdir(filepath.Join(dir, p), 0755); err != nil {
 			t.Fatal(err)
 		}
-		for _, b := range []string{"discover", "agentupdate"} {
+		for _, b := range []string{"discover", "agentupdate", "agentboot"} {
 			if err := os.WriteFile(filepath.Join(dir, p, b), []byte("test"), 0755); err != nil {
 				t.Fatal(err)
 			}

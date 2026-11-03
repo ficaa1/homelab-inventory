@@ -1,119 +1,221 @@
 # Signed agent updates
 
-Off by default. When on, agents install new versions of `discover` that you
-signed, first on a few test hosts, then everywhere once you promote them.
+Signed updates are opt-in for each host. Configuring the API makes signed
+onboarding available; it does not convert existing unsigned agents. A signed
+runtime contains `discover` and `agentupdate`; the installed `agentboot` verifies
+and supervises both. The launcher itself is upgraded by rerunning the installer.
 
-## 1. Make a key and a release
+## 1. Install the native signer
 
-On a machine you trust (not the API server's container), from a checkout:
+Use a trusted checkout and Go 1.25 or later. Build the payloads and native Linux
+amd64 signer from the same source and version, even when building on another OS:
 
 ```sh
-export SIGNER_KEY="$HOME/.config/homelab-inventory/release.key"
-export SIGNER_DIR="$HOME/inventory-releases"
-make keygen > release-public.key
+umask 022
+make dist signer-linux VERSION=v0.1.0
+sha256sum bin/agentsign-linux-amd64
+```
+
+Transfer `bin/agentsign-linux-amd64` through your trusted administrative channel
+to the signer machine. Compare its SHA-256 with the build output before installing
+it. On that Linux amd64 machine, as root:
+
+```sh
+install -d -m 0755 /usr/local/libexec/homelab-inventory
+install -o root -g root -m 0755 ./agentsign-linux-amd64 \
+  /usr/local/libexec/homelab-inventory/agentsign
+install -d -m 0700 /root/.config/homelab-inventory
+install -d -m 0755 /srv/homelab-inventory/releases
+```
+
+`make signer-linux` sets `CGO_ENABLED=0`, `GOOS=linux`, `GOARCH=amd64`, and uses
+exactly the payload's version flags. A build-machine-native `bin/agentsign` may
+not run on the signer. Replace the installed signer when changing release source:
+its compiled agent revision must match the payload. The API must never receive
+the private key or a writable signing directory.
+
+## 2. Generate the key and publish
+
+From the trusted build checkout, configure the existing remote signer interface.
+The example names below are placeholders; choose your own signer and paths:
+
+```sh
+export SIGNER_HOST=root@signer.example.org
+export SIGNER_PORT=22
+export SIGNER_BIN=/usr/local/libexec/homelab-inventory/agentsign
+export SIGNER_KEY=/root/.config/homelab-inventory/release.key
+export SIGNER_DIR=/srv/homelab-inventory/releases
+export LOCAL_SIGNER_BIN="$PWD/bin/agentsign"
+export SIGNER_INPUT=bin
+export AGENT_PLATFORMS=linux/amd64,linux/arm64
+scripts/release-agent.sh keygen > release-public.key
 make release VERSION=v0.1.0
 ```
 
-Back up the private key somewhere offline. It never goes near the API.
+For signing locally, leave `SIGNER_HOST` unset and set the other paths for that
+machine. `keygen` creates a signer-owned mode-0600 Ed25519 key, or validates and
+reuses the existing one. It prints only the public key. Back up the private key
+offline. Use a distinct key and release directory for a different product or
+trust domain; never overwrite another installation's key.
 
-## 2. Serve it
+`make release` builds static artifacts and signs a new increasing sequence. Its
+legacy `latest.json` contains only `discover`; `N/runtime.json` describes the
+compatible protocol-1 `discover`/`agentupdate` pair. `AGENT_PLATFORMS` is signed
+into both manifests; Linux amd64 and arm64 are the defaults. `freebsd/amd64` can
+be published for legacy agents, but the slots installer targets Linux only.
 
-Copy `SIGNER_DIR` to the API server, mount it read-only at `/agent-releases`,
-and set:
+## 3. Serve the release tree read-only
 
-```text
-AGENT_RELEASE_DIR=/agent-releases
-AGENT_CANARY_HOSTS=host-a,host-b
+Make the complete release tree available to the API host using your deployment
+process. Keep old sequence directories and copy immutable release directories
+before replacing `latest.json` and `control.json`. Copy `promoted.json` after a
+signer promotion as well; a remote snapshot must include its referenced release.
+Never copy the private key. For Compose, add to the API service:
+
+```yaml
+volumes:
+  - /srv/homelab-inventory/releases:/agent-releases:ro
+environment:
+  AGENT_RELEASE_DIR: /agent-releases
+  AGENT_CANARY_HOSTS: canary-vm,canary-lxc
 ```
 
-The canary hosts get each new release first. Leave it empty to roll out only
-when you promote.
+Use actual hostnames you selected as canaries, never a default fleet list. Restart
+the API after changing environment configuration. For a binary service, set the
+same variables and grant read access to the release tree while retaining signer
+write ownership. The API stores browser rollout decisions under its own data
+directory; it never writes the release tree.
 
-## 3. Switch hosts to signed updates
+In **Admin → Add a host**, check signed-release readiness, the public-key
+fingerprint and the configured canaries. The fingerprint is SHA-256 of the
+decoded 32-byte Ed25519 public key, not the text file's checksum. Compare it with
+a value obtained through your trusted signer channel. Configure notifications
+for warning transitions and use the normal notification test before rollout.
 
-Give each host `release-public.key` through a channel you trust, then install the
-agent with `--signed` (the other files are as in [Install](install.md#details)):
+## 4. Migrate the canaries with one paste
+
+In Add a host, enter the exact hostname of the selected canary and copy its
+fresh generated signed command. Run it in that host's root console (or use the
+sudo command). The generated command includes `--updates slots`, downloads the
+launcher, redeems the short-lived enrollment code and selects the signed runtime.
+The long-lived agent credential is stored privately, not placed in the command.
+The same command handles a fresh install or conversion of an existing public
+unsigned or legacy signed installation.
+
+This first download is **trust on first use (TOFU)**: trusting the installer,
+launcher and first public key requires a trusted API origin/transport. Matching
+checksums from that same server catch corruption, not a compromised server.
+Use HTTPS and compare the displayed release-key fingerprint through an
+independent trusted channel. `--allow-http` is an explicit trusted-network
+exception and exposes enrollment credentials to observers. Once installed, the
+release key is pinned and the installer checks it on reruns. The launcher itself
+is checked only against the API’s SHA256SUMS, not a release signature, so rerunning
+enrollment again trusts the installer and launcher supplied by that API.
+
+A configured canary receives the current candidate. Other new hosts receive the
+last signer-promoted runtime. Before the first signer promotion, non-canary
+signed enrollment refuses. Hold blocks new signed enrollment as well as update
+offers; it cannot be bypassed with Add a host. The API cannot choose an arbitrary
+older signed baseline.
+
+The installer stages and verifies the pair before changing the existing schedule,
+retains migration intent and enrollment retry identity, and requires an accepted
+first report before completing cutover. Rerun the same command after an
+interruption; keep the migration state. A replacement code is an escape hatch
+when the retry window expires. Do not erase state to force another attempt.
+
+The private `.migration` directory records preparation, backups and cutover intent.
+A prepared retry rechecks the key and legacy floor, then reuses its saved token.
+A lost redemption response can be retried with the same persisted installation
+nonce for 30 minutes; a different nonce or hostname cannot reuse the code.
+The systemd timer stays active during cutover. A failed cutover restores the old
+configuration; after an abrupt kill, the next timer tick runs the old schedule or
+the installed launcher reconciles the saved intent. Handled termination signals
+trigger rollback immediately. If TrueNAS middleware cannot restore cron, recovery
+files and intent remain for the next cron invocation to retry. Floors survive
+rollback. TrueNAS cron hides middleware mail output and records up to 1 MiB per
+invocation in `launcher.log`, retaining one previous log, both mode 0600.
+Keep backups private: they include the previous token.
+
+Check **Hosts** for signed mode, the expected sequence and updater, a fresh
+accepted inventory, and healthy committed operation. Check locally on systemd:
 
 ```sh
-sudo sh ./install-agent.sh --binary-dir "$PWD" --api-url https://inventory.example.org \
-  --token-file /root/inventory-token --signed \
-  --public-key /root/release-public.key --manifest /root/release/manifest.json \
-  --artifacts /root/release
+systemctl status homelab-discover.timer
+journalctl -u homelab-discover.service -n 20
+sudo /var/lib/homelab-agent/agentboot -dir /var/lib/homelab-agent -status
 ```
 
-`manifest.json` is the release's `latest.json`; `/root/release` holds that
-release's files.
+Verify at least two subsequent healthy scheduled reports. Include a representative
+unprivileged LXC canary before broad rollout; success on a VM does not establish
+container compatibility. For an LXC without SSH, enter its console from the
+hypervisor and paste the generated root command there. Downloads and installation
+run inside the guest; do not pipe credentials through container execution stdin.
 
-## 4. Roll out
+## 5. Promote, then migrate the remaining hosts
 
-Check the canaries in **Hosts**. Then, on the signer:
+After reviewing the canaries, on the configured signer checkout:
 
 ```sh
-make promote   # offer the release to every host
-make hold      # stop offering it (installed hosts keep it)
-make auto      # back to canaries only
+make promote
 ```
 
-You can also promote from the dashboard with the `OPERATOR_TOKEN`. `make hold`
-always wins.
+This verifies the retained protocol-1 envelope and every artifact, then writes
+`promoted.json` with its sequence and exact signed-envelope SHA-256. That pointer
+selects the immutable bootstrap baseline. Transfer the updated release metadata
+if the API serves a copy. Only signer promotion changes this baseline. Browser
+or operator-token promotion changes update offers, but cannot authorize a new
+bootstrap baseline in the read-only release tree.
 
-## If a release is bad
-
-A host that cannot report with a new release goes back to the previous one by
-itself. To go back by hand, hold the release and run on the host:
+Obtain and paste one fresh command per remaining host. Future runtime releases
+need only publish → check canaries → signer promote, without another host login.
 
 ```sh
-sudo /var/lib/homelab-agent/agentupdate -dir /var/lib/homelab-agent -recover
+make hold      # pause offers and signed enrollment; keep installed runtimes
+make auto      # latest candidate to configured canaries
 ```
 
-To ship an older version again, publish it as a new release. Release numbers
-only go up.
+Hold, auto and publishing a new sequence retain the promoted pointer. A newly
+published candidate does not become the default for ordinary new hosts. Keep all
+retained releases: the signer performs no release garbage collection. Never
+remove the promoted sequence or data needed by in-flight downloads/reports.
 
-## Details
+## Migration and recovery boundaries
 
-**What is checked.** Each release is signed with Ed25519; hosts check the
-signature, file sizes and hashes, and run a read-only self-test before using it.
-Legacy signed installs update only `discover`; their `agentupdate` is upgraded
-by rerunning the installer. Slots installs update both runtime components
-together, as described below. Reports never decide a rollout: an agent
-token can download releases but cannot sign or promote them.
+Legacy signed conversion preserves its validated same-key replay floor, including
+a higher rejected sequence. A selected baseline below that floor must refuse;
+publish a higher repair release instead. Unreadable state or a mismatched key
+fails closed. Never delete legacy state, slot controls, or the stable lock inode
+to get past an error. Sequence comparisons do not depend on release timestamps.
 
-**Platforms.** `AGENT_PLATFORMS` (default `linux/amd64,linux/arm64`, plus
-`freebsd/amd64` if you want it) sets what each release contains.
+A separate product's key, floor and schedule are a different trust domain. For a
+TrueNAS migration use a new dataset directory and credential, and explicitly
+select only the predecessor schedule to replace; preserve its files and key.
+See [TrueNAS and LXC installation](install.md#truenas-scale-and-lxc).
 
-**Signing over SSH.** Set `SIGNER_HOST=operator@192.0.2.10`, `SIGNER_PORT`, and
-absolute remote `SIGNER_BIN`, `SIGNER_KEY` and `SIGNER_DIR`. The build is copied
-to the signer and signed there; the key never leaves it.
+A failing candidate falls back to the recorded known-good runtime. A quarantined
+sequence stays rejected even if fallback inventories succeed. Hold the release,
+inspect the safe stage/code and publish corrected code at a higher sequence.
+Do not reset `latest.json` to an older release or delete a host's floor.
 
-**Existing plain host.** Without reinstalling, stop its timer, then:
+Legacy plain-to-signed installation with local `--signed`, `--public-key`,
+`--manifest` and `--artifacts` remains available, but updates only `discover`.
+Use `--updates slots` for the replaceable runtime pair. Trusted offline slots
+installation can supply `--binary-dir`, `--public-key`, `--manifest` pointing to
+`N/runtime.json`, `--artifacts` pointing to `N`, and `--token-file` instead of
+downloading a baseline. Selecting that offline baseline is an operator trust
+choice and still cannot lower an existing floor.
 
-```sh
-sudo cp /root/release-public.key /var/lib/homelab-agent/public.key
-sudo chmod 600 /var/lib/homelab-agent/public.key
-sudo /var/lib/homelab-agent/agentupdate -dir /var/lib/homelab-agent \
-  -public /var/lib/homelab-agent/public.key \
-  -initialize /root/release/manifest.json -input /root/release
-sudo /var/lib/homelab-agent/agentupdate -configure \
-  -config /var/lib/homelab-agent/config.json -dir /var/lib/homelab-agent \
-  -public /var/lib/homelab-agent/public.key -discover /usr/local/bin/discover \
-  -api-url https://inventory.example.org \
-  -token-file /var/lib/homelab-agent/token -signed
-sudo /usr/local/bin/homelab-discover
-```
-
-**Dashboard offers.** `POST /agent/offers` with `Authorization: Bearer <operator
-token>` and `{"action":"promote","sequence":1,"confirm":true}`. Other actions:
-`auto`, `hold`, and `update` with a `host`. A new release clears earlier choices.
-
-**New key.** `make hold`, stop every agent's timer, back up the release folder,
-make a new key at a different path, and run
-`SIGNER_KEY=/private/new.key scripts/release-agent.sh resign`. Give hosts the new
-public key, restart their timers, check they report, then `make auto` or
-`make promote`. If the old key leaked, check what is already installed before
-you resume.
-
-**Never** reset `latest.json` to an older release, delete a host's update state
-to force a downgrade, or mount the private key into the API.
+**Key rotation.** Once a promoted baseline exists, `agentsign -resign` refuses:
+changing its envelope or shared public key would invalidate the immutable
+bootstrap identity. A coordinated trust migration is required; deleting
+`promoted.json` or replacing host keys is not a rotation procedure. Before any
+baseline promotion, the legacy held-release rotation remains available: hold,
+stop all agent schedules, back up the entire release tree and host state, create
+a new key at a different path, re-sign with `scripts/release-agent.sh resign`,
+provision the new public key through a trusted channel, then validate hosts before
+resuming. It changes only the held current release; older retained envelopes
+remain signed by the old key. Never overwrite the old private key.
 
 ## Update health in Hosts
 
@@ -195,10 +297,10 @@ updates are not configured.
 Status contains safe stage/code enums, bounded counters and sticky
 `firstFailure`/`lastFailure` records. It never includes raw errors, stderr, paths,
 URLs or response bodies. Shared agent-token telemetry does not authorize offers
-or attest to a host's identity. Signed enrollment and conversion remain separate follow-up work. These
-reporting changes reach old installations only when a new updater is installed.
+or attest to a host's identity. Existing unsigned and legacy installations receive these reporting changes only
+when a new updater is installed or they are explicitly converted to slots.
 
-## Runtime slots (fresh installations)
+## Runtime slots
 
 `--updates slots` installs a signed `discover` and `agentupdate` pair. The
 root-owned `agentboot` launcher holds the key, token and sequence floor. Both
@@ -209,10 +311,10 @@ Publish with `make release` as above. It now signs two envelopes at the same
 sequence: `latest.json` is the legacy discover-only offer; `N/runtime.json` is
 protocol 1 for slots. Old signed and unsigned installations keep their current
 behavior. They are not converted when the API is upgraded. A release directory
-made by an old signer continues to work for legacy hosts but cannot enroll or
-update a slots host. Retain old sequence directories for in-flight reports and
-artifact downloads; the API verifies each retained envelope before serving only
-its listed artifacts.
+made by an old signer continues to serve legacy hosts but cannot enroll or
+update a slots host until a protocol-1 runtime is published. Retain old sequence
+directories for in-flight reports and artifact downloads; the API verifies each
+retained envelope before serving only its listed artifacts.
 
 On a fresh Linux systemd host, supply a trusted launcher, public key and signed
 baseline through your existing trusted channel:
@@ -225,9 +327,8 @@ sudo sh ./install-agent.sh --updates slots --binary-dir "$PWD/bin" \
 ```
 
 For a disposable test use `--prefix /absolute/test-root`; it runs the first
-report without systemd. This path refuses an existing plain or legacy signed
-installation. Enrollment, conversion, a promoted bootstrap selector and TrueNAS
-cron are separate follow-up work. Choose the baseline deliberately; the local
+report without systemd. The same installer supports explicit conversion with a
+retained migration journal. Choose an offline baseline deliberately; the local
 installer does not bypass the operator's responsibility to select it.
 
 Under `/var/lib/homelab-agent`:

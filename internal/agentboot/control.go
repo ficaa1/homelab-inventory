@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"github.com/ficaa1/homelab-inventory/internal/agentproto"
 	"github.com/ficaa1/homelab-inventory/internal/agentrelease"
+	"os"
 	"path/filepath"
 )
 
@@ -150,4 +151,41 @@ func validDigest(s string) bool {
 		}
 	}
 	return true
+}
+
+// AdoptBaseline publishes an explicitly installed, verified baseline without
+// resetting the durable generation. A surviving higher-floor mirror must win
+// over the older mirror if power fails between their two atomic writes.
+func (r Runner) AdoptBaseline(c Control) error {
+	if c.State != "committed" || c.Active.Sequence != c.Floor || c.Active.Digest != c.FloorDigest || c.Fallback.Identity != c.Active.Identity {
+		return errCorrupt
+	}
+	for _, s := range []Slot{c.Active, c.Fallback} {
+		if _, e := r.checkSlot(s); e != nil {
+			return e
+		}
+	}
+	previous, e := r.Load()
+	if e == nil {
+		if c.Floor < previous.Floor || c.Floor == previous.Floor && c.FloorDigest != previous.FloorDigest {
+			return errCorrupt
+		}
+		// A previous attempt may already have published the first mirror. Preserve
+		// that record and its generation; the next normal tick reconciles its mirror.
+		if c.Floor == previous.Floor {
+			return nil
+		}
+		if previous.Generation == ^uint64(0) {
+			return errCorrupt
+		}
+		c.Generation = previous.Generation
+	} else {
+		for _, name := range []string{"control.0", "control.1"} {
+			if _, se := os.Lstat(filepath.Join(r.Dir, name)); !os.IsNotExist(se) {
+				return errCorrupt
+			}
+		}
+		c.Generation = 0
+	}
+	return r.save(&c)
 }

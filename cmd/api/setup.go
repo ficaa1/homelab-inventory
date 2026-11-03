@@ -15,6 +15,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ficaa1/homelab-inventory/internal/agentmount"
+	"github.com/ficaa1/homelab-inventory/internal/agentoffers"
+	"github.com/ficaa1/homelab-inventory/internal/agentrelease"
 	"github.com/ficaa1/homelab-inventory/internal/auth"
 	"github.com/ficaa1/homelab-inventory/internal/httpx"
 	"github.com/ficaa1/homelab-inventory/internal/setup"
@@ -86,6 +89,36 @@ func (s *server) setupGate(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// Release details are shown only through authenticated setup/agent status.
+func (s *server) signedEnrollmentStatus(host string) map[string]any {
+	out := map[string]any{"configured": s.agentDir() != "", "ready": false, "key_fingerprint": "", "canary_hosts": agentoffers.CanaryHosts(), "release": nil}
+	if s.agentDir() == "" {
+		out["reason"] = "Signed updates are not configured; the command uses the unsigned installer."
+		return out
+	}
+	public, err := os.ReadFile(filepath.Join(s.agentDir(), "public.key"))
+	if err == nil {
+		out["key_fingerprint"], _ = agentrelease.PublicKeyFingerprint(public)
+	}
+	m, _, c, err := agentrelease.Read(s.agentDir())
+	if err == nil {
+		out["release"] = map[string]any{"sequence": m.Sequence, "version": m.Version, "revision": m.Revision, "mode": c.Mode}
+	}
+	baseline, _, err := s.enrollmentBaseline(host)
+	if err != nil {
+		out["reason"] = err.Error()
+		return out
+	}
+	out["baseline_sequence"] = baseline.Sequence
+	out["ready"] = s.binariesAvailable()
+	out["reason"] = "Ready for signed enrollment"
+	if !s.binariesAvailable() {
+		out["reason"] = "Agent bootstrap binaries unavailable"
+	}
+	return out
+}
+
 func (s *server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	state, left := "claimed", 0
@@ -93,6 +126,13 @@ func (s *server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 		state, left = s.setup.Status()
 	}
 	out := map[string]any{"state": state}
+	if httpx.BearerOK(r, s.apiToken(), httpx.DenyWhenUnset) {
+		out["signed_updates"] = s.signedEnrollmentStatus(r.URL.Query().Get("host"))
+	} else if len(r.Header.Values("Authorization")) == 0 && s.browserAuth != nil {
+		if _, ok := s.browserAuth.Session(r); ok && auth.CSRF(r, s.authConfig()) {
+			out["signed_updates"] = s.signedEnrollmentStatus(r.URL.Query().Get("host"))
+		}
+	}
 	if state == "unclaimed" {
 		origin, err := s.setupURL(r)
 		if err != nil {
@@ -153,8 +193,47 @@ func (s *server) handleSetupClaim(w http.ResponseWriter, r *http.Request) {
 }
 func (s *server) handleSetupEnroll(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	var in struct{}
+	var in struct {
+		Hostname        string `json:"hostname"`
+		Scheduler       string `json:"scheduler"`
+		StateDir        string `json:"state_dir"`
+		ReplaceSchedule string `json:"replace_schedule"`
+	}
 	if !setupBody(w, r, &in) {
+		return
+	}
+	if in.Hostname != "" && store.ValidateHost(in.Hostname) != nil {
+		writeError(w, 400, "invalid hostname")
+		return
+	}
+	if in.Scheduler != "" && in.Scheduler != "systemd" && in.Scheduler != "truenas-cron" {
+		writeError(w, 400, "unsupported scheduler")
+		return
+	}
+	if in.Scheduler == "truenas-cron" && (!filepath.IsAbs(in.StateDir) || filepath.Clean(in.StateDir) != in.StateDir || strings.ContainsAny(in.StateDir, " \t\r\n\x00%\"'\\")) || in.StateDir != "" && in.Scheduler != "truenas-cron" {
+		writeError(w, 400, "TrueNAS cron requires an absolute persistent state_dir")
+		return
+	}
+	if in.Scheduler == "truenas-cron" {
+		if err := agentmount.ValidateStatePath(in.StateDir); err != nil {
+			writeError(w, 400, err.Error())
+			return
+		}
+	}
+	if in.ReplaceSchedule != "" {
+		if in.Scheduler != "truenas-cron" || len(in.ReplaceSchedule) > 256 || strings.ContainsAny(in.ReplaceSchedule, "\r\n\x00") || strings.HasPrefix(in.ReplaceSchedule, "-") {
+			writeError(w, 400, "replace_schedule must be a cron job ID or exact description")
+			return
+		}
+	}
+	signed := s.agentDir() != ""
+	if signed {
+		if _, _, err := s.enrollmentBaseline(in.Hostname); err != nil {
+			writeError(w, 409, err.Error())
+			return
+		}
+	} else if in.Scheduler == "truenas-cron" {
+		writeError(w, 409, "TrueNAS cron requires a configured signed release")
 		return
 	}
 	origin, err := s.setupURL(r)
@@ -162,7 +241,7 @@ func (s *server) handleSetupEnroll(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid API host")
 		return
 	}
-	code, id, expires, err := s.setup.Enroll()
+	code, id, expires, err := s.setup.EnrollHost(in.Hostname)
 	if err != nil {
 		status := 503
 		if errors.Is(err, setup.ErrLimit) {
@@ -173,6 +252,18 @@ func (s *server) handleSetupEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	command := "curl -fsSL " + shellQuote(origin+"/install.sh") + " | sudo sh -s -- --enroll " + shellQuote(code)
+	if signed {
+		command += " --updates slots"
+	}
+	if in.Hostname != "" {
+		command += " --hostname " + shellQuote(in.Hostname)
+	}
+	if in.Scheduler == "truenas-cron" {
+		command += " --scheduler truenas-cron --state-dir " + shellQuote(in.StateDir)
+		if in.ReplaceSchedule != "" {
+			command += " --replace-schedule " + shellQuote(in.ReplaceSchedule)
+		}
+	}
 	if strings.HasPrefix(origin, "http:") {
 		command += " --allow-http"
 	}
@@ -180,15 +271,15 @@ func (s *server) handleSetupEnroll(w http.ResponseWriter, r *http.Request) {
 		command = "printf '%s\\n' " + shellQuote("Agent binaries unavailable. Use the packaged image, configure AGENT_BIN_DIR, or follow manual setup in docs/install.md.") + " >&2; false"
 	}
 	writeJSON(w, 200, map[string]any{"id": id, "code": code, "expires_at": expires, "api_url": origin,
-		"http": strings.HasPrefix(origin, "http:"), "commands": map[string]string{"linux": command}})
+		"http": strings.HasPrefix(origin, "http:"), "signed_updates": signed, "hostname": in.Hostname, "commands": map[string]string{"linux": command, "root": strings.Replace(command, " | sudo sh -s --", " | sh -s --", 1)}})
 }
 func (s *server) handleSetupEnrollList(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	out := make([]map[string]any, 0)
 	for _, c := range s.setup.List() {
-		out = append(out, map[string]any{"id": c.ID, "code_hint": c.Hint, "expires_at": c.Expires, "used_by": c.UsedBy})
+		out = append(out, map[string]any{"id": c.ID, "code_hint": c.Hint, "expires_at": c.Expires, "used_by": c.UsedBy, "hostname": c.Host})
 	}
-	writeJSON(w, 200, map[string]any{"outstanding": out})
+	writeJSON(w, 200, map[string]any{"outstanding": out, "status": map[string]any{"signed_updates": s.signedEnrollmentStatus(r.URL.Query().Get("host"))}})
 }
 func (s *server) handleAgentEnroll(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -206,8 +297,9 @@ func (s *server) handleAgentEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Code string `json:"code"`
-		Host string `json:"hostname"`
+		Code  string `json:"code"`
+		Host  string `json:"hostname"`
+		Nonce string `json:"nonce"`
 	}
 	// Keep malformed, unknown, used and expired credentials indistinguishable.
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
@@ -221,7 +313,7 @@ func (s *server) handleAgentEnroll(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid API host")
 		return
 	}
-	t, err := s.setup.Redeem(in.Code, in.Host)
+	t, err := s.setup.RedeemNonce(in.Code, in.Host, in.Nonce)
 	if err != nil {
 		if errors.Is(err, setup.ErrCode) {
 			writeError(w, 403, "invalid enrollment code")
@@ -298,7 +390,7 @@ func (s *server) setupURL(r *http.Request) (string, error) {
 }
 func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'" }
 func (s *server) binariesAvailable() bool {
-	for _, name := range []string{"SHA256SUMS", "linux-amd64/discover", "linux-amd64/agentupdate", "linux-arm64/discover", "linux-arm64/agentupdate"} {
+	for _, name := range []string{"SHA256SUMS", "linux-amd64/discover", "linux-amd64/agentupdate", "linux-amd64/agentboot", "linux-arm64/discover", "linux-arm64/agentupdate", "linux-arm64/agentboot"} {
 		info, err := os.Stat(filepath.Join(s.agentBinDir, name))
 		if err != nil || !info.Mode().IsRegular() {
 			return false
@@ -325,7 +417,7 @@ func (s *server) handleAgentBin(w http.ResponseWriter, r *http.Request) {
 	name := "SHA256SUMS"
 	if r.URL.Path != "/agent/bin/SHA256SUMS" {
 		p, b := r.PathValue("platform"), r.PathValue("binary")
-		if p != "linux-amd64" && p != "linux-arm64" || b != "discover" && b != "agentupdate" {
+		if p != "linux-amd64" && p != "linux-arm64" || b != "discover" && b != "agentupdate" && b != "agentboot" {
 			http.NotFound(w, r)
 			return
 		}

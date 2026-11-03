@@ -109,6 +109,16 @@ func Verify(data, public []byte) (Manifest, error) {
 	return m, nil
 }
 func Digest(data []byte) string { return fmt.Sprintf("%x", sha256.Sum256(data)) }
+
+// PublicKeyFingerprint identifies the decoded Ed25519 trust root, independent
+// of whitespace in the public key file. It never reads a private key.
+func PublicKeyFingerprint(public []byte) (string, error) {
+	key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(public)))
+	if err != nil || len(key) != ed25519.PublicKeySize {
+		return "", errors.New("invalid public key")
+	}
+	return Digest(key), nil
+}
 func Check(data []byte, a Artifact) error {
 	if int64(len(data)) != a.Size || Digest(data) != a.SHA256 {
 		return errors.New("artifact checksum or size mismatch")
@@ -317,6 +327,122 @@ type Control struct {
 	Mode     string `json:"mode"`
 }
 
+// promoted pins an immutable retained runtime, not the mutable latest offer.
+// Only the signer writes this pointer; dashboard offers cannot change it.
+type promoted struct {
+	Sequence       uint64 `json:"sequence"`
+	ManifestSHA256 string `json:"manifest_sha256"`
+}
+
+// ReadPromoted verifies the exact protocol-1 envelope selected by the signer.
+// It remains usable when a newer release is held or offered only to canaries.
+func ReadPromoted(dir string) (Manifest, []byte, error) {
+	f, err := os.Open(filepath.Join(dir, "promoted.json"))
+	if err != nil {
+		return Manifest{}, nil, err
+	}
+	defer f.Close()
+	b, err := io.ReadAll(io.LimitReader(f, 1025))
+	if err != nil {
+		return Manifest{}, nil, err
+	}
+	var p promoted
+	if len(b) > 1024 {
+		return Manifest{}, nil, errors.New("invalid promoted baseline")
+	}
+	if _, err = agentproto.ExactObject(b, "sequence", "manifest_sha256"); err != nil {
+		return Manifest{}, nil, errors.New("invalid promoted baseline")
+	}
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err = dec.Decode(&p); err != nil || p.Sequence == 0 || len(p.ManifestSHA256) != 64 {
+		return Manifest{}, nil, errors.New("invalid promoted baseline")
+	}
+	m, data, err := ReadSequence(dir, p.Sequence, true)
+	if err != nil {
+		return Manifest{}, nil, err
+	}
+	if Digest(data) != p.ManifestSHA256 {
+		return Manifest{}, nil, errors.New("promoted manifest digest mismatch")
+	}
+	return m, data, nil
+}
+
+// SetControl is a signer operation. The caller must hold the release-tree lock.
+// Promotion verifies all retained artifacts before advancing the bootstrap
+// baseline. Hold, auto and publication never clear the previous baseline.
+func SetControl(dir, mode string) error {
+	if mode != "auto" && mode != "hold" && mode != "promote" {
+		return errors.New("invalid control")
+	}
+	m, _, _, err := Read(dir)
+	if err != nil {
+		return err
+	}
+	if mode == "promote" {
+		runtime, data, err := ReadSequence(dir, m.Sequence, true)
+		if err != nil {
+			return err
+		}
+		if runtime.Version != m.Version || runtime.Revision != m.Revision || len(runtime.Platforms) != len(m.Platforms) {
+			return errors.New("runtime identity conflict")
+		}
+		for _, platform := range m.Platforms {
+			a := runtime.Artifacts[platform+"/discover"]
+			legacy := m.Artifacts[platform+"/discover"]
+			if a.Name != legacy.Name || a.SHA256 != legacy.SHA256 || a.Size != legacy.Size {
+				return errors.New("runtime identity conflict")
+			}
+		}
+		for _, a := range runtime.Artifacts {
+			if err = checkRetainedArtifact(dir, runtime.Sequence, a); err != nil {
+				return err
+			}
+		}
+		if _, err = os.Lstat(filepath.Join(dir, "promoted.json")); err == nil {
+			old, oldData, err := ReadPromoted(dir)
+			if err != nil {
+				return err
+			}
+			if old.Sequence > runtime.Sequence || old.Sequence == runtime.Sequence && Digest(oldData) != Digest(data) {
+				return errors.New("promoted baseline downgrade or equivocation")
+			}
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		// The baseline is durable before the fleet-wide offer. A crash between
+		// these writes keeps a verified operator-selected enrollment baseline.
+		if err = WriteJSON(filepath.Join(dir, "promoted.json"), promoted{runtime.Sequence, Digest(data)}); err != nil {
+			return err
+		}
+	}
+	return WriteJSON(filepath.Join(dir, "control.json"), Control{Sequence: m.Sequence, Mode: mode})
+}
+
+func checkRetainedArtifact(dir string, seq uint64, a Artifact) error {
+	f, err := os.Open(filepath.Join(dir, strconv.FormatUint(seq, 10), a.Name))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if !st.Mode().IsRegular() || st.Size() != a.Size {
+		return errors.New("retained artifact size or type mismatch")
+	}
+	h := sha256.New()
+	n, err := io.Copy(h, io.LimitReader(f, a.Size+1))
+	if err != nil {
+		return err
+	}
+	if n != a.Size || hex.EncodeToString(h.Sum(nil)) != a.SHA256 {
+		return errors.New("retained artifact checksum mismatch")
+	}
+	return nil
+}
+
 func Read(dir string) (Manifest, []byte, Control, error) {
 	var c Control
 	data, err := os.ReadFile(filepath.Join(dir, "latest.json"))
@@ -341,6 +467,13 @@ func Read(dir string) (Manifest, []byte, Control, error) {
 // Resign rotates the envelope trust root without changing executable hashes or
 // sequence. Caller holds the signer lock and has stopped fleet schedules.
 func Resign(dir, keyPath string) error {
+	// Re-signing changes exact envelope bytes and the shared trust root. Never
+	// invalidate an enrollment baseline or silently rebind its immutable digest.
+	if _, err := os.Lstat(filepath.Join(dir, "promoted.json")); err == nil {
+		return errors.New("promoted baseline requires explicit trust migration; in-place resign refused")
+	} else if !os.IsNotExist(err) {
+		return err
+	}
 	m, data, c, err := Read(dir)
 	if err != nil {
 		return err

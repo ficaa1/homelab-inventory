@@ -121,6 +121,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /agent/report", s.agentAuth(s.handleAgentReport))
 	mux.HandleFunc("POST /inventory", s.agentAuth(s.handleIngest))
 	mux.HandleFunc("GET /agent/manifest", s.agentAuth(s.handleAgentManifest))
+	mux.HandleFunc("GET /agent/bootstrap", s.bootstrapAuth(s.handleAgentBootstrap))
+	mux.HandleFunc("GET /agent/public-key", s.bootstrapAuth(s.handleAgentPublicKey))
 	mux.HandleFunc("GET /agent/artifacts/{sequence}/{name}", s.agentAuth(s.handleAgentArtifact))
 	mux.HandleFunc("POST /agent/status", s.agentAuth(s.handlePostAgentStatus))
 	mux.HandleFunc("GET /agent/status", s.auth(s.handleAgentStatus))

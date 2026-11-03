@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/ficaa1/homelab-inventory/internal/agentmount"
 	"github.com/ficaa1/homelab-inventory/internal/agentproc"
 	"github.com/ficaa1/homelab-inventory/internal/agentproto"
 	"github.com/ficaa1/homelab-inventory/internal/agentrelease"
-	"github.com/ficaa1/homelab-inventory/internal/fsx"
 )
 
 func (r Runner) deadline() time.Duration {
@@ -366,7 +366,19 @@ func (r Runner) resolveCollection(ctx context.Context, c *Control, phase string,
 
 // Run holds one stable lock inode. Status can still be read or sent when that
 // lock is busy or the control records are corrupt. Only Run writes the floor.
-func (r Runner) Run(ctx context.Context) (runErr error) {
+func (r Runner) Run(ctx context.Context) error { return r.run(ctx, 0, nil) }
+
+// RunWithLockWait is for the installer's first report; timer runs use Run.
+func (r Runner) RunWithLockWait(ctx context.Context, wait time.Duration, onWait func()) error {
+	return r.run(ctx, wait, onWait)
+}
+
+func (r Runner) run(ctx context.Context, wait time.Duration, onWait func()) (runErr error) {
+	if r.Dataset != "" {
+		if e := agentmount.CheckDataset(r.Dataset); e != nil {
+			return failure("state", "state_corrupt")
+		}
+	}
 	aggregate, cancel := context.WithTimeout(ctx, 12*time.Minute)
 	defer cancel()
 	statusParent := ctx
@@ -383,7 +395,7 @@ func (r Runner) Run(ctx context.Context) (runErr error) {
 		mark(&c, "state", errCorrupt)
 		return errCorrupt
 	}
-	unlock, e := fsx.LockDir(r.Dir)
+	unlock, e := LockDirWait(ctx, r.Dir, wait, onWait)
 	if e != nil {
 		mark(&c, "lock", classify("lock", e))
 		return classify("lock", e)
