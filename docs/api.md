@@ -177,7 +177,8 @@ hold returns 409; missing release/journal/persistence returns 503. See
 
 `POST /actions/preview` uses the API token and accepts
 `{"kind":"stack_restart","target":"app","host":"host-a"}` (or
-`container_restart` with an exact container name). It returns containers, impact,
+`container_restart` with an exact container name, or `vpn_reconnect` with the
+detected VPN gateway name; see [VPN recovery](vpn.md)). It returns containers, impact,
 operations and `container_set_hash`. Execution uses operator bearer, the same
 fields plus `confirm:true` and that hash. Both POST routes accept optional `host`:
 when supplied it must be a string exactly equal to `ACTIONS_HOST`, otherwise 400

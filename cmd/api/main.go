@@ -39,6 +39,7 @@ import (
 	"github.com/ficaa1/homelab-inventory/internal/setup"
 	"github.com/ficaa1/homelab-inventory/internal/silence"
 	"github.com/ficaa1/homelab-inventory/internal/store"
+	"github.com/ficaa1/homelab-inventory/internal/vpnwatch"
 )
 
 func main() {
@@ -256,6 +257,18 @@ func run() error {
 			},
 		}
 
+		if srv.exec != nil {
+			srv.vpnWatch, err = vpnwatch.Open(*dir, vpnwatch.Options{Runner: srv.exec, Actions: srv.actions, Settings: func() (bool, int) { e := srv.effective(); return e.VPNAutofix, e.VPNAutofixAfterMinutes }, Message: func(ctx context.Context, m notify.Message) {
+				if !srv.effective().Sending() {
+					return
+				}
+				err := srv.notifier.Sender.Send(ctx, m)
+				srv.notifier.Recorder.Record(notify.Delivery{At: time.Now().UTC(), Title: m.Title, Type: m.Type, Kind: "action", OK: err == nil, Error: errText(err)})
+			}})
+			if err != nil {
+				return nil, fmt.Errorf("opening VPN watch: %w", err)
+			}
+		}
 		if eff := srv.effective(); eff.Sending() {
 			logger.Printf("notifications on: %s and above, evaluated every %s", eff.NotifyLevel, eff.NotifyInterval)
 		} else {
@@ -271,6 +284,9 @@ func run() error {
 		rt.close = func() { srv.plugins.Close() }
 		rt.workers = func(ctx context.Context) {
 			rt.launch(ctx, srv.plugins.Loop)
+			if srv.vpnWatch != nil {
+				rt.launch(ctx, srv.vpnWatch.Loop)
+			}
 
 			// The notification loop lives here rather than in a `alerts --notify`
 			// timer because this is the only always-on process and it already has the

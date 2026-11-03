@@ -34,6 +34,10 @@ Press the restart button on a container or stack. The dashboard shows what will 
 and what depends on it, asks you to confirm, then asks for the operator token
 once per browser session. **Admin** lists recent restarts.
 
+For a detected VPN gateway, **Network → VPN → Reconnect VPN** previews the
+gateway and its dependent containers, then recovers them in order. Optional
+automatic recovery is off by default. See [VPN health and recovery](vpn.md).
+
 ## Restart whole Compose projects
 
 By default a stack restarts its containers one by one, dependencies first. To

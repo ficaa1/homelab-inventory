@@ -54,20 +54,22 @@ func (s *server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	out := struct {
-		RunRetention      store.Policy    `json:"run_retention"`
-		NotifyLevel       alert.Level     `json:"notify_level"`
-		NotifyInterval    string          `json:"notify_interval"`
-		DigestInterval    string          `json:"digest_interval"`
-		NotifyEnabled     bool            `json:"notify_enabled"`
-		DashboardName     string          `json:"dashboard_name"`
-		IconsFetch        bool            `json:"icons_fetch"`
-		AppriseSet        bool            `json:"apprise_set"`
-		AppriseHint       string          `json:"apprise_hint,omitempty"`
-		DigestAppriseSet  bool            `json:"digest_apprise_set"`
-		DigestAppriseHint string          `json:"digest_apprise_hint,omitempty"`
-		Sending           bool            `json:"sending"`
-		Source            map[string]bool `json:"configured_here"`
-		Coverage          []levelCoverage `json:"coverage"`
+		RunRetention           store.Policy    `json:"run_retention"`
+		NotifyLevel            alert.Level     `json:"notify_level"`
+		NotifyInterval         string          `json:"notify_interval"`
+		DigestInterval         string          `json:"digest_interval"`
+		NotifyEnabled          bool            `json:"notify_enabled"`
+		DashboardName          string          `json:"dashboard_name"`
+		VPNAutofix             bool            `json:"vpn_autofix"`
+		VPNAutofixAfterMinutes int             `json:"vpn_autofix_after_minutes"`
+		IconsFetch             bool            `json:"icons_fetch"`
+		AppriseSet             bool            `json:"apprise_set"`
+		AppriseHint            string          `json:"apprise_hint,omitempty"`
+		DigestAppriseSet       bool            `json:"digest_apprise_set"`
+		DigestAppriseHint      string          `json:"digest_apprise_hint,omitempty"`
+		Sending                bool            `json:"sending"`
+		Source                 map[string]bool `json:"configured_here"`
+		Coverage               []levelCoverage `json:"coverage"`
 		// AtOrAboveFloor is how many current, unsilenced alerts are eligible
 		// to notify. Zero here with Sending true is the "working, and quiet"
 		// case that looked like a fault.
@@ -77,13 +79,14 @@ func (s *server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		Log            notify.Log    `json:"log"`
 		UpdatedAt      *time.Time    `json:"updated_at,omitempty"`
 	}{
-		RunRetention:      eff.RunRetention,
-		NotifyLevel:       eff.NotifyLevel,
-		NotifyInterval:    eff.NotifyInterval.String(),
-		DigestInterval:    eff.DigestInterval.String(),
-		NotifyEnabled:     eff.NotifyEnabled,
-		DashboardName:     eff.DashboardName,
-		IconsFetch:        eff.IconsFetch,
+		RunRetention:   eff.RunRetention,
+		NotifyLevel:    eff.NotifyLevel,
+		NotifyInterval: eff.NotifyInterval.String(),
+		DigestInterval: eff.DigestInterval.String(),
+		NotifyEnabled:  eff.NotifyEnabled,
+		DashboardName:  eff.DashboardName,
+		IconsFetch:     eff.IconsFetch,
+		VPNAutofix:     eff.VPNAutofix, VPNAutofixAfterMinutes: eff.VPNAutofixAfterMinutes,
 		AppriseSet:        eff.AppriseURL != "",
 		AppriseHint:       settings.Redacted(eff.AppriseURL),
 		DigestAppriseSet:  eff.DigestAppriseURL != "",
@@ -104,6 +107,7 @@ func (s *server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		"notify_enabled":     st.NotifyEnabled != nil,
 		"dashboard_name":     st.DashboardName != nil,
 		"icons_fetch":        st.IconsFetch != nil,
+		"vpn_autofix":        st.VPNAutofix != nil, "vpn_autofix_after_minutes": st.VPNAutofixAfterMinutes != nil,
 	}
 	if !st.UpdatedAt.IsZero() {
 		t := st.UpdatedAt

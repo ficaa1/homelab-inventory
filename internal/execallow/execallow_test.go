@@ -59,7 +59,7 @@ func TestBuildArgvContainerRestart(t *testing.T) {
 
 func TestCommands(t *testing.T) {
 	names := Commands()
-	expected := []string{"compose-pull", "compose-restart", "compose-set-image", "compose-up", "container-restart", "image-prune"}
+	expected := []string{"compose-pull", "compose-restart", "compose-set-image", "compose-up", "container-restart", "container-state", "image-prune", "vpn-exit-check", "vpn-wg-dump"}
 	if !strSliceEq(names, expected) {
 		t.Fatalf("expected %v, got %v", expected, names)
 	}

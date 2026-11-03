@@ -29,6 +29,7 @@ var (
 type Network struct {
 	load                         *plexload.Client
 	inventory                    func() ([]plugin.NetworkHost, error)
+	vpnPanel                     func(context.Context)
 	dnsRecords                   func(context.Context) ([]plugin.DNSRecord, error)
 	speed                        *speed.Speedtester
 	extra                        plugin.Config
@@ -276,3 +277,5 @@ func notice(source string, err error) plugin.Block {
 	}
 	return plugin.Block{Type: "notice", Tone: tone, Text: message}
 }
+
+func (n *Network) SetVPNPanelSource(source func(context.Context)) { n.vpnPanel = source }

@@ -72,6 +72,9 @@ func Resolve(inv *inventory.Inventory, kind, target string, policy execallow.Pol
 	if policy.CheckInventory(inv) != nil || inv.Docker == nil || !inv.Docker.Available || inv.Docker.Containers == nil {
 		return p, errors.New("latest target host Docker inventory unavailable")
 	}
+	if kind == "vpn_reconnect" {
+		return resolveVPN(inv, target, p)
+	}
 	switch kind {
 	case "container_restart":
 		c, err := execallow.FindContainer(inv, target)
@@ -180,11 +183,15 @@ type Entry struct {
 	Result     string            `json:"result"`
 	ExitCode   int               `json:"exit_code"`
 	Results    []ContainerResult `json:"results"`
+	Reason     string            `json:"reason"`
+	ExitIP     *string           `json:"exitIp"`
+	Country    *string           `json:"country"`
 }
 
 // Manager keeps one audit row per action, including an interrupted self-restart.
 // Rows are stored atomically; a running row is replaced on completion.
 type Manager struct {
+	runMu   sync.Mutex
 	mu      sync.Mutex
 	runner  *execallow.Runner
 	path    string
@@ -238,8 +245,31 @@ func (m *Manager) save() error {
 	return err
 }
 func (m *Manager) Execute(ctx context.Context, kind, target, actor string, confirmedHash string) (Entry, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.runMu.Lock()
+	defer m.runMu.Unlock()
+	return m.execute(ctx, kind, target, actor, confirmedHash)
+}
+
+// ErrBusy means an automatic action was skipped without waiting or auditing.
+var ErrBusy = errors.New("another action is running")
+
+func (m *Manager) TryExecute(ctx context.Context, kind, target, actor, confirmedHash string) (Entry, error) {
+	if !m.runMu.TryLock() {
+		return Entry{Kind: kind, Target: target, Actor: actor, Result: "skipped", Reason: ErrBusy.Error(), ExitCode: -1}, ErrBusy
+	}
+	defer m.runMu.Unlock()
+	return m.execute(ctx, kind, target, actor, confirmedHash)
+}
+
+func (m *Manager) Busy() bool {
+	if !m.runMu.TryLock() {
+		return true
+	}
+	m.runMu.Unlock()
+	return false
+}
+
+func (m *Manager) execute(ctx context.Context, kind, target, actor, confirmedHash string) (Entry, error) {
 	if m.runner == nil || m.runner.Inventory == nil {
 		return Entry{}, errors.New("restart execution unavailable")
 	}
@@ -259,11 +289,12 @@ func (m *Manager) Execute(ctx context.Context, kind, target, actor string, confi
 	}
 
 	e := Entry{At: time.Now().UTC(), Actor: actor, Kind: kind, Target: target, Containers: p.Containers, Result: "running", ExitCode: -1, Results: []ContainerResult{}}
-	m.entries = append(m.entries, e)
-
-	if err = m.save(); err != nil {
-		m.entries = m.entries[:len(m.entries)-1]
-		return Entry{}, fmt.Errorf("action audit unavailable: %w", err)
+	if err = m.begin(e); err != nil {
+		return Entry{}, err
+	}
+	if kind == "vpn_reconnect" {
+		e = m.reconnect(ctx, p, e)
+		return e, m.finish(e)
 	}
 	e.Result = "ok"
 	e.ExitCode = 0
@@ -302,11 +333,7 @@ func (m *Manager) Execute(ctx context.Context, kind, target, actor string, confi
 		}
 		e.Results = append(e.Results, result)
 	}
-	m.entries[len(m.entries)-1] = e
-	if err = m.save(); err != nil {
-		return e, fmt.Errorf("action completed but audit update failed: %w", err)
-	}
-	return e, nil
+	return e, m.finish(e)
 }
 func (m *Manager) Log(limit int) []Entry {
 	m.mu.Lock()
@@ -326,8 +353,8 @@ func (m *Manager) Log(limit int) []Entry {
 
 // Exec serializes allowlisted commands with restarts and persists intent before execution.
 func (m *Manager) Exec(ctx context.Context, command string, args map[string]string, actor string) (execallow.Result, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.runMu.Lock()
+	defer m.runMu.Unlock()
 	if m.runner == nil {
 		return execallow.Result{}, errors.New("execution unavailable")
 	}
@@ -339,19 +366,33 @@ func (m *Manager) Exec(ctx context.Context, command string, args map[string]stri
 		target = args["container"]
 	}
 	e := Entry{At: time.Now().UTC(), Actor: actor, Kind: command, Target: target, Containers: []string{}, Results: []ContainerResult{}, Result: "running", ExitCode: -1}
-	m.entries = append(m.entries, e)
-	if err := m.save(); err != nil {
-		m.entries = m.entries[:len(m.entries)-1]
-		return execallow.Result{}, fmt.Errorf("action audit unavailable: %w", err)
+	if err := m.begin(e); err != nil {
+		return execallow.Result{}, err
 	}
 	result := m.runner.Run(ctx, command, args)
 	e.ExitCode, e.Result = result.ExitCode, "ok"
 	if result.Error != "" || result.ExitCode != 0 {
 		e.Result = "failed"
 	}
+	return result, m.finish(e)
+}
+
+func (m *Manager) begin(e Entry) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.entries = append(m.entries, e)
+	if err := m.save(); err != nil {
+		m.entries = m.entries[:len(m.entries)-1]
+		return fmt.Errorf("action audit unavailable: %w", err)
+	}
+	return nil
+}
+func (m *Manager) finish(e Entry) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.entries[len(m.entries)-1] = e
 	if err := m.save(); err != nil {
-		return result, fmt.Errorf("action completed but audit update failed: %w", err)
+		return fmt.Errorf("action completed but audit update failed: %w", err)
 	}
-	return result, nil
+	return nil
 }
