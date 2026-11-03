@@ -59,15 +59,7 @@ func main() {
 		return
 	}
 	if *control != "" {
-		if *control != "hold" && *control != "promote" && *control != "auto" {
-			fail(fmt.Errorf("invalid control"))
-		}
-		m, _, _, e := agentrelease.Read(*dir)
-		if e != nil {
-			fail(e)
-		}
-		e = agentrelease.WriteJSON(filepath.Join(*dir, "control.json"), agentrelease.Control{Sequence: m.Sequence, Mode: *control})
-		if e != nil {
+		if e = agentrelease.SetControl(*dir, *control); e != nil {
 			fail(e)
 		}
 		return

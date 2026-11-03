@@ -4,7 +4,7 @@ COMMANDS := discover api alerts portmap mcpbridge agentboot agentupdate agentsig
 AGENT_PLATFORMS ?= linux/amd64,linux/arm64
 export AGENT_PLATFORMS
 
-.PHONY: all vet test build dist agent-dist docker api ports alerts release keygen hold promote auto clean fmt api-linux mediapolicy-linux release-artifacts test-install-server
+.PHONY: all vet test build dist agent-dist docker api ports alerts release keygen hold promote auto clean fmt api-linux signer-linux mediapolicy-linux release-artifacts test-install-server
 all: vet test build
 vet:
 	go vet ./...
@@ -27,6 +27,8 @@ dist: build
 agent-dist: dist
 api-linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/api-linux-amd64 ./cmd/api
+signer-linux:
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/agentsign-linux-amd64 ./cmd/agentsign
 mediapolicy-linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/mediapolicy-linux-amd64 ./cmd/mediapolicy
 docker:
