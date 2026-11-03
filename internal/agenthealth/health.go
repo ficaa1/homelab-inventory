@@ -177,7 +177,7 @@ func Evaluate(dir, releaseDir string, invs []*inventory.Inventory, now time.Time
 			if p.Label == "" {
 				p = Projection{State: "not_reported", Label: "Update status not reported"}
 			}
-			p.Critical = p.Unhealthy && !e.Since.IsZero() && now.Sub(e.Since) >= 24*time.Hour
+			p.Critical = p.Unhealthy
 			e.View = p
 			ledger[host] = e
 			snap.Hosts[host] = p
@@ -296,7 +296,7 @@ func Evaluate(dir, releaseDir string, invs []*inventory.Inventory, now time.Time
 		}
 		p.Unhealthy = !e.Since.IsZero()
 		p.Paused = held && p.Unhealthy
-		p.Critical = p.Unhealthy && now.Sub(e.Since) >= 24*time.Hour
+		p.Critical = p.Unhealthy
 		if p.Paused {
 			p.Offered = e.View.Offered
 		}

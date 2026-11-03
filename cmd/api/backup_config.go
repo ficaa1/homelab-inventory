@@ -25,7 +25,7 @@ func (s *server) backupConfig() map[string]string {
 	defaults, _ := json.Marshal(s.defaults)
 	out["APP_SETTINGS_DEFAULTS"] = string(defaults)
 	eff := s.effective()
-	raw := map[string]any{"vpn_autofix": eff.VPNAutofix, "vpn_autofix_after_minutes": eff.VPNAutofixAfterMinutes, "notify_level": string(eff.NotifyLevel), "notify_interval": eff.NotifyInterval.String(), "digest_interval": eff.DigestInterval.String(), "apprise_url": eff.AppriseURL, "digest_apprise_url": eff.DigestAppriseURL, "notify_enabled": eff.NotifyEnabled, "run_retention": eff.RunRetention}
+	raw := map[string]any{"vpn_autofix": eff.VPNAutofix, "vpn_autofix_after_minutes": eff.VPNAutofixAfterMinutes, "vpn_autofix_skip": eff.VPNAutofixSkip, "notify_level": string(eff.NotifyLevel), "notify_interval": eff.NotifyInterval.String(), "digest_interval": eff.DigestInterval.String(), "apprise_url": eff.AppriseURL, "digest_apprise_url": eff.DigestAppriseURL, "notify_enabled": eff.NotifyEnabled, "run_retention": eff.RunRetention}
 	b, _ := json.Marshal(raw)
 	out["APP_SETTINGS_EFFECTIVE"] = string(b)
 	if s.plugins != nil {

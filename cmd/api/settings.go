@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/alert"
@@ -62,6 +63,10 @@ func (s *server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		DashboardName          string          `json:"dashboard_name"`
 		VPNAutofix             bool            `json:"vpn_autofix"`
 		VPNAutofixAfterMinutes int             `json:"vpn_autofix_after_minutes"`
+		VPNAutofixSkip         []string        `json:"vpn_autofix_skip"`
+		// VPNGateways is every gateway in the latest inventories, plus any
+		// skipped name no longer reported, so each one can be a checkbox.
+		VPNGateways []string `json:"vpn_gateways"`
 		IconsFetch             bool            `json:"icons_fetch"`
 		AppriseSet             bool            `json:"apprise_set"`
 		AppriseHint            string          `json:"apprise_hint,omitempty"`
@@ -86,13 +91,14 @@ func (s *server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		NotifyEnabled:  eff.NotifyEnabled,
 		DashboardName:  eff.DashboardName,
 		IconsFetch:     eff.IconsFetch,
-		VPNAutofix:     eff.VPNAutofix, VPNAutofixAfterMinutes: eff.VPNAutofixAfterMinutes,
+		VPNAutofix:     eff.VPNAutofix, VPNAutofixAfterMinutes: eff.VPNAutofixAfterMinutes, VPNAutofixSkip: eff.VPNAutofixSkip,
 		AppriseSet:        eff.AppriseURL != "",
 		AppriseHint:       settings.Redacted(eff.AppriseURL),
 		DigestAppriseSet:  eff.DigestAppriseURL != "",
 		DigestAppriseHint: settings.Redacted(eff.DigestAppriseURL),
 		Sending:           eff.Sending(),
 		Coverage:          []levelCoverage{},
+		VPNGateways:       append([]string{}, eff.VPNAutofixSkip...),
 	}
 
 	// Which fields a human has set here, so the page can show what is coming
@@ -107,7 +113,7 @@ func (s *server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		"notify_enabled":     st.NotifyEnabled != nil,
 		"dashboard_name":     st.DashboardName != nil,
 		"icons_fetch":        st.IconsFetch != nil,
-		"vpn_autofix":        st.VPNAutofix != nil, "vpn_autofix_after_minutes": st.VPNAutofixAfterMinutes != nil,
+		"vpn_autofix":        st.VPNAutofix != nil, "vpn_autofix_after_minutes": st.VPNAutofixAfterMinutes != nil, "vpn_autofix_skip": st.VPNAutofixSkip != nil,
 	}
 	if !st.UpdatedAt.IsZero() {
 		t := st.UpdatedAt
@@ -118,6 +124,14 @@ func (s *server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	// notifier itself uses, so the number on the page is the number that
 	// governs delivery rather than a similar-looking one.
 	if invs, err := s.store.LatestAll(); err == nil {
+		for _, inv := range invs {
+			for _, g := range inv.VPNGateways() {
+				if g.Container != "" && !slices.Contains(out.VPNGateways, g.Container) {
+					out.VPNGateways = append(out.VPNGateways, g.Container)
+				}
+			}
+		}
+		slices.Sort(out.VPNGateways)
 		rep, err := s.evaluateAlerts(invs, now)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "loading disk health evidence")

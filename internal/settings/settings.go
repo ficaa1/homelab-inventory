@@ -31,6 +31,8 @@ package settings
 import (
 	"fmt"
 	"net/url"
+	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -58,12 +60,15 @@ type Stored struct {
 	DigestAppriseURL *string `json:"digest_apprise_url,omitempty"`
 	// NotifyEnabled turns delivery off without discarding the URL, so muting
 	// for an afternoon does not mean re-entering a credential afterwards.
-	NotifyEnabled          *bool     `json:"notify_enabled,omitempty"`
-	DashboardName          *string   `json:"dashboard_name,omitempty"`
-	IconsFetch             *bool     `json:"icons_fetch,omitempty"`
-	VPNAutofix             *bool     `json:"vpn_autofix,omitempty"`
-	VPNAutofixAfterMinutes *int      `json:"vpn_autofix_after_minutes,omitempty"`
-	UpdatedAt              time.Time `json:"updated_at,omitempty"`
+	NotifyEnabled          *bool   `json:"notify_enabled,omitempty"`
+	DashboardName          *string `json:"dashboard_name,omitempty"`
+	IconsFetch             *bool   `json:"icons_fetch,omitempty"`
+	VPNAutofix             *bool   `json:"vpn_autofix,omitempty"`
+	VPNAutofixAfterMinutes *int    `json:"vpn_autofix_after_minutes,omitempty"`
+	// VPNAutofixSkip names gateway containers that automatic recovery leaves
+	// alone. Manual reconnect still works for them.
+	VPNAutofixSkip *[]string `json:"vpn_autofix_skip,omitempty"`
+	UpdatedAt      time.Time `json:"updated_at,omitempty"`
 }
 
 // Defaults are the values from the environment, used wherever Stored is
@@ -93,7 +98,11 @@ type Effective struct {
 	IconsFetch             bool
 	VPNAutofix             bool
 	VPNAutofixAfterMinutes int
+	VPNAutofixSkip         []string
 }
+
+// containerName is the Docker container name shape execallow accepts.
+var containerName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
 
 // Resolve layers Stored over Defaults.
 func Resolve(s Stored, d Defaults) Effective {
@@ -150,6 +159,10 @@ func Resolve(s Stored, d Defaults) Effective {
 	if s.VPNAutofixAfterMinutes != nil && *s.VPNAutofixAfterMinutes >= 1 && *s.VPNAutofixAfterMinutes <= 1440 {
 		e.VPNAutofixAfterMinutes = *s.VPNAutofixAfterMinutes
 	}
+	e.VPNAutofixSkip = []string{}
+	if s.VPNAutofixSkip != nil {
+		e.VPNAutofixSkip = append(e.VPNAutofixSkip, *s.VPNAutofixSkip...)
+	}
 	return e
 }
 
@@ -171,6 +184,7 @@ type Update struct {
 	IconsFetch             *bool      `json:"icons_fetch,omitempty"`
 	VPNAutofix             *bool      `json:"vpn_autofix,omitempty"`
 	VPNAutofixAfterMinutes *int       `json:"vpn_autofix_after_minutes,omitempty"`
+	VPNAutofixSkip         *[]string  `json:"vpn_autofix_skip,omitempty"`
 }
 
 // Apply validates an update and merges it into the stored settings.
@@ -286,6 +300,24 @@ func Apply(s Stored, u Update, now time.Time, defaults ...Defaults) (Stored, err
 			return s, fmt.Errorf("vpn_autofix_after_minutes must be between 1 and 1440")
 		}
 		out.VPNAutofixAfterMinutes = &v
+	}
+	if u.VPNAutofixSkip != nil {
+		v := []string{}
+		for _, name := range *u.VPNAutofixSkip {
+			name = strings.TrimSpace(name)
+			if name == "" || slices.Contains(v, name) {
+				continue
+			}
+			if len(name) > 128 || !containerName.MatchString(name) {
+				return s, fmt.Errorf("vpn_autofix_skip: %q is not a container name", name)
+			}
+			v = append(v, name)
+		}
+		if len(v) > 32 {
+			return s, fmt.Errorf("vpn_autofix_skip takes at most 32 names")
+		}
+		slices.Sort(v)
+		out.VPNAutofixSkip = &v
 	}
 
 	out.UpdatedAt = now

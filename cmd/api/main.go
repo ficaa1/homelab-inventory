@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -258,7 +259,7 @@ func run() error {
 		}
 
 		if srv.exec != nil {
-			srv.vpnWatch, err = vpnwatch.Open(*dir, vpnwatch.Options{Runner: srv.exec, Actions: srv.actions, Settings: func() (bool, int) { e := srv.effective(); return e.VPNAutofix, e.VPNAutofixAfterMinutes }, Message: func(ctx context.Context, m notify.Message) {
+			srv.vpnWatch, err = vpnwatch.Open(*dir, vpnwatch.Options{Runner: srv.exec, Actions: srv.actions, Settings: func() (bool, int) { e := srv.effective(); return e.VPNAutofix, e.VPNAutofixAfterMinutes }, Skip: func(c string) bool { return slices.Contains(srv.effective().VPNAutofixSkip, c) }, Message: func(ctx context.Context, m notify.Message) {
 				if !srv.effective().Sending() {
 					return
 				}

@@ -154,14 +154,14 @@ counter. A higher signed release can still install. The existing floor is never
 lowered. New state also pins the signed manifest's exact digest, so different
 bytes at an already reserved sequence are refused.
 
-`agent.update.unhealthy` replaces `agent.outdated`. It warns immediately on a
-reported failure, rollback or rejection, or after a host has been below its
-eligible offer for more than 45 minutes. The API stores the first observed lag
-and incident under its data directory, so restarting it does not restart the
-budget. The same unresolved incident escalates to critical after 24 hours.
-Notifications use the existing transition, silence and severity-floor settings:
-repeated checks stay quiet, with one escalation and a recovery transition.
-A critical notification floor means only a long-stuck update reaches delivery.
+`agent.update.unhealthy` replaces `agent.outdated`. It is critical from the
+start: raised immediately on a reported failure, rollback or rejection, or after
+a host has been below its eligible offer for more than 45 minutes. The API
+stores the first observed lag and incident under its data directory, so
+restarting it does not restart the budget. Notifications use the existing
+transition, silence and severity-floor settings: repeated checks stay quiet,
+with one message when it starts and one when it clears, so the default critical
+floor delivers it.
 A fresh installation of notification state still seeds existing conditions
 silently, as for other alerts.
 

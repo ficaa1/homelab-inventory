@@ -84,7 +84,7 @@ func TestRolloutHealth(t *testing.T) {
 		{"fresh failed inventories and hold", func(t *testing.T, dir string, save func(inventory.AgentUpdate, time.Time), eval func(string, time.Time) Snapshot) {
 			save(fail, at)
 			s := eval(release, at)
-			if !s.Hosts["host-a"].Unhealthy || s.Hosts["host-a"].Reason != "reason not reported by this updater" {
+			if !s.Hosts["host-a"].Unhealthy || !s.Hosts["host-a"].Critical || s.Hosts["host-a"].Reason != "reason not reported by this updater" {
 				t.Fatal(s)
 			}
 			m, _, c, _ := agentrelease.Read(release)
@@ -93,10 +93,6 @@ func TestRolloutHealth(t *testing.T) {
 			}
 			s = eval(release, at.Add(time.Hour))
 			if !s.Hosts["host-a"].Unhealthy || !s.Hosts["host-a"].Paused {
-				t.Fatal(s)
-			}
-			s = eval(release, at.Add(24*time.Hour))
-			if !s.Hosts["host-a"].Critical {
 				t.Fatal(s)
 			}
 		}},

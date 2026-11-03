@@ -256,7 +256,7 @@
     var recovery = [["Last reconnect", last ? (last.at ? HI.ago(last.at) + " · " : "") + (last.actor || "Unknown actor") + " · " + (last.result || "Unknown result") : "No reconnect recorded"]];
     if (last && last.reason) recovery.push(["Reconnect reason", last.reason]);
     if (last && (last.exitIp || last.country)) recovery.push(["Exit after reconnect", [last.exitIp, last.country].filter(Boolean).join(" · ")]);
-    recovery.push(["Automatic reconnect", fix ? (fix.enabled ? "On · after " + fix.afterMinutes + "m unhealthy" : "Off") : "Unavailable"]);
+    recovery.push(["Automatic reconnect", fix ? (fix.state === "excluded" ? "Off for this gateway" : fix.enabled ? "On · after " + fix.afterMinutes + "m unhealthy" : "Off") : "Unavailable"]);
     if (fix) {
       recovery.push(["Recovery state", state(fix.state)]);
       if (fix.reason) recovery.push(["Recovery reason", fix.reason]);
