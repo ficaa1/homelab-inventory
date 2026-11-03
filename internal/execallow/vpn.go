@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const containerStateFormat = `{"name":{{json .Name}},"state":{{json .State.Status}},"health":{{if .State.Health}}{{json .State.Health.Status}}{{else}}""{{end}},"startedAt":{{json .State.StartedAt}}}`
+const containerStateFormat = `{"name":{{json .Name}},"state":{{json .State.Status}},"health":{{with index .State "Health"}}{{json .Status}}{{else}}""{{end}},"startedAt":{{json .State.StartedAt}}}`
 const probeMaxOutput = 64 << 10
 
 func isProbe(command string) bool {

@@ -207,7 +207,10 @@ func inspectRuntime(ctx context.Context, env *Env, ids []string) map[string]runt
 	return out
 }
 
-const dockerRuntimeFormat = `{{.Id}} {"restart_count":{{.RestartCount}},"network_mode":{{json .HostConfig.NetworkMode}},"pid":{{.State.Pid}},"cap_add":{{json .HostConfig.CapAdd}},"started_at":{{json .State.StartedAt}},"health":{{if .State.Health}}{{json .State.Health.Status}}{{else}}""{{end}}}`
+// Health is read with index: Docker executes the template over the raw JSON
+// map with missingkey=error, and a container without a healthcheck has no
+// Health key, so .State.Health fails the whole line.
+const dockerRuntimeFormat = `{{.Id}} {"restart_count":{{.RestartCount}},"network_mode":{{json .HostConfig.NetworkMode}},"pid":{{.State.Pid}},"cap_add":{{json .HostConfig.CapAdd}},"started_at":{{json .State.StartedAt}},"health":{{with index .State "Health"}}{{json .Status}}{{else}}""{{end}}}`
 
 func inspectMounts(ctx context.Context, env *Env, ids []string) map[string][]dockerMount {
 	out := map[string][]dockerMount{}

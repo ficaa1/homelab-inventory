@@ -217,7 +217,7 @@ func TestDockerRuntimeFormat(t *testing.T) {
 	tmpl, err := template.New("runtime").Funcs(template.FuncMap{"json": func(value any) (string, error) {
 		b, err := json.Marshal(value)
 		return string(b), err
-	}}).Parse(dockerRuntimeFormat)
+	}}).Option("missingkey=error").Parse(dockerRuntimeFormat)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,12 @@ func TestDockerRuntimeFormat(t *testing.T) {
 		data := map[string]any{
 			"Id": "aaaaaaaaaaaa", "RestartCount": 2,
 			"HostConfig": map[string]any{"NetworkMode": "bridge", "CapAdd": []string{"NET_ADMIN"}},
-			"State":      map[string]any{"Pid": 100, "StartedAt": "2026-01-02T03:04:05Z", "Health": health},
+			"State":      map[string]any{"Pid": 100, "StartedAt": "2026-01-02T03:04:05Z"},
+		}
+		// Docker falls back to the raw JSON map with missingkey=error, and a
+		// container without a healthcheck has no Health key at all.
+		if health != nil {
+			data["State"].(map[string]any)["Health"] = health
 		}
 		var buf bytes.Buffer
 		if err := tmpl.Execute(&buf, data); err != nil {
