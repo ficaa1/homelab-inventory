@@ -48,7 +48,7 @@
   }
   function clock(t) { return new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
   function state(status) {
-    return status === "not configured" ? "Not configured" : status === "unavailable" ? "Unavailable" : status ? status.charAt(0).toUpperCase() + status.slice(1) : "Unavailable";
+    return status === "not configured" ? "Not configured" : status === "unavailable" ? "Unavailable" : status === "cutoff" ? "Cut off" : status ? status.charAt(0).toUpperCase() + status.slice(1) : "Unavailable";
   }
 
   // ------------------------------------------------------------ building blocks
@@ -190,21 +190,29 @@
   function vpnCard(v, full) {
     var sum = s.data.summary, d = v && v.data, q = sum && sum.qbit, many = !!(sum.vpns && sum.vpns.length > 1);
     var vpnAge = since(v.inventoryAt);
-    var stale = !!v.stale || !!s.err.summary || !d || vpnAge == null || vpnAge > 2700 || vpnAge < -15, hs = null, tone = "";
+    var inventoryStale = !!v.stale || !d || vpnAge == null || vpnAge > 2700 || vpnAge < -15;
+    var stale = !!s.err.summary || (!v.live && inventoryStale), hs = null, tone = "";
     if (d) {
       var at = v.inventoryAt ? new Date(v.inventoryAt).getTime() : NaN, hst = d.latestHandshake ? new Date(d.latestHandshake).getTime() : NaN;
       if (isFinite(at) && isFinite(hst)) hs = Math.max(0, (at - hst) / 1000);
+      if (num(v.handshakeAgeSeconds)) hs = v.handshakeAgeSeconds;
       tone = !d.interfaceUp ? "crit" : hs == null ? "warn" : hs <= 180 ? "ok" : "warn";
     }
-    var dot = h("span", { class: "net-dot " + (stale ? "" : tone), title: !d ? "No data" : !d.interfaceUp ? "Interface down" : hs == null ? "No handshake" : hs <= 180 ? "Up" : "Handshake stale" });
+    var handshakeTone = tone;
+    var statusTone = {up: "ok", healthy: "ok", ok: "ok", down: "crit", cutoff: "crit", unhealthy: "crit", degraded: "warn", reconnecting: "warn", unknown: "", unavailable: ""};
+    if (v.status) tone = statusTone[v.status] || "";
+    var dot = h("span", { class: "net-dot " + (stale ? "" : tone), title: v.status ? state(v.status) : !d ? "No data" : !d.interfaceUp ? "Interface down" : hs == null ? "No handshake" : hs <= 180 ? "Up" : "Handshake stale" });
     var chips = [];
+    if (v.status) chips.push(chip(state(v.status), stale ? "" : tone, v.reason || "VPN status"));
     if (many) chips.push(chip(v.host, "", "Host"));
-    if (d && d.interfaceUp) chips.push(chip(age(hs), stale ? "" : tone, "Handshake", "refresh"));
+    if (d && d.interfaceUp) { if (hs != null) chips.push(chip(age(hs), stale ? "" : handshakeTone, "Handshake", "refresh")); }
     else if (d) chips.push(chip("down", stale ? "" : "crit", "Interface"));
-    if (stale) chips.push(ageChip(vpnAge));
+    if (v.live) chips.push(chip("Live", "", "API tunnel checks"));
+    if (inventoryStale) chips.push(ageChip(vpnAge));
     var flow = h("span", { class: "net-flow" });
-    if (source("vpn")) {
-      var rx = series("vpnRx")[0], tx = series("vpnTx")[0];
+    var rx = series("vpnRx").filter(function (x) { return x.labels && x.labels.name === v.container; })[0];
+    var tx = series("vpnTx").filter(function (x) { return x.labels && x.labels.name === v.container; })[0];
+    if (source("vpn") && (rx || tx)) {
       if (panelStale("vpnRx") || panelStale("vpnTx")) flow.className += " net-dim";
       flow.appendChild(h("span", { class: "net-cell" }, [h("span", { class: "net-dir", title: "Received", text: "↓" }), spark(rx && rx.points, { zero: true, dot: false }), h("b", { text: bps(rx && rx.value) })]));
       flow.appendChild(h("span", { class: "net-cell" }, [h("span", { class: "net-dir", title: "Sent", text: "↑" }), spark(tx && tx.points, { zero: true, dot: false }), h("b", { text: bps(tx && tx.value) })]));
@@ -217,25 +225,58 @@
       flow.appendChild(qb);
     }
     var where = d ? [d.country ? h("b", { text: d.country }) : null, d.city ? h("span", { text: d.city }) : null] : [];
+    if (!(d && d.exitIp) && (v.status === "down" || v.status === "cutoff") && v.reason) where = [h("span", { text: v.reason })];
     var summary = [
-      h("span", { class: "net-vpn-head" }, [dot, h("span", { class: "ops-label" }, [HI.iconNode("shield", "sm"), "VPN"]), h("span", { class: "net-chips" }, chips)]),
+      h("span", { class: "net-vpn-head" }, [dot, h("span", { class: "ops-label" }, [HI.iconNode("shield", "sm"), v.container || "VPN"]), h("span", { class: "net-chips" }, chips)]),
       h("span", { class: "net-ip", text: d && d.exitIp || "—" }),
       h("span", { class: "net-where" }, where), flow];
-    var rows = [["Endpoint", d && d.endpoint || "—"], ["Org", d && d.org || "—"],
+    var rows = [["Status", stale ? "Stale · " + state(v.status) : state(v.status)], ["Reason", v.reason || "—"],
+      ["Container", v.container || "—"], ["Container state", d && d.state || "—"], ["Health", d && d.health || "—"], ["Since", v.since ? HI.ago(v.since) : "—"],
+      ["Exit address", d && d.exitIp || "—"], ["Location", d ? [d.country, d.city].filter(Boolean).join(" · ") || "—" : "—"],
+      ["Handshake", hs == null ? "Unavailable" : age(hs) + " ago"], ["Endpoint", d && d.endpoint || "—"], ["Org", d && d.org || "—"],
       ["Received", d && d.rxBytes != null ? size(d.rxBytes) : "—"], ["Sent", d && d.txBytes != null ? size(d.txBytes) : "—"],
       ["Collected", v.inventoryAt ? HI.ago(v.inventoryAt) : "—"]];
+    if (inventoryStale) rows.push(["Inventory", "Stale · live checks shown where available"]);
     if (many) rows.unshift(["Host", v.host || "—"]);
     if (q && q.status === "ok") rows.push(["qBittorrent", (q.version || "—") + " · " + (q.connectionStatus || "—") + (q.dhtNodes != null ? " · DHT " + q.dhtNodes : "")]);
-    var key = "vpn-" + (v.host || "");
+    var key = "vpn-" + JSON.stringify([v.host || "", v.container || ""]);
     if (full && !(key in open)) open[key] = true;
-    return details(key, "ops-card ops-wide net-card net-vpn" + (stale ? " net-stale" : ""), summary, [facts(rows)]);
+    var body = [facts(rows)];
+    if (Array.isArray(v.dependents)) {
+      body.push(h("h3", { class: "hn-vpn-heading", text: "Dependent containers" }));
+      body.push(v.dependents.length ? h("ul", { class: "hn-vpn-deps" }, v.dependents.map(function (dep) {
+        var attached = dep.attached === true ? "Attached" : dep.attached === false ? "Cut off" : "Attachment unknown";
+        return h("li", {}, [h("span", { class: "hn-vpn-dep-name", text: dep.name || "—" }),
+          chip(attached, stale ? "" : dep.attached === true ? "ok" : dep.attached === false ? "crit" : ""),
+          h("span", { class: "ops-muted", text: (dep.state || "State unavailable") + (dep.startedAt ? " · started " + HI.ago(dep.startedAt) : "") })]);
+      })) : muted("No dependent containers"));
+    } else body.push(muted("Dependent containers unavailable"));
+    var last = v.lastReconnect, fix = v.autofix;
+    body.push(h("h3", { class: "hn-vpn-heading", text: "Recovery" }));
+    var recovery = [["Last reconnect", last ? (last.at ? HI.ago(last.at) + " · " : "") + (last.actor || "Unknown actor") + " · " + (last.result || "Unknown result") : "No reconnect recorded"]];
+    if (last && last.reason) recovery.push(["Reconnect reason", last.reason]);
+    if (last && (last.exitIp || last.country)) recovery.push(["Exit after reconnect", [last.exitIp, last.country].filter(Boolean).join(" · ")]);
+    recovery.push(["Automatic reconnect", fix ? (fix.enabled ? "On · after " + fix.afterMinutes + "m unhealthy" : "Off") : "Unavailable"]);
+    if (fix) {
+      recovery.push(["Recovery state", state(fix.state)]);
+      if (fix.reason) recovery.push(["Recovery reason", fix.reason]);
+      var cooldown = since(fix.cooldownUntil);
+      recovery.push(["Cooldown", cooldown != null && cooldown < 0 ? age(-cooldown) + " remaining" : "None"]);
+      recovery.push(["Last automatic run", fix.lastRun ? HI.ago(fix.lastRun) : "No automatic run recorded"]);
+    }
+    body.push(facts(recovery));
+    var allowed = v.reconnectAllowed === true && !!v.container && HI.restartsEnabled(v.host) && !s.err.summary;
+    body.push(h("div", { class: "hn-vpn-actions" }, [
+      h("button", { class: "btn", type: "button", disabled: !allowed, onclick: function () { HI.vpnReconnect(v.host, v.container); }, text: "Reconnect VPN" }),
+      h("span", { class: "ops-muted", text: allowed ? "Preview affected containers before confirming." : "Reconnect unavailable. Check VPN status and actions configuration." })]));
+    return details(key, "ops-card ops-wide net-card net-vpn" + (stale ? " net-stale" : ""), summary, body);
   }
   function vpnSection(full) {
     var sum = s.data.summary;
     if (!sum) return card("ops-wide net-vpn", "shield", "VPN", [], [s.err.summary ? muted("Unavailable") : skel(true)]);
     var list = Array.isArray(sum.vpns) && sum.vpns.length ? sum.vpns : [sum.vpn || { stale: true }];
-    if (!list[0].data && !list[0].inventoryAt) return card("ops-wide", "shield", "VPN", [], [muted("No host has reported tunnel facts")]);
-    return full ? list.map(function (v) { return vpnCard(v, true); }) : [vpnCard(list[0], false)];
+    if (!list[0].data && !list[0].inventoryAt && !list[0].status) return card("ops-wide", "shield", "VPN", [], [muted("No host has reported tunnel facts")]);
+    return list.map(function (v) { return vpnCard(v, full); });
   }
 
   // ------------------------------------------------------------ WAN and quality

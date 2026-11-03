@@ -35,8 +35,8 @@ func (n *Network) vpnView() (plugin.View, error) {
 			handshake = host.LatestHandshake.Format("2006-01-02T15:04:05Z07:00")
 		}
 		age := n.host.Now().Sub(host.CollectedAt).Seconds()
-		rows = append(rows, map[string]any{"host": n.text(host.Host), "up": host.InterfaceUp, "stale": age > 2700 || age < -5, "handshake": handshake, "exit": scalar(host.ExitIP), "location": fmt.Sprint(scalar(host.City), " ", scalar(host.Country)), "endpoint": scalar(host.Endpoint), "rx": counter(host.RXBytes), "tx": counter(host.TXBytes)})
+		rows = append(rows, map[string]any{"host": n.text(host.Host), "container": n.text(host.Container), "up": host.InterfaceUp, "stale": age > 2700 || age < -5, "handshake": handshake, "exit": scalar(host.ExitIP), "location": fmt.Sprint(scalar(host.City), " ", scalar(host.Country)), "endpoint": scalar(host.Endpoint), "rx": counter(host.RXBytes), "tx": counter(host.TXBytes)})
 	}
-	v.Blocks = append(v.Blocks, plugin.Block{Type: "table", Title: "Inventory tunnel facts", Empty: "No VPN facts collected", Columns: []plugin.Column{{Key: "host", Label: "Host"}, {Key: "up", Label: "Interface up"}, {Key: "stale", Label: "Stale"}, {Key: "handshake", Label: "Latest handshake", Format: "time"}, {Key: "exit", Label: "Exit IP"}, {Key: "location", Label: "Location"}, {Key: "endpoint", Label: "Peer endpoint"}, {Key: "rx", Label: "Received", Format: "bytes"}, {Key: "tx", Label: "Sent", Format: "bytes"}}, Rows: rows})
+	v.Blocks = append(v.Blocks, plugin.Block{Type: "table", Title: "Inventory tunnel facts", Empty: "No VPN facts collected", Columns: []plugin.Column{{Key: "host", Label: "Host"}, {Key: "container", Label: "Gateway"}, {Key: "up", Label: "Interface up"}, {Key: "stale", Label: "Stale"}, {Key: "handshake", Label: "Latest handshake", Format: "time"}, {Key: "exit", Label: "Exit IP"}, {Key: "location", Label: "Location"}, {Key: "endpoint", Label: "Peer endpoint"}, {Key: "rx", Label: "Received", Format: "bytes"}, {Key: "tx", Label: "Sent", Format: "bytes"}}, Rows: rows})
 	return v, nil
 }

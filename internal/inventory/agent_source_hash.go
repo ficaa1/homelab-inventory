@@ -2,4 +2,4 @@ package inventory
 
 // agentSourceHash pins the source for AgentRevision. This file is excluded
 // from the source digest so recording a new hash does not change that digest.
-const agentSourceHash = "f2b9f1cee14238dd714ace3170866dd064e8c6833dca9b79975076225856fb34"
+const agentSourceHash = "6c4bb3b50a5973f14fdc5beaa07b338a6258cb294664a16d8c313fa84b16cd04"

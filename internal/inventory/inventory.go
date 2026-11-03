@@ -33,7 +33,7 @@ const SchemaVersion = "5"
 // whenever the agent source changes, then refresh agentSourceHash as directed
 // by TestAgentSourceRevision. Older agents omit it and report revision zero.
 // Revision 1 starts the extracted project after the collector and module cut.
-const AgentRevision = 4
+const AgentRevision = 8
 
 // Inventory is the root document emitted by one run of the discovery binary on
 // one machine.
@@ -58,9 +58,13 @@ type Inventory struct {
 	ZFS        *ZFS        `json:"zfs,omitempty"`
 	Shares     *Shares     `json:"shares,omitempty"`
 	Scheduling *Scheduling `json:"scheduling,omitempty"`
-	VPN        *VPN        `json:"vpn,omitempty"`
-	Software   *Software   `json:"software,omitempty"`
-	Firewall   *Firewall   `json:"firewall,omitempty"`
+	// VPNs contains every detected gateway. nil means Docker was not collected
+	// or unavailable; an empty non-nil slice means no gateways were found.
+	VPNs []VPN `json:"vpns"`
+	// VPN mirrors vpns[0] and is kept for compatibility with older consumers.
+	VPN      *VPN      `json:"vpn,omitempty"`
+	Software *Software `json:"software,omitempty"`
+	Firewall *Firewall `json:"firewall,omitempty"`
 
 	// Diagnostics records everything that went sideways during collection.
 	// A partial inventory with loud diagnostics is far more useful than a
@@ -426,6 +430,12 @@ type Container struct {
 	// when this container shares another's network namespace. The last is the
 	// one that records network namespace sharing.
 	NetworkMode string `json:"network_mode,omitempty"`
+	// Runtime facts are narrowly selected from inspect, never .Config.Env or
+	// healthcheck logs. A nil StartedAt means Docker supplied no valid start.
+	PID       int        `json:"pid,omitempty"`
+	CapAdd    []string   `json:"cap_add,omitempty"`
+	StartedAt *time.Time `json:"started_at,omitempty"`
+	Health    string     `json:"health,omitempty"`
 	// DependsOn is the compose dependency, taken from the label compose writes.
 	DependsOn []string `json:"depends_on,omitempty"`
 }
@@ -896,4 +906,30 @@ type ProxmoxFirewall struct {
 	// "disabled/running" — a string that reads like good news at a glance.
 	Enabled bool   `json:"enabled"`
 	Status  string `json:"status,omitempty"`
+}
+
+// VPNGateways prefers the multi-gateway section, falling back for older agents.
+// An explicitly empty vpns array is authoritative even if vpn is also present.
+func (inv *Inventory) VPNGateways() []VPN {
+	if inv == nil {
+		return nil
+	}
+	if inv.VPNs != nil {
+		return inv.VPNs
+	}
+	if inv.VPN != nil {
+		return []VPN{*inv.VPN}
+	}
+	return nil
+}
+
+// VPNGateway returns the named gateway in the latest inventory.
+func (inv *Inventory) VPNGateway(container string) *VPN {
+	vs := inv.VPNGateways()
+	for i := range vs {
+		if vs[i].Container == container {
+			return &vs[i]
+		}
+	}
+	return nil
 }

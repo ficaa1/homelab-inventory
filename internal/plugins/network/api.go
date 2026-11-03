@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ficaa1/homelab-inventory/internal/inventory"
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
 	"github.com/ficaa1/homelab-inventory/internal/plugins/network/speed"
 )
@@ -79,6 +80,11 @@ func (n *Network) API(ctx context.Context, req plugin.APIRequest) (plugin.APIRes
 // ------------------------------------------------------------ summary
 
 type vpnData struct {
+	Container       string     `json:"container"`
+	State           string     `json:"state"`
+	Health          string     `json:"health"`
+	Interface       string     `json:"interface"`
+	StartedAt       *time.Time `json:"startedAt"`
 	InterfaceUp     bool       `json:"interfaceUp"`
 	LatestHandshake *time.Time `json:"latestHandshake"`
 	Endpoint        *string    `json:"endpoint"`
@@ -90,11 +96,21 @@ type vpnData struct {
 	Org             *string    `json:"org"`
 }
 type vpnView struct {
-	Host        string     `json:"host"`
-	InventoryAt *time.Time `json:"inventoryAt"`
-	AgeSeconds  *float64   `json:"ageSeconds"`
-	Stale       bool       `json:"stale"`
-	Data        *vpnData   `json:"data"`
+	Status              string                   `json:"status"`
+	Reason              string                   `json:"reason"`
+	Container           string                   `json:"container"`
+	Dependents          []inventory.VPNDependent `json:"dependents"`
+	Since               *time.Time               `json:"since"`
+	HandshakeAgeSeconds *float64                 `json:"handshakeAgeSeconds"`
+	Live                bool                     `json:"live"`
+	ReconnectAllowed    bool                     `json:"reconnectAllowed"`
+	LastReconnect       *plugin.NetworkReconnect `json:"lastReconnect"`
+	Autofix             plugin.NetworkAutofix    `json:"autofix"`
+	Host                string                   `json:"host"`
+	InventoryAt         *time.Time               `json:"inventoryAt"`
+	AgeSeconds          *float64                 `json:"ageSeconds"`
+	Stale               bool                     `json:"stale"`
+	Data                *vpnData                 `json:"data"`
 }
 type qbitHealth struct {
 	Status     string  `json:"status"`
@@ -121,6 +137,9 @@ type summaryAnswer struct {
 }
 
 func (n *Network) summary(ctx context.Context) summaryAnswer {
+	if n.vpnPanel != nil {
+		n.vpnPanel(ctx)
+	}
 	now := n.host.Now().UTC()
 	out := summaryAnswer{GeneratedAt: now, VPN: vpnView{Stale: true}, VPNs: n.vpns(now)}
 	if len(out.VPNs) > 0 {
@@ -146,7 +165,7 @@ func (n *Network) summary(ctx context.Context) summaryAnswer {
 	return out
 }
 
-// vpns lists every host reporting tunnel facts, the most recently collected first.
+// vpns lists every gateway reporting tunnel facts, newest host inventory first.
 func (n *Network) vpns(now time.Time) []vpnView {
 	out := []vpnView{}
 	if n.inventory == nil {
@@ -166,17 +185,26 @@ func (n *Network) vpns(now time.Time) []vpnView {
 	for _, h := range hosts {
 		at := h.CollectedAt.UTC()
 		age := now.Sub(at).Seconds()
-		v := vpnView{Host: n.text(h.Host), InventoryAt: &at, AgeSeconds: &age, Stale: age > 2700 || age < -5,
-			Data: &vpnData{InterfaceUp: h.InterfaceUp, LatestHandshake: h.LatestHandshake, Endpoint: text(h.Endpoint), RXBytes: h.RXBytes, TXBytes: h.TXBytes, ExitIP: text(h.ExitIP), Country: text(h.Country), City: text(h.City), Org: text(h.Org)}}
+		v := vpnView{Status: h.Status, Reason: n.text(h.Reason), Container: n.text(h.Container), Dependents: append([]inventory.VPNDependent{}, h.Dependents...), Since: h.Since, HandshakeAgeSeconds: h.HandshakeAgeSeconds, Live: h.Live, ReconnectAllowed: h.ReconnectAllowed, LastReconnect: h.LastReconnect, Autofix: h.Autofix, Host: n.text(h.Host), InventoryAt: &at, AgeSeconds: &age, Stale: age > 2700 || age < -5,
+			Data: &vpnData{Container: n.text(h.Container), State: n.text(h.State), Health: n.text(h.Health), Interface: n.text(h.Interface), StartedAt: h.StartedAt, InterfaceUp: h.InterfaceUp, LatestHandshake: h.LatestHandshake, Endpoint: text(h.Endpoint), RXBytes: h.RXBytes, TXBytes: h.TXBytes, ExitIP: text(h.ExitIP), Country: text(h.Country), City: text(h.City), Org: text(h.Org)}}
+		for i := range v.Dependents {
+			v.Dependents[i].Name = n.text(v.Dependents[i].Name)
+			v.Dependents[i].State = n.text(v.Dependents[i].State)
+		}
+		if h.LastReconnect != nil {
+			r := *h.LastReconnect
+			r.Actor = n.text(r.Actor)
+			r.Reason = n.text(r.Reason)
+			r.ExitIP = text(r.ExitIP)
+			r.Country = text(r.Country)
+			v.LastReconnect = &r
+		}
 		out = append(out, v)
 	}
 	for i := 1; i < len(out); i++ {
 		for j := i; j > 0 && out[j].InventoryAt.After(*out[j-1].InventoryAt); j-- {
 			out[j], out[j-1] = out[j-1], out[j]
 		}
-	}
-	if len(out) > 20 {
-		out = out[:20]
 	}
 	return out
 }

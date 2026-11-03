@@ -1,13 +1,17 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"github.com/ficaa1/homelab-inventory/internal/actions"
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
+	"github.com/ficaa1/homelab-inventory/internal/vpnwatch"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // A migrated shared private-dashboard token is accepted only for inventory
@@ -48,16 +52,28 @@ func (s *server) observePluginRequests(next http.Handler) http.Handler {
 }
 
 func (s *server) bindNetworkInventory() {
+	s.plugins.BindVPNPanelSource(func(ctx context.Context) {
+		if s.vpnWatch != nil {
+			go func() {
+				checkCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+				defer cancel()
+				_ = s.vpnWatch.Check(checkCtx, true)
+			}()
+		}
+	})
 	s.plugins.BindNetworkSource(func() ([]plugin.NetworkHost, error) {
 		inventories, err := s.store.LatestAll()
 		if err != nil {
 			return nil, err
 		}
+		manager := s.actions
+		if manager == nil {
+			manager, _ = actions.Open(s.store.Dir(), nil)
+		}
 		out := []plugin.NetworkHost{}
 		for _, inv := range inventories {
-			if inv.VPN != nil {
-				v := inv.VPN
-				out = append(out, plugin.NetworkHost{Host: inv.Host.Hostname, CollectedAt: inv.CollectedAt, InterfaceUp: v.InterfaceUp, LatestHandshake: v.LatestHandshake, Endpoint: v.Endpoint, ExitIP: v.ExitIP, Country: v.Country, City: v.City, Org: v.Org, RXBytes: v.RXBytes, TXBytes: v.TXBytes})
+			for _, v := range inv.VPNGateways() {
+				out = append(out, vpnwatch.Project(inv, &v, s.vpnWatch, manager, s.actionPolicy.Host, s.exec != nil))
 			}
 		}
 		return out, nil

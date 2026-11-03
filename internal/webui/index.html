@@ -3300,7 +3300,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       try { extra = operatorHeaders(); } catch (err) { return Promise.reject(err); }
     }
     var controller = new AbortController();
-    var timer = setTimeout(function () { controller.abort(); }, path.endsWith("/execute") ? 90000 : 10000);
+    var timer = setTimeout(function () { controller.abort(); }, path.endsWith("/execute") ? (body.kind === "vpn_reconnect" ? 300000 : 90000) : 10000);
     var headers = Object.assign({"Content-Type": "application/json", "X-Requested-By": "homelab-inventory"}, extra);
     if (token && !headers.Authorization) headers.Authorization = "Bearer " + token;
     return fetch(path, {method: "POST", headers: headers, body: JSON.stringify(body), signal: controller.signal, cache: "no-store"})
@@ -3322,21 +3322,22 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   function restartVisible(session) { return session === restartSession && !!$("restart-sheet") && !$("drawer").classList.contains("hidden"); }
   function showRestartPreview(p, session, changed) {
     if (!restartVisible(session)) return;
+    var reconnect = p.kind === "vpn_reconnect";
     var chips = '<div class="sub">Containers</div><div class="restart-chips">' + (p.containers || []).map(function (n) { return '<span class="pill">' + esc(n) + '</span>'; }).join("") + '</div>';
     var impact = (p.impact || []).map(function (x) {
       return '<details class="restart-detail"><summary><span class="pill warning">' + esc(x.name) + ' · ' + (x.kind === "network" ? 'network down' : 'unavailable') + '</span></summary><div class="sub">' + esc(x.target) + ' · ' + esc(x.effect) + '</div></details>';
     }).join("");
     restartSheet(p.target, (changed ? '<div class="pill warning" role="status">Container set changed</div>' : '') + chips + (impact ? '<div class="sub">Impact</div><div class="restart-chips">' + impact + '</div>' : '') +
-      '<button type="button" class="btn primary" id="restart-confirm"' + (!p.container_set_hash || !p.containers.length ? ' disabled' : '') + '>Restart</button>');
+      '<button type="button" class="btn primary" id="restart-confirm"' + (!p.container_set_hash || !p.containers.length ? ' disabled' : '') + '>' + (reconnect ? 'Reconnect VPN' : 'Restart') + '</button>');
     $("restart-confirm").onclick = function () { executeRestart(p, session); };
   }
-  function beginRestart(kind, target) {
-    if (!restartsEnabled(route.host)) { restartSheet(target, '<div role="status" class="sub">' + esc(RESTART_HINT) + '</div>'); return; }
+  function beginRestart(kind, target, host) {
+    var requestedHost = host || route.host;
+    if (!restartsEnabled(requestedHost)) { restartSheet(target, '<div role="status" class="sub">' + esc(RESTART_HINT) + '</div>'); return; }
     if (restartBusy) return;
     stopRestartHealth();
     var session = ++restartSession;
     restartSheet(target, '<div role="status" class="sub">Loading…</div>');
-    var requestedHost = route.host;
     actionPost("/actions/preview", {kind: kind, target: target, host: requestedHost}).then(function (r) {
       if (!restartVisible(session)) return;
       if (r.status === 401) { showGate(true); closeDrawer(); return; }
@@ -3351,12 +3352,12 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   function executeRestart(p, session) {
     if (restartBusy || !restartVisible(session)) return;
     restartBusy = true;
-    restartSheet(p.target, '<div role="status">' + restartStatus("running").replace("unknown, check", "Restarting…") + '</div>');
+    restartSheet(p.target, '<div role="status">' + restartStatus("running").replace("unknown, check", p.kind === "vpn_reconnect" ? "Reconnecting…" : "Restarting…") + '</div>');
     actionPost("/actions/execute", {kind: p.kind, target: p.target, container_set_hash: p.container_set_hash, confirm: true, host: p.host}).then(function (r) {
       if (r.status === 401) { showGate(true); closeDrawer(); return; }
       if (r.status === 409 && r.body.preview) { r.body.preview.host = p.host; showRestartPreview(r.body.preview, session, true); return; }
       if (r.body.results && r.body.result) {
-        if (restartVisible(session)) restartSheet(p.target, '<div role="status">' + restartStatus(r.body.result) + '</div>' + restartResults(r.body.results));
+        if (restartVisible(session)) restartSheet(p.target, '<div role="status">' + restartStatus(r.body.result) + '</div>' + (r.body.reason ? '<div class="sub">' + esc(r.body.reason) + '</div>' : '') + restartResults(r.body.results));
         loadActionLog();
         return;
       }
@@ -3401,7 +3402,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     var el = $("recent-actions");
     if (!el) return;
     el.innerHTML = actionLogError ? '<div class="sub">' + esc(actionLogError) + '</div>' : actionLog === null ? skeleton(2) : actionLog.map(function (a) {
-      return '<details class="restart-detail"><summary><div class="restart-name"><b>' + esc(a.target) + '</b><div class="restart-log-meta"><time datetime="' + esc(a.at) + '">' + esc(new Date(a.at).toLocaleString()) + '</time> · ' + esc(a.actor) + '</div></div>' + restartStatus(a.result) + '</summary><div class="sub">' + (a.kind === "stack_restart" ? 'Stack' : 'Container') + '</div>' + restartResults(a.results) + (a.result === 'running' ? '<div class="sub">Check Docker</div>' : '') + '</details>';
+      return '<details class="restart-detail"><summary><div class="restart-name"><b>' + esc(a.target) + '</b><div class="restart-log-meta"><time datetime="' + esc(a.at) + '">' + esc(new Date(a.at).toLocaleString()) + '</time> · ' + esc(a.actor) + '</div></div>' + restartStatus(a.result) + '</summary><div class="sub">' + (a.kind === "vpn_reconnect" ? 'VPN reconnect' : a.kind === "stack_restart" ? 'Stack' : 'Container') + '</div>' + restartResults(a.results) + (a.result === 'running' ? '<div class="sub">Check Docker</div>' : '') + '</details>';
     }).join("") || '<div class="sub">No actions.</div>';
   }
   function loadActionLog() {
@@ -4793,7 +4794,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     // Private order first (actions, notifications, scoring, storage); the
     // public-only dashboard and host enrolment cards follow.
     $("admin").innerHTML = recentActionsHTML() + adminVerdict(s) +
-      '<div class="admin-grid"><div>' + adminNotify(s) + adminLog(s) + adminGeneral(s) + '</div><div><div id="plugin-admin-sections"></div>' + adminStorage() + "</div></div>" + adminHostsHTML();
+      '<div class="admin-grid"><div>' + adminNotify(s) + adminLog(s) + adminGeneral(s) + adminVPN(s) + '</div><div><div id="plugin-admin-sections"></div>' + adminStorage() + "</div></div>" + adminHostsHTML();
     mountPluginAdmins();
     renderActionLog();
     wireStorage();
@@ -4880,6 +4881,16 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       (s.icons_fetch ? " checked" : "") + '> fetch launcher icons</label></div>' +
       '<div class="src">Fetching tells a third-party icon repository which service slugs this dashboard uses. It is off unless enabled here or by ICONS_FETCH.</div>' +
       '<div class="actions"><button class="btn" id="a-dashboard-save">Save</button><span id="a-dashboard-msg" class="src"></span></div></div></div>';
+  }
+  function adminVPN(s) {
+    return '<section class="setting"><h4>' + ic("shield") + 'VPN recovery</h4>' +
+      '<p>Reconnect a persistently unhealthy VPN and its dependent containers. Requires enabled actions on the configured actions host.</p>' +
+      '<div class="form"><div class="row"><label for="a-vpn-autofix"><input type="checkbox" id="a-vpn-autofix" style="width:auto"' +
+      (s.vpn_autofix === true ? ' checked' : '') + '> enable automatic reconnect</label></div>' +
+      '<div><label for="a-vpn-after">Unhealthy for (minutes)</label>' +
+      '<input id="a-vpn-after" type="number" min="1" max="1440" step="1" value="' + esc(s.vpn_autofix_after_minutes == null ? 10 : s.vpn_autofix_after_minutes) + '">' +
+      '<div class="src">Off by default. Delay: 1–1440 minutes. Recovery observes its cooldown and records every attempt in Recent actions.</div></div>' +
+      '<div class="actions"><button type="button" class="btn" id="a-vpn-save">Save</button><span id="a-vpn-msg" class="src" role="status"></span></div></div></section>';
   }
   function storageRefresh() {
     return api("/storage/runs").then(function (s) { data.runStorage = s; renderAdmin(); renderKPIs(); });
@@ -5085,6 +5096,12 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   }
 
   function wireAdmin() {
+    var vpnSave = $("a-vpn-save");
+    if (vpnSave) vpnSave.addEventListener("click", function () {
+      var after = $("a-vpn-after");
+      if (!after.value || !after.checkValidity()) { adminMsg("a-vpn-msg", "Enter whole minutes from 1 to 1440.", true); return; }
+      saveSettings({vpn_autofix: $("a-vpn-autofix").checked, vpn_autofix_after_minutes: Number(after.value)}, "a-vpn-msg");
+    });
     var general = $("a-dashboard-save");
     if (general) general.addEventListener("click", function () {
       saveSettings({ dashboard_name: $("a-dashboard-name").value.trim(), icons_fetch: $("a-icons-fetch").checked }, "a-dashboard-msg")
@@ -8592,6 +8609,9 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       Promise.resolve().then(hydrateIcons);
       return t.content.firstChild;
     },
+    // Fixed VPN action, sharing the core preview/confirmation and operator flow.
+    vpnReconnect: function (host, container) { beginRestart("vpn_reconnect", container, host); },
+    restartsEnabled: restartsEnabled,
     ports: function (root) { mountPorts(root); return true; },
     // Hand one file to the upload sheet for this plugin's own destination; the
     // sheet sends it with progress and errors. False when it is not configured.

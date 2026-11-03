@@ -10,10 +10,10 @@
 package execallow
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"regexp"
 	"sort"
@@ -78,6 +78,9 @@ var allowed = map[string]command{
 		required: []string{"compose_file"},
 		optional: []string{"service", "project"},
 	},
+	"vpn-wg-dump":     {required: []string{"container"}},
+	"vpn-exit-check":  {required: []string{"container"}},
+	"container-state": {required: []string{"container"}},
 	"container-restart": {
 		required: []string{"container"},
 	},
@@ -87,23 +90,31 @@ var allowed = map[string]command{
 // error; every outcome is folded into Result (ExitCode -1 = rejected/could not
 // run, 0 = success, >0 = ran but exited non-zero).
 func (r *Runner) Run(ctx context.Context, command string, args map[string]string) Result {
+	if isProbe(command) {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+	}
 	if err := r.Validate(command, args); err != nil {
 		return Result{Command: command, ExitCode: -1, Error: err.Error()}
 	}
 	if r.Execute != nil {
-		return r.Execute(ctx, command, args)
+		return sanitizeProbeResult(command, r.Execute(ctx, command, args))
 	}
 
 	if command == "compose-set-image" {
 		return r.composeSetImage(args["compose_file"], args["old_image"], args["new_image"])
 	}
 
-	if command == "container-restart" {
+	if command == "container-restart" || isProbe(command) {
 		name := args["container"]
 		inspected := r.runArgv(ctx, []string{"docker", "inspect", "--type=container", "--format", "{{.Name}}", "--", name})
 		if inspected.Error != "" || inspected.ExitCode != 0 || strings.TrimSpace(inspected.Stdout) != "/"+name {
 			return Result{Command: command, ExitCode: -1, Error: "live Docker target is not the exact container name"}
 		}
+	}
+	if isProbe(command) {
+		return r.runProbe(ctx, command, args)
 	}
 	return r.runCommand(ctx, command, args)
 }
@@ -121,6 +132,14 @@ func (r *Runner) validate(command string, args map[string]string) Result {
 	cmd, ok := allowed[command]
 	if !ok {
 		return Result{Command: command, ExitCode: -1, Error: fmt.Sprintf("unknown command %q", command)}
+	}
+
+	if isProbe(command) {
+		for key := range args {
+			if key != "container" {
+				return Result{Error: "unexpected probe argument"}
+			}
+		}
 	}
 
 	// Validate required args.
@@ -163,7 +182,7 @@ func (r *Runner) validate(command string, args map[string]string) Result {
 			return Result{Error: "new_image must differ from old_image"}
 		}
 	}
-	if command == "container-restart" || command == "compose-restart" {
+	if command == "container-restart" || command == "compose-restart" || isProbe(command) {
 		if r.Inventory == nil {
 			return Result{Error: "latest target host inventory is unavailable"}
 		}
@@ -174,10 +193,13 @@ func (r *Runner) validate(command string, args map[string]string) Result {
 		if err := r.Policy.CheckInventory(inv); err != nil {
 			return Result{Error: err.Error()}
 		}
-		if command == "container-restart" {
+		if command == "container-restart" || isProbe(command) {
 			if _, err := FindContainer(inv, args["container"]); err != nil {
 				return Result{Error: err.Error()}
 			}
+		}
+		if (command == "vpn-wg-dump" || command == "vpn-exit-check") && inv.VPNGateway(args["container"]) == nil {
+			return Result{Error: "container is not the latest inventory VPN gateway"}
 		}
 	}
 	if command == "compose-restart" && (args["project"] == "" || r.Policy.ComposeFiles[args["project"]] != args["compose_file"]) {
@@ -192,6 +214,10 @@ func (r *Runner) runCommand(ctx context.Context, name string, args map[string]st
 }
 
 func (r *Runner) runArgv(ctx context.Context, argv []string) Result {
+	return r.runCaptured(ctx, argv, false)
+}
+
+func (r *Runner) runCaptured(ctx context.Context, argv []string, wireGuard bool) Result {
 	label := strings.Join(argv, " ")
 
 	timeout := r.Timeout
@@ -213,9 +239,23 @@ func (r *Runner) runArgv(ctx context.Context, argv []string) Result {
 	cmd.Stdin = nil
 	cmd.WaitDelay = 2 * time.Second
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	maxOutput := DefaultMaxOutput
+	if wireGuard || (len(argv) > 1 && (argv[1] == "exec" || argv[1] == "inspect")) {
+		maxOutput = probeMaxOutput
+	}
+	stdout := &boundedOutput{max: maxOutput}
+	stderr := &boundedOutput{max: 4096}
+	var output io.Writer = stdout
+	var dump *wgOutput
+	if wireGuard {
+		dump = &wgOutput{}
+		output = dump
+	}
+	cmd.Stdout = output
+	cmd.Stderr = stderr
+	if wireGuard {
+		cmd.Stderr = io.Discard
+	}
 
 	err := cmd.Run()
 
@@ -225,6 +265,16 @@ func (r *Runner) runArgv(ctx context.Context, argv []string) Result {
 		Stderr:  truncate(strings.TrimSpace(stderr.String()), 4096),
 	}
 
+	if wireGuard {
+		res.Command = "vpn-wg-dump"
+		res.Stdout, res.Stderr = dump.String(), ""
+	}
+	if stdout.overflow {
+		res.Stdout = ""
+		res.ExitCode = -1
+		res.Error = "command output exceeded limit"
+		return res
+	}
 	switch {
 	case err == nil:
 		res.ExitCode = 0
@@ -270,6 +320,10 @@ func buildArgv(name string, args map[string]string) []string {
 			a = append(a, s)
 		}
 		return a
+	case "vpn-wg-dump":
+		return []string{"docker", "exec", args["container"], "wg", "show", "all", "dump"}
+	case "container-state":
+		return []string{"docker", "inspect", "--type=container", "--format", containerStateFormat, "--", args["container"]}
 	case "container-restart":
 		return []string{"docker", "restart", "/" + args["container"]}
 	default:

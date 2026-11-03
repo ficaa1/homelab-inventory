@@ -29,7 +29,12 @@ Each must be at least 32 characters, and all three must be different. Without an
 | `ICONS_FETCH` | off | `1` to download logos for launcher tiles |
 
 Restarts and agent updates have their own pages: [restarts](restarts.md),
-[self-update](self-update.md).
+[self-update](self-update.md), [VPN health and recovery](vpn.md).
+
+VPN automatic recovery is stored in Admin as `vpn_autofix` (default `false`) and
+`vpn_autofix_after_minutes` (default `10`, range `1–1440`). It requires the actions
+configuration. `VPN_CHECK_URL` selects the server-side exit-check endpoint; see
+[VPN health and recovery](vpn.md).
 
 ## Browser sign-in (OIDC)
 

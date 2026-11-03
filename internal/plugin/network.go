@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"github.com/ficaa1/homelab-inventory/internal/inventory"
 	"time"
 )
 
@@ -21,13 +22,38 @@ type DNSConsumer interface {
 
 // NetworkHost is the narrow read-only projection supplied by inventory core.
 // It contains public tunnel facts; no settings, credentials or full inventories.
+type NetworkReconnect struct {
+	At      time.Time `json:"at"`
+	Actor   string    `json:"actor"`
+	Result  string    `json:"result"`
+	Reason  string    `json:"reason"`
+	ExitIP  *string   `json:"exitIp"`
+	Country *string   `json:"country"`
+}
+type NetworkAutofix struct {
+	Enabled       bool       `json:"enabled"`
+	AfterMinutes  int        `json:"afterMinutes"`
+	State         string     `json:"state"`
+	Reason        string     `json:"reason"`
+	LastRun       *time.Time `json:"lastRun"`
+	CooldownUntil *time.Time `json:"cooldownUntil"`
+}
 type NetworkHost struct {
-	Host                                 string
-	CollectedAt                          time.Time
-	InterfaceUp                          bool
-	LatestHandshake                      *time.Time
-	Endpoint, ExitIP, Country, City, Org *string
-	RXBytes, TXBytes                     *uint64
+	Container, State, Health, Interface, Status, Reason string
+	StartedAt                                           *time.Time
+	Dependents                                          []inventory.VPNDependent
+	Since                                               *time.Time
+	HandshakeAgeSeconds                                 *float64
+	Live                                                bool
+	ReconnectAllowed                                    bool
+	LastReconnect                                       *NetworkReconnect
+	Autofix                                             NetworkAutofix
+	Host                                                string
+	CollectedAt                                         time.Time
+	InterfaceUp                                         bool
+	LatestHandshake                                     *time.Time
+	Endpoint, ExitIP, Country, City, Org                *string
+	RXBytes, TXBytes                                    *uint64
 }
 type NetworkSource interface {
 	SetNetworkSource(func() ([]NetworkHost, error))
@@ -66,4 +92,19 @@ func (r *Registry) BindNetworkDNS() {
 		return
 	}
 	consumer.SetDNSRecordsSource(source.DNSRecords)
+}
+
+// NetworkPanelSource requests an exit check through the shared five-minute cache.
+type NetworkPanelSource interface{ SetVPNPanelSource(func(context.Context)) }
+
+func (r *Registry) BindVPNPanelSource(source func(context.Context)) {
+	e := r.entries["network"]
+	if e == nil {
+		return
+	}
+	e.op.Lock()
+	defer e.op.Unlock()
+	if p, ok := e.plugin.(NetworkPanelSource); ok {
+		p.SetVPNPanelSource(source)
+	}
 }

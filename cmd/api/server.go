@@ -42,6 +42,7 @@ import (
 	"github.com/ficaa1/homelab-inventory/internal/store"
 	"github.com/ficaa1/homelab-inventory/internal/trend"
 	"github.com/ficaa1/homelab-inventory/internal/triage"
+	"github.com/ficaa1/homelab-inventory/internal/vpnwatch"
 	"github.com/ficaa1/homelab-inventory/internal/webui"
 )
 
@@ -95,6 +96,7 @@ type server struct {
 	icons            *icons.Cache
 	exec             *execallow.Runner
 	actions          *actions.Manager
+	vpnWatch         *vpnwatch.Watch
 	defaults         settings.Defaults
 }
 
