@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
@@ -60,24 +61,31 @@ type Options struct {
 	Reconnect func(context.Context, string) (actions.Entry, error)
 	Now       func() time.Time
 }
-type Watch struct {
-	mu                            sync.Mutex
-	checkMu                       sync.Mutex
-	opts                          Options
-	path                          string
+type gateway struct {
 	saved                         durable
 	snap                          Snapshot
 	lastWG, lastExit, lastInspect time.Time
 	exitOK                        bool
 	failures                      int
 	startedAt                     time.Time
-	liveState                     string
-	liveHealth                    string
+	liveState, liveHealth         string
 	verifiedAt                    time.Time
+	revision                      uint64 // Invalidates in-flight probes when a manual action finishes.
+}
+type persisted struct {
+	Gateways map[string]durable `json:"gateways"`
+}
+type Watch struct {
+	mu       sync.Mutex
+	checkMu  sync.Mutex
+	opts     Options
+	path     string
+	saved    map[string]durable
+	gateways map[string]gateway
 }
 
 func Open(dir string, opts Options) (*Watch, error) {
-	w := &Watch{opts: opts, path: filepath.Join(dir, "state-vpn-watch.json")}
+	w := &Watch{opts: opts, path: filepath.Join(dir, "state-vpn-watch.json"), saved: map[string]durable{}, gateways: map[string]gateway{}}
 	if opts.Now == nil {
 		w.opts.Now = time.Now
 	}
@@ -96,8 +104,15 @@ func Open(dir string, opts Options) (*Watch, error) {
 	}
 	b, err := os.ReadFile(w.path)
 	if err == nil {
-		if json.Unmarshal(b, &w.saved) != nil {
-			return nil, errors.New("invalid VPN watch state")
+		// The former single-gateway shape and malformed files start fresh.
+		// This state has never been deployed; incompatible state must not block startup.
+		var state persisted
+		if json.Unmarshal(b, &state) == nil && state.Gateways != nil {
+			for name, d := range state.Gateways {
+				if name != "" && name == d.Container && d.Host != "" {
+					w.saved[name] = d
+				}
+			}
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, err
@@ -105,7 +120,7 @@ func Open(dir string, opts Options) (*Watch, error) {
 	return w, nil
 }
 func (w *Watch) save() error {
-	b, err := json.Marshal(w.saved)
+	b, err := json.Marshal(persisted{Gateways: w.saved})
 	if err != nil {
 		return err
 	}
@@ -121,19 +136,19 @@ func (w *Watch) settings() (bool, int) {
 	}
 	return on, n
 }
-func (w *Watch) snapshot(now time.Time) Snapshot {
-	s := w.snap
+func (w *Watch) snapshot(g gateway, now time.Time) Snapshot {
+	s := g.snap
 	if s.Facts.LatestHandshake != nil {
 		a := now.Sub(*s.Facts.LatestHandshake).Seconds()
 		s.HandshakeAgeSeconds = &a
 	}
 	on, n := w.settings()
-	s.Autofix = Autofix{Enabled: on, AfterMinutes: n, State: "off", LastRun: w.saved.LastAuto}
+	s.Autofix = Autofix{Enabled: on, AfterMinutes: n, State: "off", LastRun: g.saved.LastAuto}
 	if on {
 		s.Autofix.State = "watching"
 	}
-	if w.saved.LastAuto != nil {
-		t := w.saved.LastAuto.Add(time.Hour)
+	if g.saved.LastAuto != nil {
+		t := g.saved.LastAuto.Add(time.Hour)
 		s.Autofix.CooldownUntil = &t
 		if on && now.Before(t) {
 			s.Autofix.State = "cooldown"
@@ -142,17 +157,23 @@ func (w *Watch) snapshot(now time.Time) Snapshot {
 	s.Dependents = append([]inventory.VPNDependent{}, s.Dependents...)
 	return s
 }
-func (w *Watch) Snapshot() Snapshot {
+
+// Snapshot reads one gateway without waiting for Docker probes.
+func (w *Watch) Snapshot(container string) Snapshot {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return w.snapshot(w.opts.Now().UTC())
+	return w.snapshot(w.gateways[container], w.opts.Now().UTC())
 }
-func (w *Watch) Health() *alert.VPNHealth {
-	s := w.Snapshot()
-	if s.Container == "" {
-		return nil
+func (w *Watch) Health() []alert.VPNHealth {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	out := []alert.VPNHealth{}
+	for _, g := range w.gateways {
+		s := g.snap
+		out = append(out, alert.VPNHealth{Host: s.Host, Container: s.Container, Status: s.Status, Reason: s.Reason, LatestHandshake: s.Facts.LatestHandshake, Since: &s.Since})
 	}
-	return &alert.VPNHealth{Host: s.Host, Container: s.Container, Status: s.Status, Reason: s.Reason, LatestHandshake: s.Facts.LatestHandshake, Since: &s.Since}
+	sort.Slice(out, func(i, j int) bool { return out[i].Container < out[j].Container })
+	return out
 }
 func (w *Watch) Loop(ctx context.Context) {
 	t := time.NewTicker(30 * time.Second)
@@ -167,21 +188,15 @@ func (w *Watch) Loop(ctx context.Context) {
 	}
 }
 
-// Check performs fixed local probes. Panel reads share the five-minute exit
-// cache; a failed exit check is retried after thirty seconds regardless of it.
+// Check serializes probes with checkMu. mu protects only published state;
+// probes work on copies so alerts and panel readers never wait for Docker.
 func (w *Watch) Check(ctx context.Context, panel bool) error {
 	if !w.checkMu.TryLock() {
 		return nil
 	}
 	defer w.checkMu.Unlock()
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	now := w.opts.Now().UTC()
 	if ctx.Err() != nil {
 		return ctx.Err()
-	}
-	if w.opts.Actions != nil && w.opts.Actions.Busy() {
-		return nil
 	}
 	if w.opts.Runner == nil || w.opts.Runner.Inventory == nil {
 		return nil
@@ -190,140 +205,186 @@ func (w *Watch) Check(ctx context.Context, panel bool) error {
 	if err != nil {
 		return err
 	}
-	if inv == nil || inv.VPN == nil || inv.VPN.Container == "" {
-		w.snap = Snapshot{}
-		w.saved.BadSince = nil
-		return w.save()
+	vs := inv.VPNGateways()
+	w.mu.Lock()
+	keep := map[string]bool{}
+	for _, v := range vs {
+		if v.Container != "" {
+			keep[v.Container] = true
+		}
 	}
-	v := inv.VPN
-	if w.snap.Host != inv.Host.Hostname || w.snap.Container != v.Container {
-		w.verifiedAt = time.Time{}
-		if w.opts.Actions != nil {
+	for name, d := range w.saved {
+		if !keep[name] || d.Host != inv.Host.Hostname {
+			delete(w.saved, name)
+			delete(w.gateways, name)
+		}
+	}
+	for name := range w.gateways {
+		if !keep[name] {
+			delete(w.gateways, name)
+		}
+	}
+	err = w.save()
+	w.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	if w.opts.Actions != nil && w.opts.Actions.Busy() {
+		return nil
+	}
+	for _, v := range vs {
+		if v.Container == "" {
+			continue
+		}
+		now := w.opts.Now().UTC()
+		w.mu.Lock()
+		g, exists := w.gateways[v.Container]
+		if !exists || g.snap.Host != inv.Host.Hostname {
+			g = gateway{saved: w.saved[v.Container], snap: Snapshot{Host: inv.Host.Hostname, Container: v.Container, Status: "unknown", Reason: "waiting for a tunnel check", Since: now}}
+			g.saved.Host, g.saved.Container = inv.Host.Hostname, v.Container
+			w.gateways[v.Container] = g
+		}
+		g.snap.Dependents = append([]inventory.VPNDependent{}, v.Dependents...)
+		w.mu.Unlock()
+		if !exists && w.opts.Actions != nil {
 			for _, e := range w.opts.Actions.Log(100) {
 				if e.Kind == "vpn_reconnect" && e.Target == v.Container && e.Result == "ok" {
-					w.verifiedAt = e.At
+					g.verifiedAt = e.At
 					break
 				}
 			}
 		}
-		w.snap = Snapshot{Host: inv.Host.Hostname, Container: v.Container, Status: "unknown", Reason: "waiting for a tunnel check", Since: now}
-		w.lastWG = time.Time{}
-		w.lastExit = time.Time{}
-		w.lastInspect = time.Time{}
-		w.failures = 0
-		w.exitOK = false
-		w.startedAt = time.Time{}
-		if w.saved.Host != inv.Host.Hostname || w.saved.Container != v.Container {
-			w.saved.BadSince = nil
+		if err := w.probe(ctx, panel, now, inv, &v, &g); err != nil {
+			return err
 		}
-		w.saved.Host = inv.Host.Hostname
-		w.saved.Container = v.Container
+		w.mu.Lock()
+		current := w.gateways[v.Container]
+		if current.revision != g.revision {
+			w.mu.Unlock()
+			continue
+		}
+		w.gateways[v.Container], w.saved[v.Container] = g, g.saved
+		err = w.save()
+		w.mu.Unlock()
+		if err != nil {
+			return err
+		}
+		if !panel {
+			if err := w.autofix(ctx, v.Container, now); err != nil {
+				return err
+			}
+		}
 	}
+	return nil
+}
+
+// probe mutates only a private copy; it never holds the reader mutex.
+func (w *Watch) probe(ctx context.Context, panel bool, now time.Time, inv *inventory.Inventory, v *inventory.VPN, g *gateway) error {
 	status, reason := "unknown", "waiting for a tunnel check"
 	state := v.State
-	w.snap.Dependents = append([]inventory.VPNDependent{}, v.Dependents...)
+	g.snap.Dependents = append([]inventory.VPNDependent{}, v.Dependents...)
 	inspectOK := false
-	if now.Sub(w.lastInspect) >= 60*time.Second {
-		w.lastInspect = now
+	if now.Sub(g.lastInspect) >= 60*time.Second {
+		g.lastInspect = now
 		c, e := w.opts.Inspect(ctx, v.Container)
 		if ctx.Err() != nil {
-			w.lastInspect = time.Time{}
+			g.lastInspect = time.Time{}
 			return ctx.Err()
 		}
 		if e == nil {
-			if !w.startedAt.IsZero() && !c.StartedAt.Equal(w.startedAt) {
-				w.lastWG = time.Time{}
-				w.lastExit = time.Time{}
-				w.failures = 0
-				w.exitOK = false
-				w.snap.Facts = vpnprobe.Facts{}
+			if !g.startedAt.IsZero() && !c.StartedAt.Equal(g.startedAt) {
+				g.lastWG = time.Time{}
+				g.lastExit = time.Time{}
+				g.failures = 0
+				g.exitOK = false
+				g.snap.Facts = vpnprobe.Facts{}
 			}
 			state = c.State
-			w.liveState = c.State
-			w.liveHealth = c.Health
-			w.startedAt = c.StartedAt
+			g.liveState = c.State
+			g.liveHealth = c.Health
+			g.startedAt = c.StartedAt
 			inspectOK = true
 		}
 	} else {
-		inspectOK = !w.startedAt.IsZero()
+		inspectOK = !g.startedAt.IsZero()
 		if inspectOK {
-			state = w.liveState
+			state = g.liveState
 		}
 	}
-	w.snap.State = state
-	w.snap.Health = w.liveHealth
-	if !w.startedAt.IsZero() {
-		t := w.startedAt
-		w.snap.StartedAt = &t
+	g.snap.State = state
+	g.snap.Health = g.liveHealth
+	if !g.startedAt.IsZero() {
+		t := g.startedAt
+		g.snap.StartedAt = &t
 	}
 	if state != "running" {
 		status, reason = "down", "gateway is not running"
-		for i := range w.snap.Dependents {
-			w.snap.Dependents[i].Attached = nil
+		for i := range g.snap.Dependents {
+			g.snap.Dependents[i].Attached = nil
 		}
 	} else {
-		if now.Sub(w.lastWG) >= 60*time.Second {
-			w.lastWG = now
+		if now.Sub(g.lastWG) >= 60*time.Second {
+			g.lastWG = now
 			f, e := w.opts.WG(ctx, v.Container)
 			if ctx.Err() != nil {
-				w.lastWG = time.Time{}
+				g.lastWG = time.Time{}
 				return ctx.Err()
 			}
 			if e == nil {
-				w.snap.Facts.LatestHandshake = f.LatestHandshake
-				w.snap.Facts.Endpoint = f.Endpoint
-				w.snap.Facts.RXBytes = f.RXBytes
-				w.snap.Facts.TXBytes = f.TXBytes
+				g.snap.Facts.LatestHandshake = f.LatestHandshake
+				g.snap.Facts.Endpoint = f.Endpoint
+				g.snap.Facts.RXBytes = f.RXBytes
+				g.snap.Facts.TXBytes = f.TXBytes
 			} else {
-				w.snap.Facts.LatestHandshake = nil
+				g.snap.Facts.LatestHandshake = nil
 			}
 		}
-		h := w.snap.Facts.LatestHandshake
-		due := (w.failures > 0 && now.Sub(w.lastExit) >= 30*time.Second) || (h != nil && now.Sub(*h) > 180*time.Second && now.Sub(w.lastExit) >= 60*time.Second) || ((h == nil || panel) && now.Sub(w.lastExit) >= 5*time.Minute)
+		h := g.snap.Facts.LatestHandshake
+		due := (g.failures > 0 && now.Sub(g.lastExit) >= 30*time.Second) || (h != nil && now.Sub(*h) > 180*time.Second && now.Sub(g.lastExit) >= 60*time.Second) || ((h == nil || panel) && now.Sub(g.lastExit) >= 5*time.Minute)
 		if due {
 			f, e := w.opts.Exit(ctx, v.Container)
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			w.lastExit = now
+			g.lastExit = now
 			if e != nil {
-				w.failures++
-				w.exitOK = false
+				g.failures++
+				g.exitOK = false
 			} else {
-				w.failures = 0
-				w.exitOK = true
-				w.snap.Facts.ExitIP = f.ExitIP
-				w.snap.Facts.Country = f.Country
-				w.snap.Facts.City = f.City
-				w.snap.Facts.Org = f.Org
+				g.failures = 0
+				g.exitOK = true
+				g.snap.Facts.ExitIP = f.ExitIP
+				g.snap.Facts.Country = f.Country
+				g.snap.Facts.City = f.City
+				g.snap.Facts.Org = f.Org
 			}
 		}
-		if w.failures >= 2 {
+		if g.failures >= 2 {
 			status, reason = "down", "two exit checks failed at least 30 seconds apart"
-		} else if w.exitOK || (h != nil && now.Sub(*h) >= 0 && now.Sub(*h) < 180*time.Second) {
+		} else if g.exitOK || (h != nil && now.Sub(*h) >= 0 && now.Sub(*h) < 180*time.Second) {
 			status, reason = "ok", "tunnel connectivity verified"
 		} else {
 			reason = "exit check failed; waiting for confirmation"
 		}
 		if status != "down" {
-			for i, d := range w.snap.Dependents {
-				cut := d.State == "running" && d.Attached != nil && !*d.Attached && !inv.CollectedAt.Before(w.verifiedAt)
+			for i, d := range g.snap.Dependents {
+				cut := d.State == "running" && d.Attached != nil && !*d.Attached && !inv.CollectedAt.Before(g.verifiedAt)
 				if inspectOK {
 					c, e := w.opts.Inspect(ctx, d.Name)
 					if ctx.Err() != nil {
 						return ctx.Err()
 					}
 					if e == nil {
-						w.snap.Dependents[i].State = c.State
-						w.snap.Dependents[i].StartedAt = &c.StartedAt
+						g.snap.Dependents[i].State = c.State
+						g.snap.Dependents[i].StartedAt = &c.StartedAt
 						if c.State != "running" {
 							cut = false
-							w.snap.Dependents[i].Attached = nil
+							g.snap.Dependents[i].Attached = nil
 						}
-						if c.State == "running" && !c.StartedAt.IsZero() && !w.startedAt.IsZero() {
-							cut = cut || c.StartedAt.Before(w.startedAt)
+						if c.State == "running" && !c.StartedAt.IsZero() && !g.startedAt.IsZero() {
+							cut = cut || c.StartedAt.Before(g.startedAt)
 							a := !cut
-							w.snap.Dependents[i].Attached = &a
+							g.snap.Dependents[i].Attached = &a
 						}
 					}
 				}
@@ -333,35 +394,32 @@ func (w *Watch) Check(ctx context.Context, panel bool) error {
 			}
 		}
 	}
-	if status != w.snap.Status {
-		w.snap.Since = now
-		if (status == "down" || status == "cutoff") && w.saved.BadSince != nil {
-			w.snap.Since = *w.saved.BadSince
+	if status != g.snap.Status {
+		g.snap.Since = now
+		if (status == "down" || status == "cutoff") && g.saved.BadSince != nil {
+			g.snap.Since = *g.saved.BadSince
 		}
 	}
-	w.snap.Status, w.snap.Reason = status, reason
+	g.snap.Status, g.snap.Reason = status, reason
 	bad := status == "down" || status == "cutoff"
 	if bad {
-		if w.saved.BadSince == nil {
+		if g.saved.BadSince == nil {
 			t := now
-			w.saved.BadSince = &t
+			g.saved.BadSince = &t
 		}
 	} else if status == "ok" {
 		// Unknown probes after a restart do not prove recovery. Keep the timer,
 		// but autofix below still requires a newly confirmed down/cutoff state.
-		w.saved.BadSince = nil
+		g.saved.BadSince = nil
 	}
-	if err = w.save(); err != nil {
-		return err
-	}
-	if panel {
-		return nil
-	}
-	return w.autofix(ctx, now)
+	return nil
 }
-func (w *Watch) autofix(ctx context.Context, now time.Time) error {
+func (w *Watch) autofix(ctx context.Context, container string, now time.Time) error {
+	w.mu.Lock()
+	g := w.gateways[container]
+	w.mu.Unlock()
 	on, n := w.settings()
-	if !on || (w.snap.Status != "down" && w.snap.Status != "cutoff") || w.saved.BadSince == nil || now.Sub(*w.saved.BadSince) < time.Duration(n)*time.Minute || (w.saved.LastAuto != nil && now.Sub(*w.saved.LastAuto) < time.Hour) {
+	if !on || (g.snap.Status != "down" && g.snap.Status != "cutoff") || g.saved.BadSince == nil || now.Sub(*g.saved.BadSince) < time.Duration(n)*time.Minute || (g.saved.LastAuto != nil && now.Sub(*g.saved.LastAuto) < time.Hour) {
 		return nil
 	}
 	if w.opts.Actions != nil && w.opts.Actions.Busy() {
@@ -371,18 +429,25 @@ func (w *Watch) autofix(ctx context.Context, now time.Time) error {
 		return nil
 	}
 	// Reserve before execution, so a crash cannot cause an automatic retry loop.
-	previousAuto := w.saved.LastAuto
+	w.mu.Lock()
+	current := w.gateways[container]
+	if current.revision != g.revision {
+		w.mu.Unlock()
+		return nil
+	}
+	previousAuto := current.saved.LastAuto
 	t := now
-	w.saved.LastAuto = &t
-	if err := w.save(); err != nil {
+	current.saved.LastAuto = &t
+	w.gateways[container], w.saved[container] = current, current.saved
+	err := w.save()
+	w.mu.Unlock()
+	if err != nil {
 		return err
 	}
-	container, status, badSince := w.snap.Container, w.snap.Status, *w.saved.BadSince
-	w.mu.Unlock()
+	status, badSince := g.snap.Status, *g.saved.BadSince
 	actionCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 300*time.Second)
 	defer cancel()
 	var e actions.Entry
-	var err error
 	if w.opts.Reconnect != nil {
 		e, err = w.opts.Reconnect(actionCtx, container)
 	} else {
@@ -398,8 +463,12 @@ func (w *Watch) autofix(ctx context.Context, now time.Time) error {
 	}
 	if errors.Is(err, actions.ErrBusy) {
 		w.mu.Lock()
-		w.saved.LastAuto = previousAuto
-		return w.save()
+		current := w.gateways[container]
+		current.saved.LastAuto = previousAuto
+		w.gateways[container], w.saved[container] = current, current.saved
+		err := w.save()
+		w.mu.Unlock()
+		return err
 	}
 	msg := notify.Message{Title: "Automatic VPN reconnect", Type: "failure"}
 	if err == nil && e.Result == "ok" {
@@ -420,37 +489,36 @@ func (w *Watch) autofix(ctx context.Context, now time.Time) error {
 		if reason == "" {
 			reason = "tunnel verification failed"
 		}
-		msg.Body = fmt.Sprintf("Automatic VPN reconnect failed: %s. Next automatic attempt after %s UTC.", reason, now.Add(time.Hour).Format("15:04"))
+		msg.Body = fmt.Sprintf("Automatic VPN reconnect for %s failed: %s. Next automatic attempt after %s UTC.", container, reason, now.Add(time.Hour).Format("15:04"))
 	}
 	if w.opts.Message != nil {
 		messageCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 		w.opts.Message(messageCtx, msg)
 		stop()
 	}
-	w.mu.Lock()
-	if err == nil && e.Result == "ok" {
-		w.verifiedAt = e.At
-	}
-	w.lastWG = time.Time{}
-	w.lastExit = time.Time{}
-	w.lastInspect = time.Time{}
+	e.Target = container
+	w.Reconnected(e)
 	return nil
 }
 
-// Reconnected refreshes observations after an action, bypassing the exit cache.
-// A successful verified action is newer evidence than the previous inventory.
+// resetObservations invalidates any in-flight copy and bypasses probe caches.
+func (g *gateway) resetObservations(e actions.Entry) {
+	if e.Result == "ok" {
+		g.verifiedAt = e.At
+	}
+	g.lastWG, g.lastExit, g.lastInspect = time.Time{}, time.Time{}, time.Time{}
+	g.failures, g.exitOK = 0, false
+	g.revision++
+}
+
+// Reconnected refreshes observations after either a manual or automatic action.
 func (w *Watch) Reconnected(e actions.Entry) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.snap.Container != e.Target {
+	g, ok := w.gateways[e.Target]
+	if !ok {
 		return
 	}
-	if e.Result == "ok" {
-		w.verifiedAt = e.At
-	}
-	w.lastWG = time.Time{}
-	w.lastExit = time.Time{}
-	w.lastInspect = time.Time{}
-	w.failures = 0
-	w.exitOK = false
+	g.resetObservations(e)
+	w.gateways[e.Target] = g
 }

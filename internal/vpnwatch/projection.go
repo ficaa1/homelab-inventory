@@ -10,8 +10,7 @@ import (
 )
 
 // Project exposes only public VPN observations and action outcomes to Network.
-func Project(inv *inventory.Inventory, watch *Watch, manager *actions.Manager, actionsHost string, allowed bool) plugin.NetworkHost {
-	v := inv.VPN
+func Project(inv *inventory.Inventory, v *inventory.VPN, watch *Watch, manager *actions.Manager, actionsHost string, allowed bool) plugin.NetworkHost {
 	h := plugin.NetworkHost{Host: inv.Host.Hostname, CollectedAt: inv.CollectedAt, InterfaceUp: v.InterfaceUp, LatestHandshake: v.LatestHandshake, Endpoint: v.Endpoint, ExitIP: v.ExitIP, Country: v.Country, City: v.City, Org: v.Org, RXBytes: v.RXBytes, TXBytes: v.TXBytes,
 		Container: v.Container, State: v.State, Health: v.Health, Interface: v.Interface, StartedAt: v.StartedAt, Dependents: v.Dependents, Status: "unknown", Reason: "Live checks need actions on this host"}
 	for _, a := range alert.VPNAlerts(h.Host, v, nil, time.Now()) {
@@ -25,7 +24,7 @@ func Project(inv *inventory.Inventory, watch *Watch, manager *actions.Manager, a
 		}
 	}
 	if watch != nil {
-		snap := watch.Snapshot()
+		snap := watch.Snapshot(v.Container)
 		if snap.Host == h.Host && snap.Container == v.Container {
 			h.Status, h.Reason, h.Since, h.HandshakeAgeSeconds, h.Live = snap.Status, snap.Reason, &snap.Since, snap.HandshakeAgeSeconds, true
 			h.Dependents = snap.Dependents

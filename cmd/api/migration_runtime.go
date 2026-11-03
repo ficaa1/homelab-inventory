@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // A migrated shared private-dashboard token is accepted only for inventory
@@ -53,7 +54,11 @@ func (s *server) observePluginRequests(next http.Handler) http.Handler {
 func (s *server) bindNetworkInventory() {
 	s.plugins.BindVPNPanelSource(func(ctx context.Context) {
 		if s.vpnWatch != nil {
-			_ = s.vpnWatch.Check(ctx, true)
+			go func() {
+				checkCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+				defer cancel()
+				_ = s.vpnWatch.Check(checkCtx, true)
+			}()
 		}
 	})
 	s.plugins.BindNetworkSource(func() ([]plugin.NetworkHost, error) {
@@ -67,8 +72,8 @@ func (s *server) bindNetworkInventory() {
 		}
 		out := []plugin.NetworkHost{}
 		for _, inv := range inventories {
-			if inv.VPN != nil {
-				out = append(out, vpnwatch.Project(inv, s.vpnWatch, manager, s.actionPolicy.Host, s.exec != nil))
+			for _, v := range inv.VPNGateways() {
+				out = append(out, vpnwatch.Project(inv, &v, s.vpnWatch, manager, s.actionPolicy.Host, s.exec != nil))
 			}
 		}
 		return out, nil
