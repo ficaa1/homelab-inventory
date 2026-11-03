@@ -78,7 +78,7 @@ func (s *server) handleAgentStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Configuration absence is a normal, useful status, not an HTTP error.
-	writeJSON(w, 200, map[string]any{"sequence": snap.Sequence, "revision": snap.Revision, "version": snap.Version, "mode": snap.Mode, "control": snap.Mode, "ssh_hold": snap.SSHHold, "promoted": snap.Mode == "promote", "configured": snap.Configured, "unavailable": snap.Unavailable, "canary_hosts": agentoffers.CanaryHosts(), "hosts": snap.Hosts})
+	writeJSON(w, 200, map[string]any{"sequence": snap.Sequence, "revision": snap.Revision, "version": snap.Version, "mode": snap.Mode, "control": snap.Control, "ssh_hold": snap.SSHHold, "promoted": snap.Mode == "promote", "configured": snap.Configured, "unavailable": snap.Unavailable, "canary_hosts": agentoffers.CanaryHosts(), "hosts": snap.Hosts})
 }
 func (s *server) handlePostAgentStatus(w http.ResponseWriter, r *http.Request) {
 	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))

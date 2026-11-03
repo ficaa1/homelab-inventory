@@ -22,13 +22,13 @@ function render(fleet, attention = []) {
 const counts = {critical:0, warning:0, info:0, silenced:0};
 let html = render(null);
 assert.equal((html.match(/class="ops-number">—/g) || []).length, 3, 'unknown summaries must not become zeros');
-assert.doesNotMatch(html, /All hosts reporting|No outdated agents/);
+assert.doesNotMatch(html, /All hosts reporting|No update incidents/);
 html = render({status:'unavailable', error:'Synthetic timeout'});
 assert.match(html, /Unavailable/);
-assert.doesNotMatch(html, /All hosts reporting|No outdated agents/);
+assert.doesNotMatch(html, /All hosts reporting|No update incidents/);
 html = render({hosts_total:0, hosts_reporting:0, agents_outdated:[], alerts:counts});
 assert.match(html, /No hosts collected/);
-assert.match(html, /No outdated agents/);
+assert.match(html, /No update incidents/);
 assert.match(html, /class="ops-number">0</);
 html = render({hosts_total:6, hosts_reporting:4, agents_outdated:['edge','apps'], alerts:{...counts, critical:1, warning:2, info:3}});
 assert.match(html, /4<small> \/ 6</);
@@ -39,7 +39,7 @@ assert.match(html, /href="#\/hosts"/);
 html = render({hosts_total:1, hosts_reporting:1, agents_outdated:null, alerts:{status:'unavailable'}});
 assert.match(html, /All hosts reporting/);
 assert.match(html, /Unavailable/);
-assert.doesNotMatch(html, /No outdated agents/);
+assert.doesNotMatch(html, /No update incidents/);
 const summary = 'Guest <img src=x> & backup failed';
 html = render({hosts_total:1, hosts_reporting:1, agents_outdated:[], alerts:counts}, [
   {host:'atlas', subject:'204', rule:'backup', severity:'warning', summary}

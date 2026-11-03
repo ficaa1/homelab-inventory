@@ -1044,6 +1044,7 @@ button.ops-tile { cursor:pointer; }
 .agent-host summary {position:relative;padding-right:14px}
 .agent-host summary::after {content:"⌄";position:absolute;right:0;top:12px;color:var(--text-3)}
 .agent-host details[open] summary::after {content:"⌃"}
+.agent-host .pill {max-width:100%;white-space:normal;overflow-wrap:anywhere}
 .agent-seq {font-variant-numeric:tabular-nums;white-space:nowrap}
 .agent-host dl {display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;font-size:12px;margin:8px 0}
 .agent-host dt {color:var(--text-3)}
@@ -2451,8 +2452,8 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     var a = agentStatus, c = agentCanary();
     // A sign-in can change offers; without one, the buttons wait for it, as the original does.
     var needsSession = capabilities.agent_offers_session === true && !(auth.status && auth.status.signed_in) && !sessionStorage.getItem(OPERATOR_KEY);
-    $("agent-fleet").innerHTML = '<div class="agent-heading">' + ic("box") + '<b>Agents</b><span class="pill ' + (!a ? "" : a.mode === "hold" ? "warning" : "good") + '">' + esc(a ? agentModeLabel(a.mode) : "Unavailable") + '</span>' + (a ? '<span class="muted">#' + a.sequence + '</span>' : '') + '</div>' +
-      (a && offersEnabled() ? '<div class="agent-controls">' + [ ["promote","Promote all"], ["hold","Hold"], ["auto", c ? "Back to " + c + "-only" : "Initial rollout"] ].map(function(x) {
+    $("agent-fleet").innerHTML = '<div class="agent-heading">' + ic("box") + '<b>Agents</b><span class="pill ' + (!a || !a.configured ? "" : a.unavailable || a.mode === "hold" ? "warning" : "good") + '">' + esc(a ? !a.configured ? "Signed updates not set up" : a.unavailable ? "Release unavailable" : agentModeLabel(a.mode) : "Unavailable") + '</span>' + (a && a.sequence ? '<span class="muted">#' + a.sequence + '</span>' : '') + '</div>' +
+      (a && a.configured && !a.unavailable && offersEnabled() ? '<div class="agent-controls">' + [ ["promote","Promote all"], ["hold","Hold"], ["auto", c ? "Back to " + c + "-only" : "Initial rollout"] ].map(function(x) {
         return '<button class="btn" type="button" data-agent-action="' + x[0] + '"' + (needsSession || a.ssh_hold || agentBusy ? ' disabled' : '') + '>' + esc(x[1]) + '</button>';
       }).join('') + '</div>' + (a.ssh_hold ? '<span class="pill warning">SSH hold</span>' : needsSession ? '<a class="btn" href="/auth/login">' + ic("lock","sm") + esc("Sign in with " + str((auth.status && auth.status.provider) || "your account")) + '</a>' : '') : '') + (!offersEnabled() ? '<div class="sub">' + esc(PROMOTION_HINT) + '</div>' : '');
   }
@@ -2473,13 +2474,14 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       return api('/hosts').then(function(h){data.hosts=h;});
     }).catch(function(e){ if (e.unauthorized) { showGate(true); return; } $("agent-error").textContent = e.status === 403 ? PROMOTION_HINT : e.message; }).finally(function(){agentBusy=false;refreshAgents();});
   }
-  function agentHostUI(h) {
-    var u=h.agent_update, seq=u ? '#'+u.sequence : '—', offered=h.agent_offered_sequence ? '#'+h.agent_offered_sequence : '—';
-    var bad=u && (u.failures || u.result==='failed' || u.result==='rollback');
-    var disabled=!offersEnabled() || !agentStatus || agentStatus.mode==='hold' || agentStatus.ssh_hold || agentBusy || h.agent_offered_sequence===agentStatus.sequence;
-    return '<div class="agent-host"><details><summary aria-label="Agent details for '+esc(h.name)+'">' + ic('box','sm') + '<span class="agent-seq" title="Installed → offered">'+seq+' → '+offered+'</span><span class="pill '+(bad?'warning':u?'good':'')+'">'+esc(u ? u.result : 'Unknown')+'</span></summary>' +
-      '<dl><dt>Version</dt><dd>'+esc(h.agent_version||'—')+'</dd><dt>Revision</dt><dd>r'+h.agent_revision+'</dd><dt>Failures</dt><dd>'+esc(u ? u.failures : '—')+'</dd><dt>Attempt</dt><dd>'+esc(u && u.attempted_at ? new Date(u.attempted_at).toLocaleString() : '—')+'</dd></dl></details>' +
-      '<button type="button" class="btn" data-agent-action="update" data-agent-host="'+esc(h.name)+'"'+(disabled?' disabled':'')+'>Update</button></div>';
+  function agentHostUI(h, detail) {
+    var p=h.agent_health || {}, u=p.update || h.agent_update, seq=p.running ? '#'+p.running : '—', offered=p.offered ? '#'+p.offered : '—';
+    var bad=p.unhealthy || p.state==='failed' || p.state==='blocked' || p.state==='rollback';
+    var disabled=!offersEnabled() || !agentStatus || !agentStatus.configured || agentStatus.unavailable || agentStatus.mode==='hold' || agentStatus.ssh_hold || agentBusy || h.agent_offered_sequence===agentStatus.sequence;
+    var row=function(k,v){return '<dt>'+k+'</dt><dd>'+esc(v||'—')+'</dd>';};
+    return '<div class="agent-host"><details'+(detail?' open':'')+'><summary aria-label="Agent details for '+esc(h.name)+'">' + ic('box','sm') + '<span class="agent-seq" title="Running → offered">'+seq+' → '+offered+'</span><span class="pill '+(bad?'warning':p.state==='current'?'good':'')+'">'+esc(p.label || 'Update status not reported')+(p.paused?' · paused':'')+'</span></summary>' +
+      '<dl>'+row('Running',seq)+row('Offered',offered)+row('Rejected',p.rejected?'#'+p.rejected:'—')+row('Updater',p.updater)+row('Discover',h.agent_version)+row('Revision',h.agent_revision?'r'+h.agent_revision:'—')+row('First failure',p.reason)+row('Failures',u ? String(u.failures) : '—')+row('Attempt',u && u.attempted_at && !/^0001-/.test(u.attempted_at) ? new Date(u.attempted_at).toLocaleString() : '—')+'</dl></details>' +
+      (detail?'':'<button type="button" class="btn" data-agent-action="update" data-agent-host="'+esc(h.name)+'"'+(disabled?' disabled':'')+'>Update</button>')+'</div>';
   }
   function renderHosts() {
     var hosts = data.hosts, rep = data.alerts;
@@ -2813,6 +2815,8 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 
   function openHost(name) {
     var body = $("host-body");
+    var summary=(data.hosts||[]).filter(function(h){return h.name===name;})[0];
+    if(summary && !summary.runs) {body.innerHTML='<div class="hhead"><h2>'+esc(name)+'</h2></div><p class="sub">No inventory has been received.</p>'+agentHostUI(summary,true);return;}
     var cached = hostCache[name];
     if (!cached) {
       body.innerHTML = skeleton(4);
@@ -2837,6 +2841,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     var c = hostCache[name];
     if (!c) return;
     var inv = c.inv, hist = c.history || [];
+    var agentHost=(data.hosts||[]).filter(function(h){return h.name===name;})[0] || {name:name};
     var host = inv.host || {};
     var mine = alertsFor(name);
     var worst = worstOf(mine);
@@ -3108,6 +3113,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       '<div class="kpis">' + tiles + "</div>" +
 
       sect("alerts", "bell", "Alerts", mine.length, '<div id="host-alerts"></div>', mine.length > 0) +
+      sect("agent", "box", "Agent updates", "", agentHostUI(agentHost,true), true) +
       sect("facts", "list", "Facts", "", '<div class="facts">' + facts + "</div>", true) +
       (protectionHTML ? sect("protection", "shield", "Protection", "", protectionHTML, true) : "") +
       (storage ? sect("storage", "disk", "Storage", pools.length + realFs.length,
@@ -3848,7 +3854,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       var knownFleet = !opsState(fleet), outdated = knownFleet && Array.isArray(fleet.agents_outdated) ? fleet.agents_outdated.length : null;
       html += '<div class="ops-hero"><details class="ops-tile" data-ops-key="alert-counts"' + (overviewOpen['alert-counts'] ? ' open' : '') + '><summary><span class="ops-label">Active alerts' + (recent ? '<span class="ops-recent" aria-label="Alert first seen within 24 hours"></span>' : '') + '</span><span class="ops-number' + (counts && counts.critical ? ' crit' : counts && counts.warning ? ' warn' : '') + '">' + (counts ? opsNumber(counts.critical + counts.warning + counts.info) : '—') + '</span><span class="ops-sub">' + (counts ? esc(counts.critical) + ' critical · ' + esc(counts.warning) + ' warnings' : esc(opsState(fleet) || opsState(fleet.alerts))) + '</span></summary><div class="ops-detail">' + (counts ? esc(counts.info) + ' informational · ' + esc(counts.silenced) + ' silenced<br>' : '') + (recent ? 'New in past 24h<br>' : '') + '<a href="#/alerts">View alerts ↗</a></div></details>';
       html += '<a class="ops-tile ops-link" href="#/hosts"><span class="ops-label">Reporting hosts</span><span class="ops-number">' + (knownFleet ? opsNumber(fleet.hosts_reporting) + '<small> / ' + opsNumber(fleet.hosts_total) + '</small>' : '—') + '</span><span class="ops-sub">' + (knownFleet ? fleet.hosts_total === 0 ? 'No hosts collected' : fleet.hosts_reporting === fleet.hosts_total ? 'All hosts reporting' : esc(fleet.hosts_total - fleet.hosts_reporting) + ' not reporting' : esc(opsState(fleet))) + '</span></a>';
-      html += '<a class="ops-tile ops-link" href="#/hosts"><span class="ops-label">Agent updates</span><span class="ops-number">' + opsNumber(outdated) + '</span><span class="ops-sub">' + (outdated === null ? 'Not collected' : outdated ? 'Hosts with an older agent' : 'No outdated agents') + '</span></a></div>';
+      html += '<a class="ops-tile ops-link" href="#/hosts"><span class="ops-label">Agent updates</span><span class="ops-number">' + opsNumber(outdated) + '</span><span class="ops-sub">' + (outdated === null ? 'Not collected' : outdated ? 'Hosts with update incidents' : 'No update incidents') + '</span></a></div>';
     } else {
       html += '<div class="ops-hero"><button type="button" class="ops-tile" id="ops-streams-toggle" aria-expanded="' + streamsOpen + '" aria-controls="ops-sessions"><span class="ops-label">' + streamsIcon + 'Streams</span><span class="ops-number">' + (!opsState(streams) ? opsNumber(streams.count) : '—') + '</span><span class="ops-sub">' +
         (opsState(streams) || (sessions.length ? sessions.slice(0,2).map(function (s) { var initials = (s.user || '?').split(/\s+/).map(function (w) { return w.charAt(0); }).join('').slice(0,2); return '<span class="ops-person"><span class="ops-avatar" aria-label="' + esc(s.user) + '">' + esc(initials) + '</span><span>' + esc(s.title) + '</span></span>'; }).join('') + (sessions.length > 2 ? '+' + (sessions.length - 2) + ' watching' : '') : 'Idle')) + '</span></button>';

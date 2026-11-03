@@ -52,6 +52,7 @@ type Snapshot struct {
 	Revision    int                   `json:"revision,omitempty"`
 	Version     string                `json:"version,omitempty"`
 	Mode        string                `json:"mode,omitempty"`
+	Control     string                `json:"control,omitempty"`
 	SSHHold     bool                  `json:"ssh_hold"`
 	Configured  bool                  `json:"configured"`
 }
@@ -158,6 +159,7 @@ func Evaluate(dir, releaseDir string, invs []*inventory.Inventory, now time.Time
 			snap.Revision = m.Revision
 			snap.Version = m.Version
 			snap.Mode = agentoffers.Effective(m, c, offers)
+			snap.Control = c.Mode
 			snap.SSHHold = c.Mode == "hold"
 		}
 	}
@@ -215,7 +217,7 @@ func Evaluate(dir, releaseDir string, invs []*inventory.Inventory, now time.Time
 			e.LagAt = time.Time{}
 			e.LagTarget = 0
 		}
-		reportedFailure := u != nil && u.Mode != "unsigned" && (u.Failures > 0 || u.Result == "failed" || u.Result == "rollback" || u.Result == "blocked" || u.Rejected != 0 || u.FirstFailure != nil)
+		reportedFailure := u != nil && (u.Failures > 0 || u.Result == "failed" || u.Result == "rollback" || u.Result == "blocked" || u.Rejected != 0 || u.FirstFailure != nil)
 		if !snap.Configured {
 			p.State = "not_set_up"
 			p.Label = "Signed updates not set up"

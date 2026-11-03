@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import secrets
 import shutil
 import socket
@@ -39,8 +40,9 @@ def main():
         env.update(API_TOKEN=token, AGENT_TOKEN=agent_token, AGENT_RELEASE_DIR=str(release_tree),
                    AGENT_CANARY_HOSTS=socket.gethostname(), AGENT_PLATFORMS="linux/amd64,linux/arm64",
                    APPRISE_URL="", DIGEST_APPRISE_URL="", OPERATOR_TOKEN="", ACTIONS_ENABLED="0")
+        revision = int(re.search(r"const AgentRevision = (\d+)", (ROOT / "internal/inventory/inventory.go").read_text()).group(1))
         raw = {"schema_version": "5", "collected_at": "__TIME__",
-               "host": {"hostname": socket.gethostname()}, "tool": {"version": "local-test", "revision": 2},
+               "host": {"hostname": socket.gethostname()}, "tool": {"version": "local-test", "revision": revision},
                "docker": None, "diagnostics": [{"severity": "warning", "message": "synthetic partial inventory"}]}
         payload = json.dumps(raw)
         collector_script = ("#!/bin/sh\nif [ \"${1:-}\" = -list ]; then exit 0; fi\nprintf '%s' '" + payload
@@ -107,7 +109,7 @@ def main():
                         raise AssertionError("agent credential accepted on admin route")
                 first = latest()
                 assert first.get("docker") is None and first["diagnostics"][0]["message"] == raw["diagnostics"][0]["message"]
-                assert first.get("agent_update") is None
+                assert first["agent_update"]["mode"] == "unsigned" and first["agent_update"]["updater"]
                 # Existing schedule/runner gains signed mode through local enrollment.
                 updater = str(state / "agentupdate")
                 run(updater, "-dir", str(state), "-public", str(public), "-initialize", str(release_tree / "latest.json"), "-input", str(artifacts))

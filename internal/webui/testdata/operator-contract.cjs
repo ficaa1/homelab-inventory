@@ -26,7 +26,7 @@ vm.runInContext(page.slice(start, end), context);
 const fleet = {innerHTML:''};
 Object.assign(context, {$:()=>fleet, esc:String, ic:()=>''});
 vm.runInContext(page.slice(page.indexOf('  var capabilities ='), page.indexOf('  function refreshAgents()')), context);
-context.agentStatus = {mode:'auto',sequence:1};
+context.agentStatus = {mode:'auto',sequence:1,configured:true};
 context.renderAgentFleet();
 assert.match(fleet.innerHTML,/Promotion is disabled — set OPERATOR_TOKEN or use the signer CLI/);
 assert.doesNotMatch(fleet.innerHTML,/data-agent-action/);
