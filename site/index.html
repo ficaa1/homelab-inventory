@@ -194,7 +194,9 @@ html{scroll-behavior:smooth}
   .search h2{font-size:12vw}
   .search .work{margin-top:32px}
   .stage{aspect-ratio:auto;background:none;overflow:visible}
-  .stage>img,.stage::after{display:none}
+  .stage::after{display:none}
+  /* the theme rule (.dk{display:block !important}) outranks a display rule here, so hide by visibility */
+  .stage>img{visibility:hidden}
   .pal{position:static;transform:none;width:100%}
   .pal .qrow kbd,.pal .hint .k{display:none}
   .pal .results{max-height:300px}
@@ -203,8 +205,8 @@ html{scroll-behavior:smooth}
   .features h2{font-size:12vw;margin-bottom:56px}
   .row-f{display:block;margin-bottom:72px}
   .row-f h3{font-size:26px}
-  .win{margin-top:20px;aspect-ratio:4/3}
-  .win img{width:175%;left:var(--fx,0%)}
+  .win{margin-top:20px;aspect-ratio:390/600}
+  .win img{width:100%;left:0}
   .plate{aspect-ratio:auto;padding:16px}
   .upd{width:100%;padding:4px 16px}
   .upd div{grid-template-columns:56px 76px 1fr}
@@ -261,8 +263,8 @@ html{scroll-behavior:smooth}
   </div>
   <div class="work">
     <div class="stage" data-in style="--i:2">
-      <img class="lt" src="img/search-backdrop-light.png" alt="" width="2560" height="1600" loading="lazy">
-      <img class="dk" src="img/search-backdrop-dark.png" alt="" width="2560" height="1600" loading="lazy">
+      <img class="lt" src="img/overview-light.png" alt="" width="2880" height="1640" loading="lazy">
+      <img class="dk" src="img/overview-dark.png" alt="" width="2880" height="1640" loading="lazy">
       <div class="pal" role="search">
         <label class="qrow"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
           <span class="sr">Search the example fleet</span>
@@ -289,29 +291,29 @@ html{scroll-behavior:smooth}
   <div class="row-f">
     <div class="t"><h3 class="d" data-in>Disk forecasts</h3><p data-in>When each filesystem, ZFS pool and Proxmox storage will be full, from the last 14 days of reports.</p></div>
     <div class="win" style="--fx:-75%" data-in>
-      <img class="lt" src="img/forecasts-light.png" alt="Home page: alerts needing attention, and storage with a forecast for each disk: / on apps full in 14 days, tank on vault in 267 days" width="2096" height="1200">
-      <img class="dk" src="img/forecasts-dark.png" alt="Home page: alerts needing attention, and storage with a forecast for each disk: / on apps full in 14 days, tank on vault in 267 days" width="2096" height="1200" loading="lazy">
+      <picture class="lt"><source media="(max-width:720px)" srcset="img/forecasts-light-phone.png" width="1170" height="1800"><img src="img/forecasts-light.png" alt="Home page: alerts needing attention, and storage with a forecast for each disk: / on apps full in 14 days, tank on vault in 267 days" width="2096" height="1200"></picture>
+      <picture class="dk"><source media="(max-width:720px)" srcset="img/forecasts-dark-phone.png" width="1170" height="1800"><img src="img/forecasts-dark.png" alt="Home page: alerts needing attention, and storage with a forecast for each disk: / on apps full in 14 days, tank on vault in 267 days" width="2096" height="1200" loading="lazy"></picture>
     </div>
   </div>
   <div class="row-f">
     <div class="t"><h3 class="d" data-in>Alerts</h3><p data-in>Full disks, failed units, unhealthy containers, ZFS scrubs and backups. Apprise notifies you when one starts or clears.</p></div>
     <div class="win" style="--fx:0%" data-in>
-      <img class="lt" src="img/alerts-light.png" alt="Alerts page: 4 warnings across 6 hosts, a restarting container, a disk at 86% and a guest with no backup job" width="2096" height="1200">
-      <img class="dk" src="img/alerts-dark.png" alt="Alerts page: 4 warnings across 6 hosts, a restarting container, a disk at 86% and a guest with no backup job" width="2096" height="1200" loading="lazy">
+      <picture class="lt"><source media="(max-width:720px)" srcset="img/alerts-light-phone.png" width="1170" height="1800"><img src="img/alerts-light.png" alt="Alerts page: 4 warnings across 6 hosts, a restarting container, a disk at 86% and a guest with no backup job" width="2096" height="1200"></picture>
+      <picture class="dk"><source media="(max-width:720px)" srcset="img/alerts-dark-phone.png" width="1170" height="1800"><img src="img/alerts-dark.png" alt="Alerts page: 4 warnings across 6 hosts, a restarting container, a disk at 86% and a guest with no backup job" width="2096" height="1200" loading="lazy"></picture>
     </div>
   </div>
   <div class="row-f">
     <div class="t"><h3 class="d" data-in>Service launcher</h3><p data-in>A tile for every web service it finds listening on your hosts, with its icon and address.</p></div>
     <div class="win" style="--fx:0%" data-in>
-      <img class="lt" src="img/launcher-light.png" alt="Services: tiles for Overseerr, Plex, Radarr, Sonarr, Tautulli, Immich, Nextcloud and Paperless-ngx with their host and port" width="2096" height="1200">
-      <img class="dk" src="img/launcher-dark.png" alt="Services: tiles for Overseerr, Plex, Radarr, Sonarr, Tautulli, Immich, Nextcloud and Paperless-ngx with their host and port" width="2096" height="1200" loading="lazy">
+      <picture class="lt"><source media="(max-width:720px)" srcset="img/launcher-light-phone.png" width="1170" height="1800"><img src="img/launcher-light.png" alt="Services: tiles for Overseerr, Plex, Radarr, Sonarr, Tautulli, Immich, Nextcloud and Paperless-ngx with their host and port" width="2096" height="1200"></picture>
+      <picture class="dk"><source media="(max-width:720px)" srcset="img/launcher-dark-phone.png" width="1170" height="1800"><img src="img/launcher-dark.png" alt="Services: tiles for Overseerr, Plex, Radarr, Sonarr, Tautulli, Immich, Nextcloud and Paperless-ngx with their host and port" width="2096" height="1200" loading="lazy"></picture>
     </div>
   </div>
   <div class="row-f">
-    <div class="t"><h3 class="d" data-in>Host pages</h3><p data-in>Containers, compose files, ports, packages, and what changed since the last report.</p></div>
+    <div class="t"><h3 class="d" data-in>Host pages</h3><p data-in>One page per host, one section for each thing it reports: alerts, facts, storage, containers, stacks, the port map, images, packages, what changed and compose files.</p></div>
     <div class="win" style="--fx:0%" data-in>
-      <img class="lt" src="img/host-light.png" alt="The page for host apps: alerts, listening sockets, containers and the open alerts" width="2096" height="1200">
-      <img class="dk" src="img/host-dark.png" alt="The page for host apps: alerts, listening sockets, containers and the open alerts" width="2096" height="1200" loading="lazy">
+      <picture class="lt"><source media="(max-width:720px)" srcset="img/host-light-phone.png" width="1170" height="1800"><img src="img/host-light.png" alt="The page for host apps: tiles for alerts, listening sockets, containers and runs, then one section each for alerts, agent updates, facts, storage and containers" width="2096" height="1200"></picture>
+      <picture class="dk"><source media="(max-width:720px)" srcset="img/host-dark-phone.png" width="1170" height="1800"><img src="img/host-dark.png" alt="The page for host apps: tiles for alerts, listening sockets, containers and runs, then one section each for alerts, agent updates, facts, storage and containers" width="2096" height="1200" loading="lazy"></picture>
     </div>
   </div>
   <div class="row-f">
@@ -330,8 +332,8 @@ html{scroll-behavior:smooth}
   <div class="row-f">
     <div class="t"><h3 class="d" data-in>Plugins</h3><p data-in>Media, network, uploads, Cloudflare and more. Each one stays off until you turn it on.</p></div>
     <div class="win" style="--fx:0%" data-in>
-      <img class="lt" src="img/plugins-light.png" alt="Media plugin: 2 streams, 1 transcode, 21.5 Mbps, now playing and 6 downloads" width="2096" height="1200">
-      <img class="dk" src="img/plugins-dark.png" alt="Media plugin: 2 streams, 1 transcode, 21.5 Mbps, now playing and 6 downloads" width="2096" height="1200" loading="lazy">
+      <picture class="lt"><source media="(max-width:720px)" srcset="img/plugins-light-phone.png" width="1170" height="1800"><img src="img/plugins-light.png" alt="Admin, Plugins: Archive, Cloudflare, Dusk, Media, Network and Security canaries, each with its settings and an on or off switch; Media and Network are on" width="2096" height="1200"></picture>
+      <picture class="dk"><source media="(max-width:720px)" srcset="img/plugins-dark-phone.png" width="1170" height="1800"><img src="img/plugins-dark.png" alt="Admin, Plugins: Archive, Cloudflare, Dusk, Media, Network and Security canaries, each with its settings and an on or off switch; Media and Network are on" width="2096" height="1200" loading="lazy"></picture>
     </div>
   </div>
 </section>
