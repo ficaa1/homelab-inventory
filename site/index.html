@@ -77,9 +77,9 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere}
 .shot iframe{position:absolute;inset:0;z-index:1;width:100%;height:100%;border:0;display:block;background:transparent}
 .shot img{position:absolute;top:0;left:0;display:block;width:100%;height:auto}
 /* the demo starts on request: one dashboard at a time, nothing heavy on load */
-.go{margin-top:28px;display:flex;justify-content:center}
-.go[hidden]{display:none}
-.go .btn:disabled{cursor:default;filter:none;opacity:.6}
+.start{margin-top:28px;display:flex;justify-content:center}
+.start[hidden]{display:none}
+.start .btn:disabled{cursor:default;filter:none;opacity:.6}
 
 /* fleet search: statement left, the dashboard's own search palette right */
 .search{background:var(--surface);padding:120px var(--m);display:grid;grid-template-columns:repeat(12,1fr);column-gap:var(--gap);align-items:start}
@@ -90,11 +90,11 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere}
 .stage{position:relative;border-radius:4px;overflow:hidden;aspect-ratio:16/10;background:var(--crop)}
 .stage>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:0 0}
 .stage::after{content:"";position:absolute;inset:0;background:var(--scrim)}
-.pal{position:absolute;z-index:1;top:7%;left:50%;transform:translateX(-50%);width:84%;display:flex;flex-direction:column;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:12px;overflow:hidden;font:400 14px/1.4 var(--ui);text-align:left}
+.pal{position:absolute;z-index:1;top:7%;left:50%;transform:translateX(-50%);width:84%;max-height:86%;display:flex;flex-direction:column;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:12px;overflow:hidden;font:400 14px/1.4 var(--ui);text-align:left}
 .pal .qrow{display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line);color:var(--muted)}
 .pal input{flex:1;min-width:0;font:400 16px/1 var(--ui);color:var(--ink);background:transparent;border:0;padding:15px 0;outline:none}
 .pal .qrow kbd{margin-left:auto}
-.pal .results{position:relative;overflow-y:auto;padding:6px;max-height:296px;overscroll-behavior:contain}
+.pal .results{position:relative;flex:1 1 auto;min-height:0;overflow-y:auto;padding:6px;max-height:296px;overscroll-behavior:contain}
 .pal .row{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border-radius:6px;cursor:pointer;font:inherit;color:inherit;background:none;border:0;text-align:left;transition:background-color .12s}
 .pal .row:hover{background:var(--panel-2)}
 .pal .row[aria-selected=true]{background:var(--sel)}
@@ -119,9 +119,11 @@ kbd{font:500 11px/16px var(--ui);padding:0 5px;border-radius:4px;border:1px soli
 .row-f .t{grid-column:1/span 4}
 .row-f h3{font-size:var(--s-head);line-height:1;margin-bottom:16px}
 .row-f p{max-width:30ch}
-.win{grid-column:5/-1;position:relative;overflow:hidden;border-radius:4px;background:var(--crop);aspect-ratio:1048/600}
-.win img{position:absolute;top:0;left:0;width:100%;height:auto;max-width:none}
-.plate{display:grid;place-items:center}
+.win{grid-column:5/-1;position:relative;overflow:hidden;border-radius:4px;background:var(--crop);padding:24px 0}
+/* the images are cut exactly to whole cards; the padding, in the dashboard's own ground colour, gives them room */
+.win.plate{padding:40px 24px}
+.win img{display:block;width:100%;height:auto}
+.plate{display:grid;place-items:center;padding:40px 24px}
 .upd{width:min(560px,78%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 22px;font:400 15px/1.4 var(--ui)}
 .upd div{display:grid;grid-template-columns:76px 96px 1fr;align-items:center;gap:12px;padding:13px 0;border-top:1px solid var(--line)}
 .upd div:first-child{border-top:0}
@@ -205,9 +207,8 @@ html{scroll-behavior:smooth}
   .features h2{font-size:12vw;margin-bottom:56px}
   .row-f{display:block;margin-bottom:72px}
   .row-f h3{font-size:26px}
-  .win{margin-top:20px;aspect-ratio:390/600}
-  .win img{width:100%;left:0}
-  .plate{aspect-ratio:auto;padding:16px}
+  .win{margin-top:20px;padding:16px 0}
+  .win.plate{padding:16px}
   .upd{width:100%;padding:4px 16px}
   .upd div{grid-template-columns:56px 76px 1fr}
   .steps{display:block}
@@ -248,11 +249,11 @@ html{scroll-behavior:smooth}
   <h1 aria-label="homelab-inventory"><span>homelab-</span><span>inventory</span></h1>
   <p class="lede" data-in style="--i:6">A dashboard for your homelab. An agent on each Linux host reports containers, disks, ZFS, Proxmox, ports and packages every 15 minutes.</p>
   <p class="try" data-in style="--i:7">The dashboard below runs on an example fleet of six hosts.</p>
-  <div class="go" id="go" data-in style="--i:8" hidden><button class="btn" type="button" id="start">Try the live dashboard</button></div>
+  <div class="start" id="go" data-in style="--i:8" hidden><button class="btn" type="button" id="start">Try the live dashboard</button></div>
   <div class="shot" data-ui data-in style="--i:9">
     <iframe id="demo" title="The homelab-inventory dashboard, running on an example fleet" data-src="demo/"></iframe>
-    <picture class="lt"><source media="(max-width:720px)" srcset="img/overview-phone-light.png"><img src="img/overview-light.png" alt="The dashboard's overview: two streams playing, the load on apps, seven alerts, the alerts that need attention and the storage forecasts" width="2880" height="1640"></picture>
-    <picture class="dk"><source media="(max-width:720px)" srcset="img/overview-phone-dark.png"><img src="img/overview-dark.png" alt="The dashboard's overview in the dark theme" width="2880" height="1640" loading="lazy"></picture>
+    <picture class="lt"><source media="(max-width:720px)" srcset="img/overview-phone-light.png" width="780" height="1440"><img src="img/overview-light.png" alt="The dashboard's overview: two streams playing, the load on apps, seven alerts, the alerts that need attention and the storage forecasts" width="2880" height="1640"></picture>
+    <picture class="dk"><source media="(max-width:720px)" srcset="img/overview-phone-dark.png" width="780" height="1440"><img src="img/overview-dark.png" alt="The dashboard's overview in the dark theme" width="2880" height="1640" loading="lazy"></picture>
   </div>
 </section>
 <!--CHUNK-->
@@ -273,7 +274,7 @@ html{scroll-behavior:smooth}
           <button class="row" type="button" role="option" aria-selected="true"><span class="tag">service</span><span class="what">Immich <span class="sub">Photos · apps:2283</span></span></button>
           <button class="row" type="button" role="option"><span class="tag">port</span><span class="what">apps:2283 <span class="sub">immich_server · photos</span></span></button>
         </div>
-        <div class="hint" id="hint" aria-live="polite"><span class="k"><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>enter</kbd> open</span><span class="k"><kbd>esc</kbd> clear</span></div>
+        <div class="hint" id="hint" aria-live="polite"><span class="k"><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>enter</kbd> where it opens</span><span class="k"><kbd>esc</kbd> clear</span></div>
       </div>
     </div>
     <div class="examples" data-in style="--i:3">
@@ -291,29 +292,29 @@ html{scroll-behavior:smooth}
   <div class="row-f">
     <div class="t"><h3 class="d" data-in>Disk forecasts</h3><p data-in>When each filesystem, ZFS pool and Proxmox storage will be full, from the last 14 days of reports.</p></div>
     <div class="win" style="--fx:-75%" data-in>
-      <picture class="lt"><source media="(max-width:720px)" srcset="img/forecasts-light-phone.png" width="1170" height="1800"><img src="img/forecasts-light.png" alt="Home page: alerts needing attention, and storage with a forecast for each disk: / on apps full in 14 days, tank on vault in 267 days" width="2096" height="1200"></picture>
-      <picture class="dk"><source media="(max-width:720px)" srcset="img/forecasts-dark-phone.png" width="1170" height="1800"><img src="img/forecasts-dark.png" alt="Home page: alerts needing attention, and storage with a forecast for each disk: / on apps full in 14 days, tank on vault in 267 days" width="2096" height="1200" loading="lazy"></picture>
+      <picture class="lt"><source media="(max-width:720px)" srcset="img/forecasts-light-phone.png" width="1170" height="1584"><img src="img/forecasts-light.png" alt="Storage on the home page, with a forecast for each disk: / on apps full in 14 days, tank on vault in 267 days" width="2096" height="1056"></picture>
+      <picture class="dk"><source media="(max-width:720px)" srcset="img/forecasts-dark-phone.png" width="1170" height="1584"><img src="img/forecasts-dark.png" alt="Storage on the home page, with a forecast for each disk: / on apps full in 14 days, tank on vault in 267 days" loading="lazy" width="2096" height="1056"></picture>
     </div>
   </div>
   <div class="row-f">
     <div class="t"><h3 class="d" data-in>Alerts</h3><p data-in>Full disks, failed units, unhealthy containers, ZFS scrubs and backups. Apprise notifies you when one starts or clears.</p></div>
     <div class="win" style="--fx:0%" data-in>
-      <picture class="lt"><source media="(max-width:720px)" srcset="img/alerts-light-phone.png" width="1170" height="1800"><img src="img/alerts-light.png" alt="Alerts page: 4 warnings across 6 hosts, a restarting container, a disk at 86% and a guest with no backup job" width="2096" height="1200"></picture>
-      <picture class="dk"><source media="(max-width:720px)" srcset="img/alerts-dark-phone.png" width="1170" height="1800"><img src="img/alerts-dark.png" alt="Alerts page: 4 warnings across 6 hosts, a restarting container, a disk at 86% and a guest with no backup job" width="2096" height="1200" loading="lazy"></picture>
+      <picture class="lt"><source media="(max-width:720px)" srcset="img/alerts-light-phone.png" width="1170" height="1974"><img src="img/alerts-light.png" alt="Alerts page: 4 warnings across 6 hosts, a restarting container and a disk at 86%" width="2096" height="1158"></picture>
+      <picture class="dk"><source media="(max-width:720px)" srcset="img/alerts-dark-phone.png" width="1170" height="1974"><img src="img/alerts-dark.png" alt="Alerts page: 4 warnings across 6 hosts, a restarting container and a disk at 86%" loading="lazy" width="2096" height="1158"></picture>
     </div>
   </div>
   <div class="row-f">
     <div class="t"><h3 class="d" data-in>Service launcher</h3><p data-in>A tile for every web service it finds listening on your hosts, with its icon and address.</p></div>
     <div class="win" style="--fx:0%" data-in>
-      <picture class="lt"><source media="(max-width:720px)" srcset="img/launcher-light-phone.png" width="1170" height="1800"><img src="img/launcher-light.png" alt="Services: tiles for Overseerr, Plex, Radarr, Sonarr, Tautulli, Immich, Nextcloud and Paperless-ngx with their host and port" width="2096" height="1200"></picture>
-      <picture class="dk"><source media="(max-width:720px)" srcset="img/launcher-dark-phone.png" width="1170" height="1800"><img src="img/launcher-dark.png" alt="Services: tiles for Overseerr, Plex, Radarr, Sonarr, Tautulli, Immich, Nextcloud and Paperless-ngx with their host and port" width="2096" height="1200" loading="lazy"></picture>
+      <picture class="lt"><source media="(max-width:720px)" srcset="img/launcher-light-phone.png" width="1170" height="1560"><img src="img/launcher-light.png" alt="Services: tiles for Overseerr, Plex, Radarr, Sonarr, Tautulli and Immich, each with its icon and address" width="2096" height="1140"></picture>
+      <picture class="dk"><source media="(max-width:720px)" srcset="img/launcher-dark-phone.png" width="1170" height="1560"><img src="img/launcher-dark.png" alt="Services: tiles for Overseerr, Plex, Radarr, Sonarr, Tautulli and Immich, each with its icon and address" loading="lazy" width="2096" height="1140"></picture>
     </div>
   </div>
   <div class="row-f">
     <div class="t"><h3 class="d" data-in>Host pages</h3><p data-in>One page per host, one section for each thing it reports: alerts, facts, storage, containers, stacks, the port map, images, packages, what changed and compose files.</p></div>
     <div class="win" style="--fx:0%" data-in>
-      <picture class="lt"><source media="(max-width:720px)" srcset="img/host-light-phone.png" width="1170" height="1800"><img src="img/host-light.png" alt="The page for host apps: tiles for alerts, listening sockets, containers and runs, then one section each for alerts, agent updates, facts, storage and containers" width="2096" height="1200"></picture>
-      <picture class="dk"><source media="(max-width:720px)" srcset="img/host-dark-phone.png" width="1170" height="1800"><img src="img/host-dark.png" alt="The page for host apps: tiles for alerts, listening sockets, containers and runs, then one section each for alerts, agent updates, facts, storage and containers" width="2096" height="1200" loading="lazy"></picture>
+      <picture class="lt"><source media="(max-width:720px)" srcset="img/host-light-phone.png" width="1170" height="2337"><img src="img/host-light.png" alt="The page for host apps: tiles for alerts, listening sockets, containers and runs, then one section each for alerts, agent updates, facts, storage and containers" width="2096" height="1112"></picture>
+      <picture class="dk"><source media="(max-width:720px)" srcset="img/host-dark-phone.png" width="1170" height="2337"><img src="img/host-dark.png" alt="The page for host apps: tiles for alerts, listening sockets, containers and runs, then one section each for alerts, agent updates, facts, storage and containers" loading="lazy" width="2096" height="1112"></picture>
     </div>
   </div>
   <div class="row-f">
@@ -332,8 +333,8 @@ html{scroll-behavior:smooth}
   <div class="row-f">
     <div class="t"><h3 class="d" data-in>Plugins</h3><p data-in>Media, network, uploads, Cloudflare and more. Each one stays off until you turn it on.</p></div>
     <div class="win" style="--fx:0%" data-in>
-      <picture class="lt"><source media="(max-width:720px)" srcset="img/plugins-light-phone.png" width="1170" height="1800"><img src="img/plugins-light.png" alt="Admin, Plugins: Archive, Cloudflare, Dusk, Media, Network and Security canaries, each with its settings and an on or off switch; Media and Network are on" width="2096" height="1200"></picture>
-      <picture class="dk"><source media="(max-width:720px)" srcset="img/plugins-dark-phone.png" width="1170" height="1800"><img src="img/plugins-dark.png" alt="Admin, Plugins: Archive, Cloudflare, Dusk, Media, Network and Security canaries, each with its settings and an on or off switch; Media and Network are on" width="2096" height="1200" loading="lazy"></picture>
+      <picture class="lt"><source media="(max-width:720px)" srcset="img/plugins-light-phone.png" width="1170" height="2184"><img src="img/plugins-light.png" alt="Admin, Plugins: each plugin with its settings and an on or off switch; Media and Network are on" width="2096" height="1598"></picture>
+      <picture class="dk"><source media="(max-width:720px)" srcset="img/plugins-dark-phone.png" width="1170" height="2184"><img src="img/plugins-dark.png" alt="Admin, Plugins: each plugin with its settings and an on or off switch; Media and Network are on" loading="lazy" width="2096" height="1598"></picture>
     </div>
   </div>
 </section>
