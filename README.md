@@ -1,6 +1,8 @@
 # homelab-inventory
 
-![homelab-inventory: overview, launcher, alerts, disk forecast, network chart, media and uploads, running on a demo fleet](docs/images/demo.gif)
+![homelab-inventory on an example fleet: the overview, disk forecasts, search, alerts, a host page and the media plugin](docs/images/demo.gif)
+
+Project page, with a live demo on an example fleet: [www.filipbiljic.com/homelab-inventory](https://www.filipbiljic.com/homelab-inventory/)
 
 A dashboard for your homelab. A small agent on each Linux host reads what is
 running (containers, disks, ZFS, Proxmox, ports, packages) and reports it every
