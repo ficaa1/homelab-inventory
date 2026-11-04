@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>homelab-inventory: a dashboard for your homelab</title>
+<meta name="description" content="A dashboard for your homelab. An agent on each Linux host reports containers, disks, ZFS, Proxmox, ports and packages every 15 minutes.">
+<meta name="color-scheme" content="light dark">
+<script>try{var t=document.documentElement.getAttribute('data-theme')||localStorage.getItem('hi-site.theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}document.documentElement.className+=' js'</script>
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="icon" href="demo/icon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://www.filipbiljic.com/homelab-inventory/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="homelab-inventory">
+<meta property="og:description" content="A dashboard for your homelab. An agent on each Linux host reports containers, disks, ZFS, Proxmox, ports and packages every 15 minutes.">
+<meta property="og:url" content="https://www.filipbiljic.com/homelab-inventory/">
+<meta property="og:image" content="https://www.filipbiljic.com/homelab-inventory/img/overview-light.png">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+:root{
+  --bg:#eef0f3; --surface:#e2e5ea; --ink:#0b0c0e; --muted:#5d6470; --accent:#1f2de6; --accent-text:#1f2de6; --accent-ink:#fff;
+  --panel:#fff; --panel-2:#f6f7f9; --line:rgba(20,22,26,.09); --sel:rgba(31,45,230,.09); --scrim:rgba(20,22,26,.38); --crop:#f4f4f5;
+  --ok:#157f4a; --ok-soft:rgba(21,127,74,.10); --warn:#a65f00; --warn-soft:rgba(166,95,0,.11); --info:#5f646b;
+  --s-small:14px; --s-body:18px; --s-head:clamp(28px,3.4vw,48px); --s-display:clamp(36px,6.1vw,88px); --s-poster:clamp(48px,8.9vw,128px);
+  --m:clamp(16px,2.2vw,32px); --gap:24px; --section:clamp(120px,14vw,200px);
+  --ui:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; --ease:cubic-bezier(.2,.7,.2,1);
+}
+:root[data-theme=dark]{
+  --bg:#0e0f11; --surface:#17181b; --ink:#eceef0; --muted:#9aa0a8; --accent:#2f3cff; --accent-text:#959cff;
+  --panel:#18191b; --panel-2:#1e2022; --line:rgba(236,238,240,.08); --sel:rgba(149,156,255,.15); --scrim:rgba(0,0,0,.55); --crop:#121314;
+  --ok:#4cc38a; --ok-soft:rgba(76,195,138,.13); --warn:#e8a33d; --warn-soft:rgba(232,163,61,.14); --info:#a3a8ae;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme]){
+  --bg:#0e0f11; --surface:#17181b; --ink:#eceef0; --muted:#9aa0a8; --accent:#2f3cff; --accent-text:#959cff;
+  --panel:#18191b; --panel-2:#1e2022; --line:rgba(236,238,240,.08); --sel:rgba(149,156,255,.15); --scrim:rgba(0,0,0,.55); --crop:#121314;
+  --ok:#4cc38a; --ok-soft:rgba(76,195,138,.13); --warn:#e8a33d; --warn-soft:rgba(232,163,61,.14); --info:#a3a8ae;
+}}
+/* each screenshot exists in both themes */
+.dk{display:none !important}
+:root[data-theme=dark] .lt{display:none !important} :root[data-theme=dark] .dk{display:block !important}
+@media (prefers-color-scheme:dark){:root:not([data-theme]) .lt{display:none !important} :root:not([data-theme]) .dk{display:block !important}}
+
+*{margin:0;box-sizing:border-box}
+html{background:var(--bg);-webkit-text-size-adjust:100%}
+body{font:400 var(--s-body)/1.5 "Schibsted Grotesk",system-ui,sans-serif;color:var(--ink);background:var(--bg);transition:background-color .3s,color .3s}
+a{color:inherit;text-underline-offset:3px;text-decoration-thickness:1px;transition:text-decoration-color .2s}
+a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:2px solid var(--accent-text);outline-offset:3px}
+code,pre{font-family:ui-monospace,"JetBrains Mono",Menlo,monospace;font-size:.86em}
+pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.d{font-weight:800;letter-spacing:-.05em;line-height:.9}
+.btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 20px;background:var(--accent);color:var(--accent-ink);font:600 var(--s-small)/1 "Schibsted Grotesk",sans-serif;text-decoration:none;border:0;border-radius:0;cursor:pointer;transition:transform .15s var(--ease),filter .2s}
+.btn:hover{filter:brightness(1.15)} .btn:active{transform:translateY(1px) scale(.98)}
+.crop{position:relative;overflow:hidden;border-radius:4px;background:var(--crop)}
+.crop img{position:absolute;display:block;max-width:none}
+.nat{display:block;border-radius:4px;width:100%;height:auto}
+.muted{color:var(--muted)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* nav */
+.top{position:absolute;inset:0 0 auto;height:72px;display:flex;align-items:center;justify-content:space-between;padding:0 var(--m);z-index:3}
+.top .mark{font-weight:800;letter-spacing:-.03em;text-decoration:none}
+.top nav{display:flex;gap:28px;align-items:center;font-size:15px}
+.top nav a:not(.btn){text-decoration:none}
+.top nav a:not(.btn):hover{text-decoration:underline}
+.theme{width:44px;height:44px;margin:0 -8px;display:grid;place-items:center;background:none;border:0;color:inherit;cursor:pointer;transition:transform .3s var(--ease)}
+.theme:hover{transform:rotate(180deg)}
+
+/* hero: the name, one line, then the dashboard itself */
+.hero{padding:136px var(--m) 0;text-align:center;background:var(--crop)}
+.hero h1{font:500 var(--s-poster)/1 "Bitcount Prop Single","Schibsted Grotesk",sans-serif;font-variation-settings:"ELSH" 0;letter-spacing:0}
+.hero .lede{margin:28px auto 0;max-width:540px}
+/* the dashboard runs to both edges and into the next section, on the same ground as the hero */
+.try{margin-top:12px;font-size:15px;color:var(--muted)}
+.shot{margin:56px calc(-1 * var(--m)) 0;overflow:hidden;position:relative;text-align:left;height:820px;border-top:1px solid var(--line)}
+/* the live demo sits over a still of the same screen, which shows while it loads */
+.shot iframe{position:absolute;inset:0;z-index:1;width:100%;height:100%;border:0;display:block;background:transparent}
+.shot img{position:absolute;top:0;left:0;display:block;width:100%;height:auto}
+/* the demo starts on request: one dashboard at a time, nothing heavy on load */
+.go{margin-top:28px;display:flex;justify-content:center}
+.go[hidden]{display:none}
+.go .btn:disabled{cursor:default;filter:none;opacity:.6}
+
+/* fleet search: statement left, the dashboard's own search palette right */
+.search{background:var(--surface);padding:120px var(--m);display:grid;grid-template-columns:repeat(12,1fr);column-gap:var(--gap);align-items:start}
+.search .say{grid-column:1/span 5;padding-top:24px}
+.search h2{font-size:var(--s-display)}
+.search .say p{margin-top:24px;max-width:34ch}
+.search .work{grid-column:6/-1}
+.stage{position:relative;border-radius:4px;overflow:hidden;aspect-ratio:16/10;background:var(--crop)}
+.stage>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:0 0}
+.stage::after{content:"";position:absolute;inset:0;background:var(--scrim)}
+.pal{position:absolute;z-index:1;top:7%;left:50%;transform:translateX(-50%);width:84%;display:flex;flex-direction:column;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:12px;overflow:hidden;font:400 14px/1.4 var(--ui);text-align:left}
+.pal .qrow{display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line);color:var(--muted)}
+.pal input{flex:1;min-width:0;font:400 16px/1 var(--ui);color:var(--ink);background:transparent;border:0;padding:15px 0;outline:none}
+.pal .qrow kbd{margin-left:auto}
+.pal .results{position:relative;overflow-y:auto;padding:6px;max-height:296px;overscroll-behavior:contain}
+.pal .row{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border-radius:6px;cursor:pointer;font:inherit;color:inherit;background:none;border:0;text-align:left;transition:background-color .12s}
+.pal .row:hover{background:var(--panel-2)}
+.pal .row[aria-selected=true]{background:var(--sel)}
+.pal .row.hit{animation:hit .5s var(--ease)}
+.pal .what{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+.pal .tag{flex:none;width:64px;font-size:12px;font-weight:600;color:var(--muted)}
+.pal .tag.warning{color:var(--warn)} .pal .tag.info{color:var(--info)}
+.pal .sub{font-size:12px;color:var(--muted)}
+.pal .hint{min-height:37px;padding:8px 14px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.pal .empty{padding:14px 10px;color:var(--muted)}
+kbd{font:500 11px/16px var(--ui);padding:0 5px;border-radius:4px;border:1px solid var(--line);border-bottom-width:2px;background:var(--panel);color:var(--muted);margin-right:3px}
+@keyframes hit{50%{transform:scale(.985)}}
+.examples{margin-top:24px;display:flex;flex-wrap:wrap;gap:12px 24px;align-items:baseline;font-size:17px}
+.examples button{font:inherit;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:3px;color:inherit;transition:color .15s}
+.examples button:hover{color:var(--accent-text)}
+
+/* features: text left, the real screen right, every row on the same two columns */
+.features{padding:var(--section) var(--m) 0}
+.features h2{font-size:var(--s-display);text-align:center;margin-bottom:112px}
+.row-f{display:grid;grid-template-columns:repeat(12,1fr);column-gap:var(--gap);align-items:center;margin-bottom:112px}
+.row-f:last-child{margin-bottom:0}
+.row-f .t{grid-column:1/span 4}
+.row-f h3{font-size:var(--s-head);line-height:1;margin-bottom:16px}
+.row-f p{max-width:30ch}
+.win{grid-column:5/-1;position:relative;overflow:hidden;border-radius:4px;background:var(--crop);aspect-ratio:1048/600}
+.win img{position:absolute;top:0;left:0;width:100%;height:auto;max-width:none}
+.plate{display:grid;place-items:center}
+.upd{width:min(560px,78%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 22px;font:400 15px/1.4 var(--ui)}
+.upd div{display:grid;grid-template-columns:76px 96px 1fr;align-items:center;gap:12px;padding:13px 0;border-top:1px solid var(--line)}
+.upd div:first-child{border-top:0}
+.upd b{font-weight:600}
+.upd small{font-size:12px;color:var(--muted);font-weight:400}
+.pill{justify-self:start;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--panel-2);color:var(--muted);white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.warn{background:var(--warn-soft);color:var(--warn)} .pill.go{background:var(--sel);color:var(--accent-text)}
+
+/* install: lines that step across */
+.steps{padding:var(--section) var(--m) 0;display:grid;grid-template-columns:repeat(12,1fr);column-gap:var(--gap);row-gap:56px}
+.steps .d{font-size:var(--s-display)}
+.steps>div:nth-child(1){grid-column:1/-1} .steps>div:nth-child(2){grid-column:2/-1}
+.steps>div:nth-child(3){grid-column:3/-1} .steps>div:nth-child(4){grid-column:4/-1}
+.steps>div:nth-child(4) .d{color:var(--accent-text)}
+.steps pre{margin-top:16px;font-size:16px}
+
+/* commands: the claim left, the allowlist right */
+.commands{padding:var(--section) var(--m) 0;display:grid;grid-template-columns:repeat(12,1fr);column-gap:var(--gap);align-items:start}
+.commands .say{grid-column:1/span 6;position:sticky;top:48px}
+.commands h2{font-size:var(--s-display)}
+.commands .say p{margin-top:24px;max-width:32ch}
+.commands table{grid-column:8/-1;border-collapse:collapse;font-size:17px;width:100%}
+.commands td{padding:14px 16px 14px 0;vertical-align:top;border-top:1px solid var(--line)}
+.commands tr:first-child td{border-top:0;padding-top:0}
+.commands td:first-child{width:38%}
+.commands td+td{color:var(--muted)}
+
+/* close */
+.close{margin-top:var(--section);background:var(--ink);color:var(--bg);min-height:640px;padding:120px var(--m) 48px;display:flex;flex-direction:column}
+.close h2{font-size:var(--s-poster)}
+.close .base{margin-top:auto;padding-top:96px;display:flex;justify-content:space-between;align-items:center;gap:32px}
+.close pre{font-size:17px}
+.close .btn{height:56px;padding:0 28px;font-size:16px;flex:none}
+
+/* footer */
+footer{background:var(--accent);color:#fff;padding:72px var(--m) 40px;display:grid;grid-template-columns:repeat(12,1fr);column-gap:var(--gap);row-gap:96px}
+footer .name{grid-column:1/span 6}
+footer .name a{font:500 var(--s-head)/1 "Bitcount Prop Single","Schibsted Grotesk",sans-serif;font-variation-settings:"ELSH" 0;text-decoration:none}
+footer .name p{margin-top:16px;font-size:15px;opacity:.8}
+footer .col{grid-column:span 3;display:flex;flex-direction:column;gap:8px;font-size:16px}
+footer .col b{font-weight:600;margin-bottom:6px}
+footer .col a{text-decoration:none;opacity:.86} footer .col a:hover{opacity:1;text-decoration:underline}
+footer .meta{grid-column:1/-1;display:flex;justify-content:space-between;font-size:14px;gap:16px}
+
+/* motion: entrances (content stays visible without script), the name lighting up, the hero picture settling */
+@keyframes lit{from{opacity:0}to{opacity:1}}
+.js [data-in]{opacity:0;transform:translateY(24px);transition:opacity .7s var(--ease),transform .7s var(--ease);transition-delay:calc(var(--i,0) * 80ms)}
+.js .in [data-in]{opacity:1;transform:none}
+.js .hero h1 i{font-style:normal;animation:lit 1ms linear both;animation-delay:calc(var(--d) * 48ms + 120ms)}
+@media (prefers-reduced-motion:reduce){
+  .js [data-in]{opacity:1;transform:none;transition:none}
+  .js .hero h1 i{animation:none}
+  .theme:hover{transform:none}
+  *{scroll-behavior:auto !important}
+}
+html{scroll-behavior:smooth}
+
+@media (max-width:720px){
+  .top nav a.opt{display:none}
+  .top nav{gap:16px}
+  .hero{padding-top:104px}
+  .hero h1{font-size:15vw;line-height:.95}
+  .hero h1 span{display:block}
+  .hero .lede{font-size:16px;margin-top:20px}
+  .shot{margin:32px calc(-1 * var(--m)) 0;height:720px}
+  .try{font-size:14px}
+  .shot img{position:absolute;top:0;left:0;width:100%}
+  .search{display:block;padding:72px var(--m)}
+  .search .say{padding:0}
+  .search h2{font-size:12vw}
+  .search .work{margin-top:32px}
+  .stage{aspect-ratio:auto;background:none;overflow:visible}
+  .stage>img,.stage::after{display:none}
+  .pal{position:static;transform:none;width:100%}
+  .pal .qrow kbd,.pal .hint .k{display:none}
+  .pal .results{max-height:300px}
+  .examples button{height:44px;padding:0 16px;background:var(--bg);text-decoration:none}
+  .examples span{width:100%}
+  .features h2{font-size:12vw;margin-bottom:56px}
+  .row-f{display:block;margin-bottom:72px}
+  .row-f h3{font-size:26px}
+  .win{margin-top:20px;aspect-ratio:4/3}
+  .win img{width:175%;left:var(--fx,0%)}
+  .plate{aspect-ratio:auto;padding:16px}
+  .upd{width:100%;padding:4px 16px}
+  .upd div{grid-template-columns:56px 76px 1fr}
+  .steps{display:block}
+  .steps>div{margin-bottom:40px}
+  .steps .d{font-size:8.6vw;line-height:.95}
+  .steps>div:nth-child(2){margin-left:6vw} .steps>div:nth-child(3){margin-left:12vw} .steps>div:nth-child(4){margin-left:18vw}
+  .commands{display:block}
+  .commands .say{position:static}
+  .commands h2{font-size:11vw}
+  .commands table{margin-top:40px;font-size:16px}
+  .close{min-height:0;padding:72px var(--m) 32px}
+  .close h2{font-size:13vw}
+  .close .base{padding-top:56px;flex-direction:column;align-items:stretch;gap:20px}
+  .close .btn{width:100%}
+  footer{grid-template-columns:1fr 1fr;row-gap:48px;padding:56px var(--m) 32px}
+  footer .name,footer .meta{grid-column:1/-1}
+  footer .col{grid-column:auto}
+  footer .name a{font-size:9vw}
+  footer .meta{flex-direction:column;gap:8px}
+}
+</style>
+</head>
+<body>
+<!--CHUNK-->
+<header class="top">
+  <a class="mark" href="#">homelab-inventory</a>
+  <nav>
+    <a class="opt" href="#features">Features</a>
+    <a class="opt" href="#commands">Commands</a>
+    <a class="opt" href="https://github.com/ficaa1/homelab-inventory/tree/main/docs">Docs</a>
+    <a class="opt" href="https://github.com/ficaa1/homelab-inventory">GitHub</a>
+    <button class="theme" type="button" id="theme" aria-label="Switch between light and dark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg></button>
+    <a class="btn" href="#install">Install</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <h1 aria-label="homelab-inventory"><span>homelab-</span><span>inventory</span></h1>
+  <p class="lede" data-in style="--i:6">A dashboard for your homelab. An agent on each Linux host reports containers, disks, ZFS, Proxmox, ports and packages every 15 minutes.</p>
+  <p class="try" data-in style="--i:7">The dashboard below runs on an example fleet of six hosts.</p>
+  <div class="go" id="go" data-in style="--i:8" hidden><button class="btn" type="button" id="start">Try the live dashboard</button></div>
+  <div class="shot" data-ui data-in style="--i:9">
+    <iframe id="demo" title="The homelab-inventory dashboard, running on an example fleet" data-src="demo/"></iframe>
+    <picture class="lt"><source media="(max-width:720px)" srcset="img/overview-phone-light.png"><img src="img/overview-light.png" alt="The dashboard's overview: two streams playing, the load on apps, seven alerts, the alerts that need attention and the storage forecasts" width="2880" height="1640"></picture>
+    <picture class="dk"><source media="(max-width:720px)" srcset="img/overview-phone-dark.png"><img src="img/overview-dark.png" alt="The dashboard's overview in the dark theme" width="2880" height="1640" loading="lazy"></picture>
+  </div>
+</section>
+<!--CHUNK-->
+<section class="search" id="search">
+  <div class="say">
+    <h2 class="d" data-in>Search every host</h2>
+    <p data-in style="--i:1">This is the dashboard's search, over an example fleet of six hosts. Type a service, port, host or alert.</p>
+  </div>
+  <div class="work">
+    <div class="stage" data-in style="--i:2">
+      <img class="lt" src="img/search-backdrop-light.png" alt="" width="2560" height="1600" loading="lazy">
+      <img class="dk" src="img/search-backdrop-dark.png" alt="" width="2560" height="1600" loading="lazy">
+      <div class="pal" role="search">
+        <label class="qrow"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <span class="sr">Search the example fleet</span>
+          <input id="q" type="text" value="immich" placeholder="Hosts, services, ports, alerts" autocomplete="off" spellcheck="false" role="combobox" aria-controls="res" aria-expanded="true"><kbd>⌘K</kbd></label>
+        <div class="results" id="res" role="listbox" aria-label="Results">
+          <button class="row" type="button" role="option" aria-selected="true"><span class="tag">service</span><span class="what">Immich <span class="sub">Photos · apps:2283</span></span></button>
+          <button class="row" type="button" role="option"><span class="tag">port</span><span class="what">apps:2283 <span class="sub">immich_server · photos</span></span></button>
+        </div>
+        <div class="hint" id="hint" aria-live="polite"><span class="k"><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>enter</kbd> open</span><span class="k"><kbd>esc</kbd> clear</span></div>
+      </div>
+    </div>
+    <div class="examples" data-in style="--i:3">
+      <span class="muted">Try</span>
+      <button class="ex" type="button">32400</button>
+      <button class="ex" type="button">tank</button>
+      <button class="ex" type="button">watchtower</button>
+      <button class="ex" type="button">vault</button>
+    </div>
+  </div>
+</section>
+<!--CHUNK-->
+<section class="features" id="features">
+  <h2 class="d" data-in>What you get</h2>
+  <div class="row-f">
+    <div class="t"><h3 class="d" data-in>Disk forecasts</h3><p data-in>When each filesystem, ZFS pool and Proxmox storage will be full, from the last 14 days of reports.</p></div>
+    <div class="win" style="--fx:-75%" data-in>
+      <img class="lt" src="img/forecasts-light.png" alt="Home page: alerts needing attention, and storage with a forecast for each disk: / on apps full in 14 days, tank on vault in 267 days" width="2096" height="1200">
+      <img class="dk" src="img/forecasts-dark.png" alt="Home page: alerts needing attention, and storage with a forecast for each disk: / on apps full in 14 days, tank on vault in 267 days" width="2096" height="1200" loading="lazy">
+    </div>
+  </div>
+  <div class="row-f">
+    <div class="t"><h3 class="d" data-in>Alerts</h3><p data-in>Full disks, failed units, unhealthy containers, ZFS scrubs and backups. Apprise notifies you when one starts or clears.</p></div>
+    <div class="win" style="--fx:0%" data-in>
+      <img class="lt" src="img/alerts-light.png" alt="Alerts page: 4 warnings across 6 hosts, a restarting container, a disk at 86% and a guest with no backup job" width="2096" height="1200">
+      <img class="dk" src="img/alerts-dark.png" alt="Alerts page: 4 warnings across 6 hosts, a restarting container, a disk at 86% and a guest with no backup job" width="2096" height="1200" loading="lazy">
+    </div>
+  </div>
+  <div class="row-f">
+    <div class="t"><h3 class="d" data-in>Service launcher</h3><p data-in>A tile for every web service it finds listening on your hosts, with its icon and address.</p></div>
+    <div class="win" style="--fx:0%" data-in>
+      <img class="lt" src="img/launcher-light.png" alt="Services: tiles for Overseerr, Plex, Radarr, Sonarr, Tautulli, Immich, Nextcloud and Paperless-ngx with their host and port" width="2096" height="1200">
+      <img class="dk" src="img/launcher-dark.png" alt="Services: tiles for Overseerr, Plex, Radarr, Sonarr, Tautulli, Immich, Nextcloud and Paperless-ngx with their host and port" width="2096" height="1200" loading="lazy">
+    </div>
+  </div>
+  <div class="row-f">
+    <div class="t"><h3 class="d" data-in>Host pages</h3><p data-in>Containers, compose files, ports, packages, and what changed since the last report.</p></div>
+    <div class="win" style="--fx:0%" data-in>
+      <img class="lt" src="img/host-light.png" alt="The page for host apps: alerts, listening sockets, containers and the open alerts" width="2096" height="1200">
+      <img class="dk" src="img/host-dark.png" alt="The page for host apps: alerts, listening sockets, containers and the open alerts" width="2096" height="1200" loading="lazy">
+    </div>
+  </div>
+  <div class="row-f">
+    <div class="t"><h3 class="d" data-in>Signed agent updates</h3><p data-in>Optional, per host. Canary hosts try a signed release first. A host whose trial fails keeps its last good agent.</p></div>
+    <div class="win plate" data-in>
+      <div class="upd" aria-label="Agent update states on six hosts">
+        <div><b>atlas</b><span>#2 <small>canary</small></span><span class="pill ok">Current</span></div>
+        <div><b>dns</b><span>#2</span><span class="pill ok">Current</span></div>
+        <div><b>files</b><span>#2</span><span class="pill ok">Current</span></div>
+        <div><b>apps</b><span>#1 → #2</span><span class="pill go">Updating</span></div>
+        <div><b>edge</b><span>#1</span><span class="pill">Behind</span></div>
+        <div><b>vault</b><span>#2 → #1</span><span class="pill warn">Rolled back</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="row-f">
+    <div class="t"><h3 class="d" data-in>Plugins</h3><p data-in>Media, network, uploads, Cloudflare and more. Each one stays off until you turn it on.</p></div>
+    <div class="win" style="--fx:0%" data-in>
+      <img class="lt" src="img/plugins-light.png" alt="Media plugin: 2 streams, 1 transcode, 21.5 Mbps, now playing and 6 downloads" width="2096" height="1200">
+      <img class="dk" src="img/plugins-dark.png" alt="Media plugin: 2 streams, 1 transcode, 21.5 Mbps, now playing and 6 downloads" width="2096" height="1200" loading="lazy">
+    </div>
+  </div>
+</section>
+<!--CHUNK-->
+<section class="steps" id="install">
+  <div><p class="d" data-in>Run the installer.</p>
+    <pre data-in style="--i:1"><code>curl -fsSL https://github.com/ficaa1/homelab-inventory/releases/latest/download/get.sh | sh</code></pre></div>
+  <div><p class="d" data-in>Open the address it prints.</p></div>
+  <div><p class="d" data-in>Add each Linux host.</p></div>
+  <div><p class="d" data-in>Hosts report every 15 minutes.</p></div>
+</section>
+<!--CHUNK-->
+<section class="commands" id="commands">
+  <div class="say">
+    <h2 class="d" data-in>Commands the agent runs</h2>
+    <p data-in style="--i:1">The agent runs only these programs, with these arguments. Anything else is refused before a process starts.</p>
+  </div>
+  <table data-in style="--i:2">
+    <tbody>
+      <tr><td><code>docker</code></td><td>version, ps, inspect</td></tr>
+      <tr><td><code>zfs</code></td><td>list, get, version</td></tr>
+      <tr><td><code>zpool</code></td><td>list, status, get, version</td></tr>
+      <tr><td><code>smartctl</code></td><td>health reads</td></tr>
+      <tr><td><code>qm</code>, <code>pct</code></td><td>config, list, status</td></tr>
+      <tr><td><code>pvesh</code></td><td>get</td></tr>
+      <tr><td><code>pve-firewall</code></td><td>status, compile</td></tr>
+      <tr><td><code>pveversion</code></td><td>no arguments</td></tr>
+      <tr><td><code>systemctl</code></td><td>list-units, list-unit-files, list-timers, show, cat</td></tr>
+      <tr><td><code>journalctl</code></td><td>a fixed kernel window</td></tr>
+      <tr><td><code>ss</code>, <code>netstat</code></td><td>-tulpn, -tuln</td></tr>
+      <tr><td><code>nft</code></td><td>list</td></tr>
+      <tr><td><code>iptables-save</code>, <code>uname</code></td><td>fixed arguments</td></tr>
+    </tbody>
+  </table>
+</section>
+<!--CHUNK-->
+<section class="close">
+  <h2 class="d" data-in>Install on a<br>Linux server</h2>
+  <div class="base" data-in style="--i:1">
+    <pre><code id="cmd">curl -fsSL https://github.com/ficaa1/homelab-inventory/releases/latest/download/get.sh | sh</code></pre>
+    <button class="btn" type="button" id="copy">Copy command</button>
+  </div>
+</section>
+<!--CHUNK-->
+<footer>
+  <div class="name"><a href="#">homelab-inventory</a><p>v0.2.1 · AGPL-3.0 · amd64 and arm64</p></div>
+  <div class="col"><b>Project</b>
+    <a href="https://github.com/ficaa1/homelab-inventory">GitHub</a>
+    <a href="https://github.com/ficaa1/homelab-inventory/releases">Releases</a>
+    <a href="https://github.com/ficaa1/homelab-inventory/issues">Issues</a>
+  </div>
+  <div class="col"><b>Docs</b>
+    <a href="https://github.com/ficaa1/homelab-inventory/blob/main/docs/install.md">Install guide</a>
+    <a href="https://github.com/ficaa1/homelab-inventory/blob/main/docs/configuration.md">Configuration</a>
+    <a href="https://github.com/ficaa1/homelab-inventory/blob/main/docs/plugins.md">Plugins</a>
+    <a href="https://github.com/ficaa1/homelab-inventory/blob/main/SECURITY.md">Security</a>
+  </div>
+  <div class="meta"><a href="https://www.filipbiljic.com/">Made by Filip Biljić</a><a href="#">Back to top</a></div>
+</footer>
+<!--CHUNK-->
+<script>
+(function(){
+var root=document.documentElement, still=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function $(id){return document.getElementById(id)}
+
+/* theme */
+function dark(){var t=root.getAttribute('data-theme');return t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches}
+$('theme').addEventListener('click',function(){var t=dark()?'light':'dark';root.setAttribute('data-theme',t);try{localStorage.setItem('hi-site.theme',t)}catch(e){}demoTheme()});
+
+/* the name lights up letter by letter, then the line and the picture rise */
+requestAnimationFrame(function(){requestAnimationFrame(function(){document.querySelector('.hero').classList.add('in')})});
+var n=0;Array.prototype.forEach.call(document.querySelectorAll('.hero h1 span'),function(s){
+  s.setAttribute('aria-hidden','true');
+  s.innerHTML=s.textContent.split('').map(function(c){return '<i style="--d:'+(n++)+'">'+c+'</i>'}).join('');
+});
+
+/* entrances: each section's parts, staggered, once */
+var secs=document.querySelectorAll('section:not(.hero),footer');
+Array.prototype.forEach.call(secs,function(s){Array.prototype.forEach.call(s.querySelectorAll('[data-in]'),function(e,i){if(!e.style.getPropertyValue('--i'))e.style.setProperty('--i',i)})});
+if('IntersectionObserver' in window){
+  var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{rootMargin:'0px 0px -12% 0px'});
+  Array.prototype.forEach.call(secs,function(s){io.observe(s)});
+}else Array.prototype.forEach.call(secs,function(s){s.classList.add('in')});
+
+/* the demo follows the page's theme */
+var demo=$('demo');
+function demoTheme(){try{demo.contentWindow.postMessage({hiTheme:dark()?'dark':'light'},'*')}catch(e){}}
+if(demo){
+  $('go').hidden=false;
+  $('start').addEventListener('click',function(){
+    var b=this;demo.addEventListener('load',function(){demoTheme();b.textContent='Running below';demo.closest('.shot').scrollIntoView({behavior:still?'auto':'smooth',block:'start'})},{once:true});
+    demo.src=demo.getAttribute('data-src')+'?theme='+(dark()?'dark':'light')+'#/home';
+    b.textContent='Loading…';b.disabled=true;
+  });
+}
+
+/* search: the dashboard palette's items and ranking, over the example fleet */
+var I=[["go","Home",""],["go","Alerts",""],["go","Hosts",""],["go","Ports",""],["go","Admin",""],["host","apps","Ubuntu 24.04.3 LTS"],["host","atlas","Debian GNU/Linux 12 (bookworm)"],["host","dns","Debian GNU/Linux 12 (bookworm)"],["host","edge","Debian GNU/Linux 12 (bookworm)"],["host","files","Debian GNU/Linux 12 (bookworm)"],["host","vault","Debian GNU/Linux 12 (bookworm)"],["service","Overseerr","Media · apps:5055"],["service","Plex","Media · apps:32400"],["service","Radarr","Media · apps:7878"],["service","Sonarr","Media · apps:8989"],["service","Tautulli","Media · apps:8181"],["service","Immich","Photos · apps:2283"],["service","Nextcloud","Files & documents · apps:8080"],["service","Paperless-ngx","Files & documents · apps:8000"],["service","Home Assistant","Home · apps:8123"],["service","Mealie","Home · apps:9925"],["service","AdGuard Home","Network · dns:3000"],["service","Dozzle","Monitoring · apps:8088"],["service","Grafana","Monitoring · apps:3000"],["service","Uptime Kuma","Monitoring · apps:3001"],["service","Homelab API","Infrastructure · apps:8100"],["service","Portainer","Infrastructure · apps:9000"],["service","Proxmox VE","Infrastructure · atlas:8006"],["service","Prometheus","Other · apps:9090"],["warning","container watchtower is restarting","apps · docker.container.unhealthy"],["warning","/ is 86% full","apps · host.filesystem.capacity"],["warning","guest 204 (files) is not included in any backup job","atlas · proxmox.backup.unscheduled"],["warning","unit rclone-backup.service has failed","files · systemd.unit.failed"],["warning","pool tank has not been scrubbed in 46d","vault · zfs.pool.scrub"],["info","no inbound filtering: 20 exposed TCP port(s) are reachable from anything that can route here","apps · firewall.no_inbound_filtering"],["info","guest 205 (win11) is not included in any backup job","atlas · proxmox.backup.unscheduled"],["info","no inbound filtering: 1 exposed TCP port(s) are reachable from anything that can route here","files · firewall.no_inbound_filtering"],["info","Sonarr: One download has not progressed in 45 minutes.","media · media.sonarr.health"],["port","apps:22","ssh.service"],["port","apps:2283","immich_server · photos"],["port","apps:3000","grafana · monitoring"],["port","apps:3001","uptime-kuma · monitoring"],["port","apps:5055","overseerr · media"],["port","apps:7878","radarr · media"],["port","apps:8000","paperless-ngx · documents"],["port","apps:8080","nextcloud · cloud"],["port","apps:8085","cadvisor · monitoring"],["port","apps:8088","dozzle · management"],["port","apps:8100","homelab-api · management"],["port","apps:8123","homeassistant · home"],["port","apps:8181","tautulli · media"],["port","apps:8443","traefik · gateway"],["port","apps:8989","sonarr · media"],["port","apps:9000","portainer · management"],["port","apps:9090","prometheus · monitoring"],["port","apps:9100","node_exporter · monitoring"],["port","apps:9925","mealie · home"],["port","apps:32400","plex · media"],["port","atlas:22","ssh.service"],["port","atlas:8006","pveproxy.service"],["port","dns:22","ssh.service"],["port","dns:53","AdGuardHome"],["port","dns:3000","AdGuardHome"],["port","edge:22","ssh.service"],["port","files:22","ssh.service"],["port","vault:22","ssh.service"],["port","vault:445","smbd.service"],["port","vault:2049","nfsd.service"]];
+var q=$('q'),res=$('res'),hint=$('hint'),hintHTML=hint.innerHTML,idx=0,matches=[],touched=false,ht;
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function score(it,t){var hay=(it[1]+' '+it[2]).toLowerCase(),w=it[1].toLowerCase();
+  if(!t)return it[0]==='go'?5:1; if(hay.indexOf(t)<0)return 0; if(w===t)return 100; if(w.indexOf(t)===0)return 50; if(w.indexOf(t)>=0)return 20; return 5}
+function render(){
+  var t=q.value.trim().toLowerCase();
+  matches=I.map(function(it,k){return {it:it,s:score(it,t),k:k}}).filter(function(x){return x.s>0}).sort(function(a,b){return b.s-a.s||a.k-b.k}).slice(0,40).map(function(x){return x.it});
+  if(idx>=matches.length)idx=0;
+  res.innerHTML=matches.length?matches.map(function(it,i){
+    return '<button class="row" type="button" role="option" data-i="'+i+'"'+(i===idx?' aria-selected="true"':'')+'><span class="tag '+esc(it[0])+'">'+esc(it[0])+'</span><span class="what">'+esc(it[1])+(it[2]?' <span class="sub">'+esc(it[2])+'</span>':'')+'</span></button>'}).join('')
+    :'<div class="empty">No matches.</div>';
+  var sel=res.querySelector('[aria-selected="true"]');if(sel){var a=sel.offsetTop,b=a+sel.offsetHeight;if(a<res.scrollTop)res.scrollTop=a-6;else if(b>res.scrollTop+res.clientHeight)res.scrollTop=b-res.clientHeight+6}
+}
+function opens(it){var m={go:'Opens '+it[1],host:'Opens the page for '+it[1],service:'Opens '+it[1]+' at '+(it[2].split(' · ')[1]||''),port:'Opens '+it[1]+' on the Ports page'};return m[it[0]]||'Opens the alert on '+it[2].split(' · ')[0]}
+function open(i){var it=matches[i];if(!it)return;idx=i;render();var b=res.querySelector('[data-i="'+i+'"]');if(b&&!still)b.classList.add('hit');
+  clearTimeout(ht);hint.textContent=opens(it);ht=setTimeout(function(){hint.innerHTML=hintHTML},1800)}
+q.addEventListener('input',function(){touched=true;idx=0;render()});
+q.addEventListener('keydown',function(e){
+  if(e.key==='ArrowDown'){e.preventDefault();idx=Math.min(idx+1,matches.length-1);render()}
+  else if(e.key==='ArrowUp'){e.preventDefault();idx=Math.max(idx-1,0);render()}
+  else if(e.key==='Enter'){e.preventDefault();open(idx)}
+  else if(e.key==='Escape'){q.value='';idx=0;render();q.blur()}
+  touched=true;
+});
+res.addEventListener('click',function(e){var b=e.target.closest('[data-i]');if(b){touched=true;open(+b.getAttribute('data-i'));q.focus()}});
+Array.prototype.forEach.call(document.querySelectorAll('.ex'),function(b){b.addEventListener('click',function(){touched=true;q.value=b.textContent;idx=0;render();q.focus({preventScroll:true})})});
+addEventListener('keydown',function(e){if(((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k')||(e.key==='/'&&!/input|textarea/i.test(document.activeElement.tagName))){e.preventDefault();$('search').scrollIntoView({block:'center'});q.focus({preventScroll:true});q.select()}});
+render();
+/* when the search first comes into view, type the example */
+if(!still&&'IntersectionObserver' in window){var so=new IntersectionObserver(function(es){if(!es[0].isIntersecting)return;so.disconnect();if(touched)return;
+  var word='immich',k=0;q.value='';render();(function type(){if(touched)return;q.value=word.slice(0,++k);render();if(k<word.length)setTimeout(type,110+Math.random()*60)})()},{threshold:.5});so.observe($('res'))}
+
+/* copy */
+var c=$('copy');
+c.addEventListener('click',function(){var t=$('cmd').textContent;(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){c.textContent='Copied'},function(){c.textContent='Select the line to copy'});setTimeout(function(){c.textContent='Copy command'},2000)});
+})();
+</script>
+</body>
+</html>
