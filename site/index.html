@@ -20,7 +20,7 @@
 :root{
   --bg:#eef0f3; --surface:#e2e5ea; --ink:#0b0c0e; --muted:#5d6470; --accent:#1f2de6; --accent-text:#1f2de6; --accent-ink:#fff;
   --panel:#fff; --panel-2:#f6f7f9; --line:rgba(20,22,26,.09); --sel:rgba(31,45,230,.09); --scrim:rgba(20,22,26,.38); --crop:#f4f4f5;
-  --ok:#157f4a; --ok-soft:rgba(21,127,74,.10); --warn:#a65f00; --warn-soft:rgba(166,95,0,.11); --info:#5f646b;
+  --ok:#13774a; --ok-soft:rgba(21,127,74,.10); --warn:#9a5800; --warn-soft:rgba(166,95,0,.11); --info:#5f646b;
   --s-small:14px; --s-body:18px; --s-head:clamp(28px,3.4vw,48px); --s-display:clamp(36px,6.1vw,88px); --s-poster:clamp(48px,8.9vw,128px);
   --m:clamp(16px,2.2vw,32px); --gap:24px; --section:clamp(120px,14vw,200px);
   --ui:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; --ease:cubic-bezier(.2,.7,.2,1);
@@ -48,7 +48,8 @@ a:hover{text-decoration-thickness:2px}
 :focus-visible{outline:2px solid var(--accent-text);outline-offset:3px}
 code,pre{font-family:ui-monospace,"JetBrains Mono",Menlo,monospace;font-size:.86em}
 pre{white-space:pre-wrap;overflow-wrap:anywhere}
-.d{font-weight:800;letter-spacing:-.05em;line-height:.9}
+.d{font-weight:800;letter-spacing:-.05em;line-height:.9;text-wrap:balance}
+p{text-wrap:pretty}
 .btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 20px;background:var(--accent);color:var(--accent-ink);font:600 var(--s-small)/1 "Schibsted Grotesk",sans-serif;text-decoration:none;border:0;border-radius:0;cursor:pointer;transition:transform .15s var(--ease),filter .2s}
 .btn:hover{filter:brightness(1.15)} .btn:active{transform:translateY(1px) scale(.98)}
 .crop{position:relative;overflow:hidden;border-radius:4px;background:var(--crop)}
@@ -59,7 +60,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere}
 
 /* nav */
 .top{position:absolute;inset:0 0 auto;height:72px;display:flex;align-items:center;justify-content:space-between;padding:0 var(--m);z-index:3}
-.top .mark{font-weight:800;letter-spacing:-.03em;text-decoration:none}
+.top .mark{display:inline-flex;align-items:center;min-height:44px;font-weight:800;letter-spacing:-.03em;text-decoration:none}
 .top nav{display:flex;gap:28px;align-items:center;font-size:15px}
 .top nav a:not(.btn){text-decoration:none}
 .top nav a:not(.btn):hover{text-decoration:underline}
@@ -150,6 +151,7 @@ kbd{font:500 11px/16px var(--ui);padding:0 5px;border-radius:4px;border:1px soli
 .commands tr:first-child td{border-top:0;padding-top:0}
 .commands td:first-child{width:38%}
 .commands td+td{color:var(--muted)}
+.commands td code{white-space:nowrap}
 
 /* close */
 .close{margin-top:var(--section);background:var(--ink);color:var(--bg);min-height:640px;padding:120px var(--m) 48px;display:flex;flex-direction:column}
@@ -202,18 +204,19 @@ html{scroll-behavior:smooth}
   .pal{position:static;transform:none;width:100%}
   .pal .qrow kbd,.pal .hint .k{display:none}
   .pal .results{max-height:300px}
+  .pal .row{min-height:44px}
   .examples button{height:44px;padding:0 16px;background:var(--bg);text-decoration:none}
   .examples span{width:100%}
   .features h2{font-size:12vw;margin-bottom:56px}
   .row-f{display:block;margin-bottom:72px}
-  .row-f h3{font-size:26px}
+  .row-f h3{font-size:26px;letter-spacing:-.03em}
   .win{margin-top:20px;padding:16px 0}
   .win.plate{padding:16px}
   .upd{width:100%;padding:4px 16px}
   .upd div{grid-template-columns:56px 76px 1fr}
   .steps{display:block}
   .steps>div{margin-bottom:40px}
-  .steps .d{font-size:8.6vw;line-height:.95}
+  .steps .d{font-size:8.6vw;line-height:.95;letter-spacing:-.03em}
   .steps>div:nth-child(2){margin-left:6vw} .steps>div:nth-child(3){margin-left:12vw} .steps>div:nth-child(4){margin-left:18vw}
   .commands{display:block}
   .commands .say{position:static}
@@ -226,8 +229,10 @@ html{scroll-behavior:smooth}
   footer{grid-template-columns:1fr 1fr;row-gap:48px;padding:56px var(--m) 32px}
   footer .name,footer .meta{grid-column:1/-1}
   footer .col{grid-column:auto}
-  footer .name a{font-size:9vw}
-  footer .meta{flex-direction:column;gap:8px}
+  footer .name a{font-size:9vw;display:inline-flex;align-items:center;min-height:44px}
+  footer .col{gap:0}
+  footer .col a,footer .meta a{display:flex;align-items:center;min-height:44px}
+  footer .meta{flex-direction:column;gap:0}
 }
 </style>
 </head>
@@ -290,28 +295,28 @@ html{scroll-behavior:smooth}
 <section class="features" id="features">
   <h2 class="d" data-in>What you get</h2>
   <div class="row-f">
-    <div class="t"><h3 class="d" data-in>Disk forecasts</h3><p data-in>When each filesystem, ZFS pool and Proxmox storage will be full, from the last 14 days of reports.</p></div>
+    <div class="t"><h3 class="d" data-in>Disk forecasts</h3><p data-in>When each filesystem, ZFS pool and Proxmox storage will be full, from a trend line through at least three days of its reports.</p></div>
     <div class="win" style="--fx:-75%" data-in>
       <picture class="lt"><source media="(max-width:720px)" srcset="img/forecasts-light-phone.png" width="1170" height="1584"><img src="img/forecasts-light.png" alt="Storage on the home page, with a forecast for each disk: / on apps full in 14 days, tank on vault in 267 days" width="2096" height="1056"></picture>
       <picture class="dk"><source media="(max-width:720px)" srcset="img/forecasts-dark-phone.png" width="1170" height="1584"><img src="img/forecasts-dark.png" alt="Storage on the home page, with a forecast for each disk: / on apps full in 14 days, tank on vault in 267 days" loading="lazy" width="2096" height="1056"></picture>
     </div>
   </div>
   <div class="row-f">
-    <div class="t"><h3 class="d" data-in>Alerts</h3><p data-in>Full disks, failed units, unhealthy containers, ZFS scrubs and backups. Apprise notifies you when one starts or clears.</p></div>
+    <div class="t"><h3 class="d" data-in>Alerts</h3><p data-in>Full disks, failed units, unhealthy containers, ZFS scrubs and backups. If you set up Apprise, it notifies you when a critical alert starts or clears. You can lower the level.</p></div>
     <div class="win" style="--fx:0%" data-in>
       <picture class="lt"><source media="(max-width:720px)" srcset="img/alerts-light-phone.png" width="1170" height="1974"><img src="img/alerts-light.png" alt="Alerts page: 4 warnings across 6 hosts, a restarting container and a disk at 86%" width="2096" height="1158"></picture>
       <picture class="dk"><source media="(max-width:720px)" srcset="img/alerts-dark-phone.png" width="1170" height="1974"><img src="img/alerts-dark.png" alt="Alerts page: 4 warnings across 6 hosts, a restarting container and a disk at 86%" loading="lazy" width="2096" height="1158"></picture>
     </div>
   </div>
   <div class="row-f">
-    <div class="t"><h3 class="d" data-in>Service launcher</h3><p data-in>A tile for every web service it finds listening on your hosts, with its icon and address.</p></div>
+    <div class="t"><h3 class="d" data-in>Service launcher</h3><p data-in>A tile for each web service it finds listening on your hosts, with its address.</p></div>
     <div class="win" style="--fx:0%" data-in>
       <picture class="lt"><source media="(max-width:720px)" srcset="img/launcher-light-phone.png" width="1170" height="1560"><img src="img/launcher-light.png" alt="Services: tiles for Overseerr, Plex, Radarr, Sonarr, Tautulli and Immich, each with its icon and address" width="2096" height="1140"></picture>
       <picture class="dk"><source media="(max-width:720px)" srcset="img/launcher-dark-phone.png" width="1170" height="1560"><img src="img/launcher-dark.png" alt="Services: tiles for Overseerr, Plex, Radarr, Sonarr, Tautulli and Immich, each with its icon and address" loading="lazy" width="2096" height="1140"></picture>
     </div>
   </div>
   <div class="row-f">
-    <div class="t"><h3 class="d" data-in>Host pages</h3><p data-in>One page per host, one section for each thing it reports: alerts, facts, storage, containers, stacks, the port map, images, packages, what changed and compose files.</p></div>
+    <div class="t"><h3 class="d" data-in>Host pages</h3><p data-in>One page per host, one section for each thing it reports: alerts, facts, storage, containers, stacks, the port map, images, packages, what changed, compose files and more.</p></div>
     <div class="win" style="--fx:0%" data-in>
       <picture class="lt"><source media="(max-width:720px)" srcset="img/host-light-phone.png" width="1170" height="2337"><img src="img/host-light.png" alt="The page for host apps: tiles for alerts, listening sockets, containers and runs, then one section each for alerts, agent updates, facts, storage and containers" width="2096" height="1112"></picture>
       <picture class="dk"><source media="(max-width:720px)" srcset="img/host-dark-phone.png" width="1170" height="2337"><img src="img/host-dark.png" alt="The page for host apps: tiles for alerts, listening sockets, containers and runs, then one section each for alerts, agent updates, facts, storage and containers" loading="lazy" width="2096" height="1112"></picture>
@@ -340,9 +345,9 @@ html{scroll-behavior:smooth}
 </section>
 <!--CHUNK-->
 <section class="steps" id="install">
-  <div><p class="d" data-in>Run the installer.</p>
+  <div><p class="d" data-in>Run the installer as root.</p>
     <pre data-in style="--i:1"><code>curl -fsSL https://github.com/ficaa1/homelab-inventory/releases/latest/download/get.sh | sh</code></pre></div>
-  <div><p class="d" data-in>Open the address it prints.</p></div>
+  <div><p class="d" data-in>Open the address it prints and claim it within 10 minutes.</p></div>
   <div><p class="d" data-in>Add each Linux host.</p></div>
   <div><p class="d" data-in>Hosts report every 15 minutes.</p></div>
 </section>
@@ -350,7 +355,7 @@ html{scroll-behavior:smooth}
 <section class="commands" id="commands">
   <div class="say">
     <h2 class="d" data-in>Commands the agent runs</h2>
-    <p data-in style="--i:1">The agent runs only these programs, with these arguments. Anything else is refused before a process starts.</p>
+    <p data-in style="--i:1">To read a host, the agent runs only these programs, with the arguments shown. Anything else is refused before a process starts.</p>
   </div>
   <table data-in style="--i:2">
     <tbody>
@@ -361,12 +366,14 @@ html{scroll-behavior:smooth}
       <tr><td><code>qm</code>, <code>pct</code></td><td>config, list, status</td></tr>
       <tr><td><code>pvesh</code></td><td>get</td></tr>
       <tr><td><code>pve-firewall</code></td><td>status, compile</td></tr>
-      <tr><td><code>pveversion</code></td><td>no arguments</td></tr>
+      <tr><td><code>pveversion</code></td><td>any arguments; it only prints</td></tr>
+      <tr><td><code>systemd-detect-virt</code></td><td>any arguments; it only prints</td></tr>
       <tr><td><code>systemctl</code></td><td>list-units, list-unit-files, list-timers, show, cat</td></tr>
       <tr><td><code>journalctl</code></td><td>a fixed kernel window</td></tr>
       <tr><td><code>ss</code>, <code>netstat</code></td><td>-tulpn, -tuln</td></tr>
       <tr><td><code>nft</code></td><td>list</td></tr>
-      <tr><td><code>iptables-save</code>, <code>uname</code></td><td>fixed arguments</td></tr>
+      <tr><td><code>iptables-save</code>, <code>ip6tables-save</code></td><td>no arguments</td></tr>
+      <tr><td><code>uname</code></td><td>-s, -r, -m, -a</td></tr>
     </tbody>
   </table>
 </section>
