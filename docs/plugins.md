@@ -1,6 +1,9 @@
 # Plugins
 
-Plugins add tabs to the dashboard. Four ship with it: **Media**, **Uploads**, **Network** and **Dusk**. They are already installed and start switched off.
+Plugins add tabs to the dashboard. Nine ship with it: **Media**, **Uploads**, **Network**, **Dusk**, **Taste**,
+**Archive**, **Tdarr**, **Cloudflare** and **Security canaries**. They are already installed and start switched off.
+This page covers the first four. [Taste](taste-plugin.md) and [Tdarr](tdarr.md) have their own pages; Archive uses the
+[media-policy service](../deploy/mediapolicy/README.md). Cloudflare and Security canaries explain their settings in the form.
 
 ## Turn one on
 
