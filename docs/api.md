@@ -18,8 +18,9 @@ returns only the agent token. Both responses use Cache-Control: no-store.
 
 `-allow-unauthenticated` is for loopback development only; startup refuses any
 non-loopback listen address with that flag. Browser sessions can authorize the
-same dashboard/admin routes as the API token, but cannot authorize agent,
-operator or setup routes. A supplied Authorization header decides authority,
+same dashboard/admin routes as the API token, plus agent offers and restart
+execution like the operator token (with the CSRF header). They cannot post
+reports or use agent routes. A supplied Authorization header decides authority,
 even when the browser also carries a session cookie.
 
 | Route | Purpose | Authentication |
