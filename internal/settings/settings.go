@@ -37,6 +37,7 @@ import (
 	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/alert"
+	"github.com/ficaa1/homelab-inventory/internal/auth"
 	"github.com/ficaa1/homelab-inventory/internal/store"
 )
 
@@ -48,6 +49,11 @@ const StateName = "settings"
 type Stored struct {
 	Auth           AuthStored `json:"auth"`
 	AuthGeneration uint64     `json:"auth_generation,omitempty"`
+
+	// Passkeys are the WebAuthn credentials that may sign in. They hold public
+	// keys only, and stay with the instance like the rest of the sign-in setup.
+	Passkeys []auth.Passkey `json:"passkeys,omitempty"`
+
 	RunRetention   *Retention `json:"run_retention,omitempty"`
 	NotifyLevel    *string    `json:"notify_level,omitempty"`
 	NotifyInterval *string    `json:"notify_interval,omitempty"`

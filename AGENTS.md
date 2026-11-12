@@ -4,4 +4,4 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before changing code. Preserve read-only
 
 `internal/plugin/` owns built-in plugin lifecycle, private settings, declarative views, guarded HTTP and cached alerts; `cmd/api/plugins.go` lists built-ins explicitly. For plugin work, read [docs/writing-plugins.md](docs/writing-plugins.md).
 
-`internal/auth/` owns provider discovery, browser sign-in, signed sessions and CSRF; `internal/settings/auth.go` owns their stored configuration and environment layering.
+`internal/auth/` owns provider discovery, browser sign-in, passkey (WebAuthn) verification, signed sessions and CSRF; `internal/settings/auth.go` owns their stored configuration and environment layering. Registered passkeys are stored in `settings.Stored`.

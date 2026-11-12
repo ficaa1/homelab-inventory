@@ -29,9 +29,11 @@ func (s *server) authConfig() auth.Config {
 		return auth.Config{}
 	}
 	c, _ := settings.ResolveAuth(st.Auth, s.defaults.Auth, st.AuthGeneration)
+	c.Passkeys = st.Passkeys
 	if s.setup != nil {
 		if state, _ := s.setup.Status(); state != "claimed" {
 			c.Enabled = false
+			c.Passkeys = nil
 		}
 	}
 	return c
@@ -68,6 +70,24 @@ func (s *server) authRoutes(mux *http.ServeMux) {
 		}
 		m.Logout(w, r)
 	})
+	mux.HandleFunc("POST /auth/passkey/options", func(w http.ResponseWriter, r *http.Request) {
+		if m == nil {
+			http.NotFound(w, r)
+			return
+		}
+		m.PasskeyOptions(w, r)
+	})
+	mux.HandleFunc("POST /auth/passkey/login", func(w http.ResponseWriter, r *http.Request) {
+		if m == nil {
+			http.NotFound(w, r)
+			return
+		}
+		m.PasskeyLogin(w, r, s.passkeyUsed)
+	})
+	mux.HandleFunc("GET /settings/passkeys", s.auth(s.handleListPasskeys))
+	mux.HandleFunc("POST /settings/passkeys/options", s.auth(s.handlePasskeyOptions))
+	mux.HandleFunc("POST /settings/passkeys", s.auth(s.handleAddPasskey))
+	mux.HandleFunc("DELETE /settings/passkeys/{id}", s.auth(s.handleDeletePasskey))
 	mux.HandleFunc("GET /settings/auth", s.auth(s.handleGetAuthSettings))
 	mux.HandleFunc("PUT /settings/auth", s.auth(s.handlePutAuthSettings))
 	mux.HandleFunc("POST /settings/auth/test", s.auth(s.handleTestAuthSettings))
@@ -75,11 +95,16 @@ func (s *server) authRoutes(mux *http.ServeMux) {
 func (s *server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	c := s.authConfig()
-	out := map[string]any{"enabled": s.browserAuth != nil && c.Ready(), "provider": c.Provider(), "signed_in": false}
+	out := map[string]any{"enabled": s.browserAuth != nil && c.Ready(), "provider": c.Provider(), "passkeys": s.browserAuth != nil && len(c.Passkeys) > 0, "signed_in": false}
 	if s.browserAuth != nil {
 		if session, ok := s.browserAuth.Session(r); ok {
 			out["signed_in"] = true
-			out["email"] = session.Email
+			if p, ok := c.Passkey(session.Passkey); ok {
+				out["passkey"] = p.Name
+				out["passkey_id"] = p.ID
+			} else {
+				out["email"] = session.Email
+			}
 			out["expires_at"] = time.Unix(session.Exp, 0).UTC().Format(time.RFC3339)
 		}
 	}

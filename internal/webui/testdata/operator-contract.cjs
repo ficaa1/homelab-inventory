@@ -33,6 +33,21 @@ assert.doesNotMatch(fleet.innerHTML,/data-agent-action/);
 context.capabilities = {agent_offers_enabled:true};
 context.renderAgentFleet();
 assert.match(fleet.innerHTML,/data-agent-action="promote"/);
+// A session can change offers: the controls wait for a sign-in this browser
+// can make, and fall back to the operator prompt where it can make none.
+context.capabilities = {agent_offers_enabled:true, agent_offers_session:true};
+context.auth = {status:{signed_in:false}};
+context.str = String;
+for (const [way, prompt] of [['passkey', /data-passkey-signin/], ['provider', /href="\/auth\/login"/]]) {
+  context.sessionSignIn = () => way;
+  context.renderAgentFleet();
+  assert.match(fleet.innerHTML, prompt);
+  assert.match(fleet.innerHTML, /data-agent-action="promote" disabled/);
+}
+context.sessionSignIn = () => '';
+context.renderAgentFleet();
+assert.doesNotMatch(fleet.innerHTML, /data-passkey-signin|\/auth\/login|disabled/);
+context.capabilities = {agent_offers_enabled:true};
 context.agentStatus = null;
 context.renderAgentFleet();
 assert.match(fleet.innerHTML, /class="pill ">Unavailable/);

@@ -48,7 +48,8 @@ More options, upgrades and removal: [Install](docs/install.md).
   [media-policy service](deploy/mediapolicy/README.md) for library policy and state.
 - **Encrypted backups** in Admin, with previewed restore and private-dashboard
   migration. [Backup and migration](docs/backups.md)
-- Optional: [sign-in](docs/configuration.md#browser-sign-in-oidc) with Google,
+- Optional: sign-in with a [passkey](docs/configuration.md#passkeys), or
+  [with](docs/configuration.md#browser-sign-in-oidc) Google,
   Authentik, Authelia or Keycloak, [signed agent updates](docs/self-update.md),
   [container restarts](docs/restarts.md), [VPN recovery](docs/vpn.md), and an [MCP server](docs/api.md#mcp-bridge) for AI assistants.
 

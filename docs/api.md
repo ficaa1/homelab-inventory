@@ -37,6 +37,12 @@ even when the browser also carries a session cookie.
 | `GET /auth/login?next=<path>` | Begin provider sign-in | Public; 404 when disabled |
 | `GET /auth/callback` | Complete provider sign-in | Public; signed state, rate limited |
 | `POST /auth/logout` | Clear browser session, 204 | CSRF header when a session cookie is present |
+| `POST /auth/passkey/options` | Begin passkey sign-in: a single-use challenge | Public; CSRF header and Origin, rate limited |
+| `POST /auth/passkey/login` | Complete passkey sign-in, 204 with a session cookie | Public; CSRF header and Origin, rate limited |
+| `GET /settings/passkeys` | Registered passkeys, without keys | API token or session |
+| `POST /settings/passkeys/options` | Begin adding a passkey on the request's Origin | API token or session + CSRF |
+| `POST /settings/passkeys` | Verify and store a new passkey, 201 | API token or session + CSRF |
+| `DELETE /settings/passkeys/{id}` | Remove a passkey and end its sessions | API token or session + CSRF |
 | `GET /settings/auth` | Sign-in settings, masked secret and sources | API token or session |
 | `PUT /settings/auth` | Merge and validate sign-in settings, invalidate sessions | API token or session + CSRF |
 | `POST /settings/auth/test` | Test temporary discovery without saving | API token or session + CSRF |
@@ -348,10 +354,12 @@ Their options are JSON body fields; read options become query parameters.
 ## Browser sign-in
 
 `GET /auth/status` is public with `Cache-Control: no-store`. It returns
-`enabled`, `provider` (configured name or issuer host), and `signed_in`.
-A valid browser session adds `email` and `expires_at` (UTC RFC3339); otherwise
-both are omitted. `enabled` requires complete, enabled configuration and a
-claimed instance. It does not describe bearer-token enforcement.
+`enabled`, `provider` (configured name or issuer host), `passkeys` (whether any
+passkey is registered) and `signed_in`. A valid browser session adds
+`expires_at` (UTC RFC3339) and either `email`, or `passkey` (its name) and
+`passkey_id`; otherwise they are omitted. `enabled` requires complete, enabled
+configuration and a claimed instance. It does not describe bearer-token
+enforcement.
 
 Login redirects to discovery's authorization endpoint with scopes
 `openid email profile`, state, nonce and S256 PKCE. The signed `hi_oidc` cookie
@@ -367,7 +375,8 @@ callback redirects to `/#/login?error=<code>`: `state`, `denied`, `provider`,
 `POST /auth/logout` clears the session and returns 204. When a session cookie
 is present it requires `X-Requested-By: homelab-inventory`. All unsafe methods
 (other than GET/HEAD) authenticated by cookie require the same header; if
-Origin is supplied it must equal the configured public URL's origin. Failure
+Origin is supplied it must equal the configured public URL's origin, or for a
+passkey session the origin the passkey was added on. Failure
 returns 403 `{"error":"missing CSRF header"}`. Bearer-authenticated requests
 are exempt. A session never authorizes inventory POSTs, release downloads,
 the setup claim, release offers or restart execution. The public packaged
@@ -399,6 +408,45 @@ issuer and validates authorization/token/userinfo URLs. It returns 200
 (or `ok:false` with a safe error); bad settings return 422. Only one test runs
 at a time; a second returns 429. This checks discovery, not actual credentials
 or a user's access: complete sign-in to check those.
+
+## Passkeys
+
+Passkeys are WebAuthn credentials. Binary values travel as unpadded base64url.
+A passkey is bound to the page origin it was added on, taken from the request's
+`Origin` header: `https://` on a host name, or `http://localhost`. Its host is
+the relying-party ID. Other origins get 400.
+
+`POST /settings/passkeys/options` returns the `publicKey` options for
+`navigator.credentials.create()`: a `challenge` valid once for five minutes,
+`rp`, a random `user.id`, `pubKeyCredParams` (ES256, EdDSA, RS256),
+`excludeCredentials` for passkeys already added on that origin,
+`authenticatorSelection` requiring a discoverable credential, and
+`attestation: "none"`. A full list (20) returns 409.
+
+`POST /settings/passkeys` takes `{"name","clientDataJSON","attestationObject"}`.
+The server checks the challenge, the origin, the relying-party ID hash and user
+presence, and stores the public key; the attestation statement is not verified.
+It returns 201 with the list. A bad name returns 422 with `fields.name`, a
+failed check 400, a credential already stored 409.
+
+`GET /settings/passkeys` returns `{"passkeys":[{"id","name","origin","created_at","last_used_at"}],"max":20}`.
+`DELETE /settings/passkeys/{id}` returns the remaining list, or 404. Sessions
+signed in with a removed passkey stop at once.
+
+`POST /auth/passkey/options` returns `{"challenge","timeout","userVerification":"preferred"}`
+for `navigator.credentials.get()`. It lists no credentials, since passkeys are
+discoverable. `POST /auth/passkey/login` takes
+`{"id","clientDataJSON","authenticatorData","signature"}`, verifies the
+challenge (single use), origin, relying-party ID hash, user presence and
+signature, and requires the signature counter to advance unless both sides are
+zero. Success returns 204 and sets `hi_session` as provider sign-in does, for
+the configured session hours. Both routes require the CSRF header and an
+`Origin`, return 404 when no passkey is registered for that origin, 401
+`{"error":"passkey not accepted"}` for any failed check, and share the provider
+callback's limit of 20 requests a minute per socket peer (429). The log names a
+fixed failure category only. A passkey session has the authority of a provider
+session, is rejected once the settings generation changes, and is unavailable
+on an unclaimed instance.
 
 ## Upload requests
 
