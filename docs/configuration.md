@@ -37,6 +37,25 @@ listing gateways it leaves alone (default none). It requires the actions
 configuration. `VPN_CHECK_URL` selects the server-side exit-check endpoint; see
 [VPN health and recovery](vpn.md).
 
+## Passkeys
+
+Sign in with a passkey instead of pasting the API token. The passkey can live in
+a password manager such as Bitwarden, or on the device.
+
+1. Open the dashboard at its HTTPS address and unlock it with the API token.
+2. Open **Admin → Sign-in**, type a name under **Passkeys**, and press **Add passkey**.
+3. Save it where the browser or password manager offers.
+
+The sign-in page then shows **Sign in with a passkey**. The token keeps working.
+
+- Browsers allow passkeys only over HTTPS on a host name, or on
+  `http://localhost`. They do not work at an IP address or over plain HTTP.
+- A passkey signs in only at the address it was added on. Add one per address.
+- **Remove** signs out every browser that used that passkey. Delete it from the
+  password manager or device as well.
+- A passkey session lasts as long as a provider session (a week by default) and
+  can do the same things.
+
 ## Browser sign-in (OIDC)
 
 Lets people sign in with an account instead of pasting the API token.
@@ -56,7 +75,7 @@ Lets people sign in with an account instead of pasting the API token.
 | Keycloak | `https://id.example.org/realms/home` | Confidential client with Standard flow |
 
 The account's email must be verified unless you untick that option. Saving
-sign-in settings signs everyone out.
+sign-in settings signs everyone out, including passkey sessions.
 
 ## Details
 
@@ -87,6 +106,13 @@ the userinfo endpoint (ID tokens are not parsed). The issuer must match exactly,
 including a trailing slash, and must use HTTPS except on loopback. Sessions
 survive restarts. A signed-in browser can do what the API token does in the
 dashboard, but cannot post reports, promote updates or restart containers.
+
+How passkeys work: WebAuthn, verified by the API itself. The server stores each
+passkey's public key in its settings and checks the challenge, the page origin
+and the signature at every sign-in. Attestation is not requested, so any
+authenticator is accepted; the trust comes from the API token used to add it.
+ES256, EdDSA and RS256 keys are supported, up to 20 passkeys. A restore keeps
+the destination's passkeys, not the backup's.
 
 **Agent, signer and MCP bridge variables.**
 

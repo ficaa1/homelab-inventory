@@ -54,11 +54,12 @@ func (s *server) setupAuth(next http.HandlerFunc) http.HandlerFunc {
 			// A signed-in owner can enroll hosts from the dashboard; the code it
 			// creates grants only the agent's narrower authority.
 			if session, ok := s.browserAuth.Session(r); ok {
-				if !auth.CSRF(r, s.authConfig()) {
+				c := s.authConfig()
+				if !auth.CSRF(r, c, session) {
 					writeError(w, 403, "missing CSRF header")
 					return
 				}
-				actor = session.Email
+				actor = c.Actor(session)
 			}
 		}
 		if actor == "bearer" && !httpx.BearerOK(r, s.apiToken(), httpx.DenyWhenUnset) {
@@ -129,7 +130,7 @@ func (s *server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 	if httpx.BearerOK(r, s.apiToken(), httpx.DenyWhenUnset) {
 		out["signed_updates"] = s.signedEnrollmentStatus(r.URL.Query().Get("host"))
 	} else if len(r.Header.Values("Authorization")) == 0 && s.browserAuth != nil {
-		if _, ok := s.browserAuth.Session(r); ok && auth.CSRF(r, s.authConfig()) {
+		if session, ok := s.browserAuth.Session(r); ok && auth.CSRF(r, s.authConfig(), session) {
 			out["signed_updates"] = s.signedEnrollmentStatus(r.URL.Query().Get("host"))
 		}
 	}

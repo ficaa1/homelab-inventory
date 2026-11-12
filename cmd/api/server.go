@@ -184,11 +184,12 @@ func (s *server) auth(next http.HandlerFunc) http.HandlerFunc {
 		} else {
 			if s.browserAuth != nil {
 				if session, ok := s.browserAuth.Session(r); ok {
-					if !auth.CSRF(r, s.authConfig()) {
+					c := s.authConfig()
+					if !auth.CSRF(r, c, session) {
 						writeError(w, 403, "missing CSRF header")
 						return
 					}
-					next(w, withActor(r, session.Email))
+					next(w, withActor(r, c.Actor(session)))
 					return
 				}
 			}

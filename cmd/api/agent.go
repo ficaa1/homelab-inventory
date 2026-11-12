@@ -232,15 +232,20 @@ func (s *server) agentSession(r *http.Request) (string, bool) {
 	}
 	// A signed-in browser session may change offers too; the API bearer never can.
 	if s.browserAuth != nil {
-		if session, ok := s.browserAuth.Session(r); ok && auth.CSRF(r, s.authConfig()) {
-			return session.Email, true
+		if session, ok := s.browserAuth.Session(r); ok {
+			if c := s.authConfig(); auth.CSRF(r, c, session) {
+				return c.Actor(session), true
+			}
 		}
 	}
 	return "", false
 }
 
 // offersBySession reports whether a browser sign-in can change agent offers.
-func (s *server) offersBySession() bool { return s.browserAuth != nil && s.authConfig().Enabled }
+func (s *server) offersBySession() bool {
+	c := s.authConfig()
+	return s.browserAuth != nil && (c.Enabled || len(c.Passkeys) > 0)
+}
 
 func (s *server) agentOffered(host string, m agentrelease.Manifest, c agentrelease.Control) bool {
 	s.agentOffersMu.Lock()

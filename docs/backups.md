@@ -8,7 +8,7 @@ Select the file and enter its passphrase, then choose **Preview restore**. Authe
 
 Resolve any reported configuration or mount blockers and preview again. Type `REPLACE` and confirm to replace the whole dataset. This also replaces new history received after the preview. The staged plan expires after thirty minutes; Cancel discards it. Download a destination backup before replacing useful destination data.
 
-Destination administrator, agent and operator credentials remain authoritative. Browser sessions and enrollment codes are invalidated. Destination browser identity settings, reverse proxy origin, execution policy and signing trust remain deployment decisions. Saved nullable settings and unknown plugin entries survive; the encrypted source configuration supplies their original fallback defaults.
+Destination administrator, agent and operator credentials remain authoritative. Browser sessions and enrollment codes are invalidated. Destination passkeys and browser identity settings, reverse proxy origin, execution policy and signing trust remain deployment decisions. Saved nullable settings and unknown plugin entries survive; the encrypted source configuration supplies their original fallback defaults.
 
 Restore stops and joins background workers, installs the staged files, then constructs fresh stores, authentication, plugins and lazy TV managers before starting work again. It does not replay requests, actions, uploads or notification history. Legacy pending/unknown request receipts remain a duplicate barrier. External services retain their own state.
 
