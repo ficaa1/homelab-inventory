@@ -12,7 +12,7 @@ amd64 signer from the same source and version, even when building on another OS:
 
 ```sh
 umask 022
-make dist signer-linux VERSION=v0.1.0
+make dist signer-linux VERSION=v0.2.1
 sha256sum bin/agentsign-linux-amd64
 ```
 
@@ -49,7 +49,7 @@ export LOCAL_SIGNER_BIN="$PWD/bin/agentsign"
 export SIGNER_INPUT=bin
 export AGENT_PLATFORMS=linux/amd64,linux/arm64
 scripts/release-agent.sh keygen > release-public.key
-make release VERSION=v0.1.0
+make release VERSION=v0.2.1
 ```
 
 For signing locally, leave `SIGNER_HOST` unset and set the other paths for that

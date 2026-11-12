@@ -105,7 +105,8 @@ How sign-in works: discovery, authorization code with PKCE, and the email from
 the userinfo endpoint (ID tokens are not parsed). The issuer must match exactly,
 including a trailing slash, and must use HTTPS except on loopback. Sessions
 survive restarts. A signed-in browser can do what the API token does in the
-dashboard, but cannot post reports, promote updates or restart containers.
+dashboard, and can also offer agent updates and restart containers (with the
+CSRF header), which the API token cannot. It cannot post reports.
 
 How passkeys work: WebAuthn, verified by the API itself. The server stores each
 passkey's public key in its settings and checks the challenge, the page origin

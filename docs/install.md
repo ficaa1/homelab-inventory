@@ -58,7 +58,7 @@ network you trust: anyone on it could read the token.
 ```sh
 curl -fsSL https://github.com/ficaa1/homelab-inventory/releases/latest/download/get.sh -o get.sh
 sudo sh get.sh                          # upgrade to the latest release
-sudo sh get.sh --version v0.1.0         # or a specific one
+sudo sh get.sh --version v0.2.1         # or a specific one
 sudo sh get.sh --uninstall              # remove, keep data
 sudo sh get.sh --uninstall --purge      # remove, delete data
 ```
@@ -100,7 +100,7 @@ replaces the Docker image name. To build the release files yourself (Go 1.25):
 
 ```sh
 umask 022
-make release-artifacts VERSION=v0.1.0
+make release-artifacts VERSION=v0.2.1
 sh scripts/get.sh --from "$PWD/dist" --prefix /tmp/inventory-test --no-docker
 ```
 
