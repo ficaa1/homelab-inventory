@@ -1490,7 +1490,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 
 /* Admin → Sign-in, and who is signed in. */
 #signin { scroll-margin-top: calc(var(--top-h) + 56px); }
-#signin h4 .pill { margin-left: auto; }
+.signin-state { margin-left: auto; }
 .session-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 16px; font-size: var(--fs-sm); color: var(--text-2); }
 .session-line .ic { color: var(--text-3); }
 .session-line b { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
@@ -1519,6 +1519,18 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 .redirect.none code { color: var(--text-3); font-family: inherit; }
 .signin-warn { display: flex; gap: 7px; align-items: baseline; font-size: var(--fs-xs); color: var(--text-2); margin: 0; }
 .signin-warn .g { color: var(--warn); font-size: 9px; }
+.signin-body > h5 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
+.pk-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.pk-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 6px 6px 12px; background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--r-sm); }
+.pk-row .ic { color: var(--text-3); }
+.pk-row .who { flex: 1; min-width: 0; font-size: var(--fs-sm); }
+.pk-row .who b { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+.pk-row .who .sub { display: block; font-size: var(--fs-xs); color: var(--text-3); overflow-wrap: anywhere; }
+.pk-row .btn { flex: none; width: auto; min-height: 30px; padding: 3px 9px; background: none; border-color: transparent; color: var(--text-2); }
+.pk-row .btn:hover { background: var(--hover); color: var(--text); }
+.pk-add { margin-top: 0; }
+.pk-add .secret-row .btn { flex: none; }
+.pk-none { font-size: var(--fs-sm); color: var(--text-3); margin: 0 0 12px; }
 
 /* ------------------------------------------------------------------ upload */
 .up-fab {
@@ -1739,10 +1751,11 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     <h2>homelab-inventory</h2>
     <p id="gate-msg">API token</p>
     <div id="gate-note" class="gate-note hidden" role="alert"></div>
-    <!-- Sign-in, when GET /auth/status says a provider is configured. The
-         token form stays one tap away underneath it. -->
+    <!-- Sign-in, when GET /auth/status says a provider is configured or a
+         passkey is registered. The token form stays one tap away underneath it. -->
     <div id="gate-sso" class="gate-sso hidden">
       <a id="gate-sso-link" class="btn primary" href="/auth/login">Sign in</a>
+      <button id="gate-passkey" class="btn hidden" type="button"><svg class="ic sm" aria-hidden="true"><use href="#i-key"/></svg>Sign in with a passkey</button>
       <button id="gate-alt" class="gate-alt" type="button" aria-expanded="false" aria-controls="gate-token-box">Use a token instead</button>
     </div>
     <div id="gate-token-box">
@@ -1879,13 +1892,14 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
         floor would cover.
       -->
       <section id="panel-admin" class="hidden">
-        <!-- Who is signed in, when the session came from the provider. -->
+        <!-- Who is signed in, when the session came from the provider or a passkey. -->
         <div id="session-line" class="setting session-line hidden"></div>
         <div id="admin"></div>
         <!-- Sign-in: outside #admin for the same reason as the plugins below. -->
         <section id="signin" class="setting hidden" aria-labelledby="signin-h">
-          <h4 id="signin-h"><svg class="ic" aria-hidden="true"><use href="#i-key"/></svg>Sign-in<span id="signin-state"></span></h4>
-          <p>Let people in through an OpenID Connect provider instead of pasting the API token. The token keeps working either way.</p>
+          <h4 id="signin-h"><svg class="ic" aria-hidden="true"><use href="#i-key"/></svg>Sign-in</h4>
+          <p>Let people in with a passkey or through an OpenID Connect provider instead of pasting the API token. The token keeps working either way.</p>
+          <div id="passkeys-body"></div>
           <div id="signin-body"></div>
         </section>
         <!-- Plugins: outside #admin, which is rebuilt on every refresh, so a
@@ -2168,6 +2182,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       if (route.tab === "admin") {
         loadSettings();
         loadSignin();
+        loadPasskeys();
         loadPlugins(route.sub === "plugins" && (previous.view !== "fleet" || previous.tab !== "admin" || previous.sub !== "plugins"));
       }
       if (previous.view !== "fleet" || previous.tab !== route.tab) routeIn($("panel-" + route.tab));
@@ -2471,11 +2486,12 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   function renderAgentFleet() {
     var a = agentStatus, c = agentCanary();
     // A sign-in can change offers; without one, the buttons wait for it, as the original does.
-    var needsSession = capabilities.agent_offers_session === true && !(auth.status && auth.status.signed_in) && !sessionStorage.getItem(OPERATOR_KEY);
+    // Where no sign-in can be offered (a passkey at an address that cannot use one), the operator token is asked for instead.
+    var needsSession = capabilities.agent_offers_session === true && !(auth.status && auth.status.signed_in) && !sessionStorage.getItem(OPERATOR_KEY) && !!sessionSignIn();
     $("agent-fleet").innerHTML = '<div class="agent-heading">' + ic("box") + '<b>Agents</b><span class="pill ' + (!a || !a.configured ? "" : a.unavailable || a.mode === "hold" ? "warning" : "good") + '">' + esc(a ? !a.configured ? "Signed updates not set up" : a.unavailable ? "Release unavailable" : agentModeLabel(a.mode) : "Unavailable") + '</span>' + (a && a.sequence ? '<span class="muted">#' + a.sequence + '</span>' : '') + '</div>' +
       (a && a.configured && !a.unavailable && offersEnabled() ? '<div class="agent-controls">' + [ ["promote","Promote all"], ["hold","Hold"], ["auto", c ? "Back to " + c + "-only" : "Initial rollout"] ].map(function(x) {
         return '<button class="btn" type="button" data-agent-action="' + x[0] + '"' + (needsSession || a.ssh_hold || agentBusy ? ' disabled' : '') + '>' + esc(x[1]) + '</button>';
-      }).join('') + '</div>' + (a.ssh_hold ? '<span class="pill warning">SSH hold</span>' : needsSession ? '<a class="btn" href="/auth/login">' + ic("lock","sm") + esc("Sign in with " + str((auth.status && auth.status.provider) || "your account")) + '</a>' : '') : '') + (!offersEnabled() ? '<div class="sub">' + esc(PROMOTION_HINT) + '</div>' : '') + signedEnrollmentHTML(a && a.signed_updates);
+      }).join('') + '</div>' + (a.ssh_hold ? '<span class="pill warning">SSH hold</span>' : needsSession ? sessionSignIn() === "passkey" ? '<button class="btn" type="button" data-passkey-signin>' + ic("key","sm") + 'Sign in with a passkey</button>' : '<a class="btn" href="/auth/login">' + ic("lock","sm") + esc("Sign in with " + str((auth.status && auth.status.provider) || "your account")) + '</a>' : '') : '') + (!offersEnabled() ? '<div class="sub">' + esc(PROMOTION_HINT) + '</div>' : '') + signedEnrollmentHTML(a && a.signed_updates);
   }
   function refreshAgents() {
     return api("/agent/status").catch(function(err) { if (err.unauthorized) showGate(true); return null; }).then(function(status) {
@@ -6642,7 +6658,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   // without a bearer. Every request names the page in X-Requested-By, which
   // is what the server's CSRF check asks of a cookie.
 
-  var auth = { status: null, retried: false, tokenOpen: false };
+  var auth = { status: null, retried: false, tokenOpen: false, passkeyBusy: false, passkeyMsg: "" };
   var LOGIN_ERRORS = {
     state: "Sign-in took too long or was started in another tab. Try again.",
     denied: "Sign-in was cancelled at the provider.",
@@ -6676,19 +6692,26 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   }
 
   function renderGate(failed, note) {
-    var s = auth.status || {}, sso = !!s.enabled, err = loginError();
+    var s = auth.status || {}, sso = !!s.enabled, pk = !!s.passkeys && passkeysSupported();
+    var err = auth.passkeyMsg || loginError();
     var text = err || note || "";
     $("gate-note").textContent = text;
     $("gate-note").classList.toggle("bad", !!err);
     $("gate-note").classList.toggle("hidden", !text);
-    $("gate-msg").textContent = sso ? "Sign in to continue." : "API token";
-    $("gate-sso").classList.toggle("hidden", !sso);
+    $("gate-msg").textContent = sso || pk ? "Sign in to continue." : "API token";
+    $("gate-sso").classList.toggle("hidden", !sso && !pk);
+    $("gate-sso-link").classList.toggle("hidden", !sso);
     if (sso) {
       $("gate-sso-link").textContent = "Sign in with " + (str(s.provider) || "your provider");
       $("gate-sso-link").href = "/auth/login?next=" + encodeURIComponent(loginNext());
     }
+    // A passkey leads when it is the only sign-in; beside a provider it is second.
+    $("gate-passkey").classList.toggle("hidden", !pk);
+    $("gate-passkey").classList.toggle("primary", !sso);
+    $("gate-passkey").disabled = auth.passkeyBusy;
+    if (auth.passkeyBusy) $("gate-passkey").setAttribute("aria-busy", "true"); else $("gate-passkey").removeAttribute("aria-busy");
     // Until the status is known, show neither way in rather than the wrong one.
-    var known = !!auth.status, open = known && (!sso || failed || auth.tokenOpen);
+    var known = !!auth.status, open = known && (!(sso || pk) || failed || auth.tokenOpen);
     $("gate-alt").setAttribute("aria-expanded", open ? "true" : "false");
     $("gate-alt").classList.toggle("hidden", !known || open);
     $("gate-token-box").classList.toggle("hidden", !open);
@@ -6703,18 +6726,77 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     $("gate-token").focus();
   });
 
+  // ------------------------------------------------------------ passkeys
+  //
+  // WebAuthn. The server sends and takes binary values as base64url; the
+  // browser API wants ArrayBuffers. A passkey belongs to the address it was
+  // added on, and browsers offer the API only over HTTPS or on localhost.
+
+  function passkeysSupported() {
+    return !!(window.isSecureContext && window.PublicKeyCredential && navigator.credentials);
+  }
+  function b64uBytes(text) {
+    var bin = atob(String(text).replace(/-/g, "+").replace(/_/g, "/")), out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  function bytesB64u(buf) {
+    var bytes = new Uint8Array(buf), bin = "";
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  // A sign-in can be offered here: through the provider, or with a passkey
+  // when this address can use one.
+  function sessionSignIn() {
+    var s = auth.status || {};
+    return s.enabled ? "provider" : s.passkeys && passkeysSupported() ? "passkey" : "";
+  }
+
+  // Resolves once this browser holds a session; rejects with a message to show.
+  function passkeyCeremony() {
+    return write("/auth/passkey/options", "POST").then(function (o) {
+      return navigator.credentials.get({ publicKey: {
+        challenge: b64uBytes(o.challenge), timeout: o.timeout, userVerification: o.userVerification } });
+    }).then(function (cred) {
+      var r = cred.response;
+      return write("/auth/passkey/login", "POST", { id: cred.id, clientDataJSON: bytesB64u(r.clientDataJSON),
+        authenticatorData: bytesB64u(r.authenticatorData), signature: bytesB64u(r.signature) });
+    }).catch(function (err) {
+      var text = "Passkey sign-in failed: " + err.message;
+      if (err.unauthorized) text = "That passkey is not registered on this dashboard.";
+      else if (err.status === 404) text = "No passkey is registered for this address.";
+      else if (err.status === 429) text = "Too many sign-in attempts. Try again in a minute.";
+      else if (err.name === "NotAllowedError" || err.name === "AbortError") text = "Passkey sign-in was cancelled or timed out.";
+      throw new Error(text);
+    });
+  }
+
+  $("gate-passkey").addEventListener("click", function () {
+    if (auth.passkeyBusy) return;
+    auth.passkeyBusy = true; auth.passkeyMsg = "";
+    renderGate(false);
+    passkeyCeremony().then(function () {
+      auth.passkeyBusy = false; auth.retried = false;
+      load();
+    }, function (err) {
+      auth.passkeyBusy = false; auth.passkeyMsg = err.message;
+      renderGate(false);
+    });
+  });
+
   // Who this browser is signed in as, at the top of Admin.
   function renderSessionLine() {
     var s = auth.status || {}, line = $("session-line");
-    var on = !!(s.signed_in && str(s.email));
+    var who = str(s.email) || str(s.passkey);
+    var on = !!(s.signed_in && who);
     line.classList.toggle("hidden", !on);
     $("signout").classList.toggle("hidden", !on);
-    $("signout").title = on ? "Signed in as " + str(s.email) : "Sign out";
+    $("signout").title = on ? (str(s.email) ? "Signed in as " : "Signed in with passkey ") + who : "Sign out";
     if (!on) { line.replaceChildren(); return; }
     var until = Date.parse(s.expires_at);
     line.replaceChildren(
-      iconNode("user", "sm"),
-      h("span", {}, ["Signed in as ", h("b", { text: str(s.email) }),
+      iconNode(str(s.email) ? "user" : "key", "sm"),
+      h("span", {}, [str(s.email) ? "Signed in as " : "Signed in with passkey ", h("b", { text: who }),
         isFinite(until) ? h("span", { title: new Date(until).toLocaleString(), text: " · until " + new Date(until).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) }) : null]),
       h("button", { class: "btn", type: "button", onclick: signOut }, [iconNode("logout", "sm"), "Sign out"]));
   }
@@ -6724,7 +6806,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     var b = $("session-line").querySelector("button");
     if (b) { b.disabled = true; b.setAttribute("aria-busy", "true"); }
     write("/auth/logout", "POST").then(function () {
-      auth.status = Object.assign({}, auth.status, { signed_in: false, email: "", expires_at: "" });
+      auth.status = Object.assign({}, auth.status, { signed_in: false, email: "", passkey: "", passkey_id: "", expires_at: "" });
       renderSessionLine();
       if (!token) { showGate(false, "Signed out."); return; }
       announce("Signed out. This browser still has the API token.");
@@ -6732,6 +6814,119 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       if (b) { b.disabled = false; b.removeAttribute("aria-busy"); }
       if (err.unauthorized) { showGate(false, "Signed out."); return; }
       announce("Could not sign out: " + err.message);
+    });
+  }
+
+  // ------------------------------------------------------------ Admin → Sign-in → Passkeys
+  //
+  // Adding one runs the browser's create ceremony on this address; the server
+  // keeps the public key. Removing one ends the sessions it signed in.
+
+  var passkeys = { list: null, err: "", busy: "", msg: "", bad: false, name: "" };
+
+  function loadPasskeys() {
+    return api("/settings/passkeys").then(function (d) {
+      passkeys.list = d && Array.isArray(d.passkeys) ? d.passkeys : [];
+      passkeys.max = d && d.max; passkeys.err = "";
+    }, function (err) {
+      if (err.unauthorized) { showGate(true); return; }
+      // A server without passkeys: no block at all.
+      passkeys.err = err.status === 404 ? "" : err.message;
+    }).then(function () { renderPasskeys(false); });
+  }
+
+  function renderPasskeys(force) {
+    var box = $("passkeys-body"), list = passkeys.list;
+    box.classList.toggle("hidden", !list && !passkeys.err);
+    if (!list) {
+      box.replaceChildren(passkeys.err ? h("div", { class: "src plug-status bad", role: "alert", text: "Could not load passkeys: " + passkeys.err }) : null);
+      return;
+    }
+    // Polling must not take the name away from someone typing it.
+    if (!force && (passkeys.busy || box.contains(document.activeElement))) return;
+    var here = location.origin, busy = !!passkeys.busy;
+    var rows = list.map(function (p) {
+      var sub = "added " + new Date(p.created_at).toLocaleDateString() + " · " + (p.last_used_at ? "used " + ago(p.last_used_at) : "never used");
+      if (str(p.origin) !== here) sub += " · signs in at " + str(p.origin);
+      return h("li", { class: "pk-row" }, [iconNode("key", "sm"),
+        h("span", { class: "who" }, [h("b", { text: str(p.name) }), h("span", { class: "sub", text: sub })]),
+        h("button", { class: "btn", type: "button", disabled: busy, "aria-label": "Remove passkey " + str(p.name), onclick: function () { removePasskey(p); } }, ["Remove"])]);
+    });
+    var kids = [h("h5", { text: "Passkeys" }),
+      rows.length ? h("ul", { class: "pk-list", "aria-label": "Registered passkeys" }, rows)
+        : h("p", { class: "pk-none", text: "None yet. A passkey signs a browser in without the token, from a password manager such as Bitwarden or from the device itself." })];
+    if (!passkeysSupported()) {
+      kids.push(h("div", { class: "plug-note" }, [iconNode("lock", "sm"), h("span", {
+        text: "Passkeys cannot be added or used at " + here + ". Browsers allow them only over HTTPS on a host name, not on an IP address. Open the dashboard at its HTTPS address to add one." })]));
+    } else if (list.length >= (passkeys.max || 20)) {
+      kids.push(h("p", { class: "pk-none", text: "The list is full. Remove one to add another." }));
+    } else {
+      var input = h("input", { id: "pk-name", type: "text", maxlength: "64", autocomplete: "off", placeholder: "Bitwarden", disabled: busy,
+        "aria-describedby": "pk-name-help", oninput: function () { passkeys.name = input.value; } });
+      input.value = passkeys.name;
+      kids.push(h("form", { class: "form plug-form pk-add", novalidate: true, "aria-label": "Add a passkey", onsubmit: function (e) { e.preventDefault(); addPasskey(); } }, [
+        h("div", { class: "pf" }, [h("label", { for: "pk-name", text: "Name for a new passkey" }),
+          h("div", { class: "secret-row" }, [input,
+            h("button", { class: "btn primary", type: "submit", disabled: busy, "aria-busy": passkeys.busy === "add" ? "true" : null },
+              [iconNode("plus", "sm"), passkeys.busy === "add" ? "Waiting for the passkey…" : "Add passkey"])]),
+          h("div", { class: "help", id: "pk-name-help", text: "Where it is kept, so you can tell them apart. It signs in only at " + here + "." })])]));
+    }
+    kids.push(h("span", { class: "src plug-status" + (passkeys.bad ? " bad" : ""), role: "status", "aria-live": "polite", text: passkeys.msg }));
+    box.replaceChildren(h("div", { class: "signin-body" }, kids));
+  }
+
+  function passkeyDone(text, bad, focus) {
+    passkeys.busy = ""; passkeys.msg = text; passkeys.bad = !!bad;
+    renderPasskeys(true);
+    var el = focus && $("passkeys-body").querySelector(focus);
+    if (el) el.focus();
+  }
+
+  function addPasskey() {
+    if (passkeys.busy) return;
+    var name = passkeys.name.trim() || "Passkey" + (passkeys.list.length ? " " + (passkeys.list.length + 1) : "");
+    passkeys.busy = "add"; passkeys.msg = "";
+    renderPasskeys(true);
+    write("/settings/passkeys/options", "POST").then(function (o) {
+      return navigator.credentials.create({ publicKey: {
+        challenge: b64uBytes(o.challenge), rp: o.rp,
+        user: { id: b64uBytes(o.user.id), name: o.user.name, displayName: o.user.displayName },
+        pubKeyCredParams: o.pubKeyCredParams,
+        excludeCredentials: (o.excludeCredentials || []).map(function (c) { return { type: "public-key", id: b64uBytes(c.id) }; }),
+        authenticatorSelection: o.authenticatorSelection, attestation: o.attestation, timeout: o.timeout } });
+    }).then(function (cred) {
+      return write("/settings/passkeys", "POST", { name: name,
+        clientDataJSON: bytesB64u(cred.response.clientDataJSON), attestationObject: bytesB64u(cred.response.attestationObject) });
+    }).then(function (d) {
+      passkeys.list = d && Array.isArray(d.passkeys) ? d.passkeys : passkeys.list;
+      passkeys.name = "";
+      passkeyDone("Added “" + name + "”. Sign out to try it: the sign-in page now offers a passkey.", false, "#pk-name");
+      loadAuthStatus();
+    }, function (err) {
+      if (err.unauthorized) { showGate(!!token); return; }
+      var text = "Could not add the passkey: " + err.message;
+      if (err.name === "InvalidStateError") text = "That authenticator already holds a passkey for this dashboard.";
+      else if (err.name === "NotAllowedError" || err.name === "AbortError") text = "Adding the passkey was cancelled or timed out. Nothing was saved.";
+      else if (err.fields && err.fields.name) text = "Name: " + err.fields.name + ".";
+      passkeyDone(text, true, "#pk-name");
+    });
+  }
+
+  function removePasskey(p) {
+    if (passkeys.busy) return;
+    // A browser with no token, signed in with this passkey, is about to lose its session.
+    var own = !token && auth.status && auth.status.signed_in && auth.status.passkey_id === p.id;
+    if (!confirm("Remove passkey “" + str(p.name) + "”?" + (own ? " You are signed in with it, so you will be signed out." : " Browsers signed in with it are signed out."))) return;
+    passkeys.busy = "remove"; passkeys.msg = "";
+    renderPasskeys(true);
+    write("/settings/passkeys/" + encodeURIComponent(p.id), "DELETE").then(function (d) {
+      passkeys.list = d && Array.isArray(d.passkeys) ? d.passkeys : passkeys.list;
+      passkeyDone("Removed “" + str(p.name) + "”. It can be deleted from the password manager or device that held it.", false, "#pk-name");
+      if (own) { showGate(false, "Passkey removed. Sign in again."); return; }
+      loadAuthStatus();
+    }, function (err) {
+      if (err.unauthorized) { showGate(!!token); return; }
+      passkeyDone("Could not remove the passkey: " + err.message, true);
     });
   }
 
@@ -6810,10 +7005,15 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       else if (!body.firstChild) body.innerHTML = skeleton(2);
       return;
     }
-    var d = signin.data, st = SIGNIN_STATE[d.state] || ["", "•", str(d.state) || "unknown"];
-    $("signin-state").replaceChildren(pill(st[2], st[0], st[1]));
+    // The pill lives in the form's heading, so it is repainted even when the form is kept.
+    if (ui.el.state) ui.el.state.replaceChildren(signinPill());
     if (ui.el.body && ui.el.body.isConnected && (ui.busy || signinDirty() || ui.el.body.contains(document.activeElement))) return;
     renderSigninForm();
+  }
+
+  function signinPill() {
+    var d = signin.data || {}, st = SIGNIN_STATE[d.state] || ["", "•", str(d.state) || "unknown"];
+    return pill(st[2], st[0], st[1]);
   }
 
   function signinRedirect() {
@@ -6826,7 +7026,8 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 
   function renderSigninForm() {
     var ui = signin.ui, d = signin.data || {}, p = signinAsPlugin(), sources = d.sources || {};
-    var body = h("div", { class: "signin-body" });
+    ui.el.state = h("span", { class: "signin-state" }, [signinPill()]);
+    var body = h("div", { class: "signin-body" }, [h("h5", {}, ["Provider (OpenID Connect)", ui.el.state])]);
     ui.el.body = body;
     ui.sync = syncSignin;
     function fromEnv(f) {
@@ -7741,6 +7942,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   }
 
   function showGate(failed, note) {
+    auth.passkeyBusy = false; auth.passkeyMsg = "";
     closeDrawer();
     sessionStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(OPERATOR_KEY);
@@ -8444,6 +8646,14 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     var goHost = t.closest ? t.closest("[data-gohost]") : null;
     if (goHost) { closeDrawer(); go("#/host/" + encodeURIComponent(goHost.dataset.gohost)); return; }
 
+    var passkeyButton = t.closest ? t.closest("[data-passkey-signin]") : null;
+    if (passkeyButton) {
+      if (passkeyButton.disabled) return;
+      passkeyButton.disabled = true;
+      $("agent-error").textContent = "";
+      passkeyCeremony().then(function () { return loadAuthStatus(); }, function (err) { $("agent-error").textContent = err.message; }).then(renderAgentFleet);
+      return;
+    }
     var agentButton = t.closest ? t.closest("[data-agent-action]") : null;
     if (agentButton) { if (!agentButton.disabled) changeAgentOffer(agentButton.dataset.agentAction,agentButton.dataset.agentHost); return; }
     var hostRow = t.closest ? t.closest("[data-hostcard]") : null;

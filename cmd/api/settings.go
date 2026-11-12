@@ -216,7 +216,7 @@ func (s *server) handleResetSettings(w http.ResponseWriter, r *http.Request) {
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
 	st := s.stored()
-	if err := s.store.WriteState(settings.StateName, settings.Stored{Auth: st.Auth, AuthGeneration: st.AuthGeneration}); err != nil {
+	if err := s.store.WriteState(settings.StateName, settings.Stored{Auth: st.Auth, AuthGeneration: st.AuthGeneration, Passkeys: st.Passkeys}); err != nil {
 		s.log.Printf("settings reset: %v", err)
 		writeError(w, http.StatusInternalServerError, "resetting settings")
 		return

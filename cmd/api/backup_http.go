@@ -256,6 +256,13 @@ func (s *server) preserveBackupCredentials(dir string) error {
 		return e
 	}
 	source["auth_generation"], _ = json.Marshal(current.AuthGeneration + 1)
+	// Passkeys are bound to this instance's address, so the destination's stay.
+	delete(source, "passkeys")
+	if len(current.Passkeys) > 0 {
+		if source["passkeys"], e = json.Marshal(current.Passkeys); e != nil {
+			return e
+		}
+	}
 	b, e = json.Marshal(source)
 	if e != nil {
 		return e

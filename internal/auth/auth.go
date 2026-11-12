@@ -26,8 +26,12 @@ import (
 const SessionCookie = "hi_session"
 const stateCookie = "hi_oidc"
 
+// Session is the signed cookie payload. A provider sign-in carries Email; a
+// passkey sign-in carries the credential ID and the origin it is bound to.
 type Session struct {
-	Email      string `json:"email"`
+	Email      string `json:"email,omitempty"`
+	Passkey    string `json:"pk,omitempty"`
+	Origin     string `json:"origin,omitempty"`
 	Exp        int64  `json:"exp"`
 	Generation uint64 `json:"gen"`
 }
@@ -44,15 +48,17 @@ type attempt struct {
 	count int
 }
 
-// Manager owns the durable signing key, HTTP client and bounded callback limiter.
+// Manager owns the durable signing key, HTTP client, bounded callback limiter
+// and pending passkey challenges.
 // Config is read afresh for every operation so disable/save takes effect at once.
 type Manager struct {
-	config   func() Config
-	key      []byte
-	client   *http.Client
-	logf     func(string, ...any)
-	mu       sync.Mutex
-	attempts map[string]attempt
+	config     func() Config
+	key        []byte
+	client     *http.Client
+	logf       func(string, ...any)
+	mu         sync.Mutex
+	attempts   map[string]attempt
+	challenges map[string]time.Time
 }
 
 func Open(dir string, config func() Config, logf func(string, ...any)) (*Manager, error) {
@@ -88,7 +94,7 @@ func Open(dir string, config func() Config, logf func(string, ...any)) (*Manager
 	if logf == nil {
 		logf = func(string, ...any) {}
 	}
-	return &Manager{config: config, key: key, client: &http.Client{Timeout: 10 * time.Second, CheckRedirect: httpx.RefuseRedirects()}, logf: logf, attempts: map[string]attempt{}}, nil
+	return &Manager{config: config, key: key, client: &http.Client{Timeout: 10 * time.Second, CheckRedirect: httpx.RefuseRedirects()}, logf: logf, attempts: map[string]attempt{}, challenges: map[string]time.Time{}}, nil
 }
 
 func (m *Manager) seal(v any) string {
@@ -127,10 +133,29 @@ func (m *Manager) Issue(email string, now time.Time) string {
 func (m *Manager) Verify(value string, now time.Time) (Session, bool) {
 	c := m.config()
 	var s Session
-	if !c.Ready() || !m.unseal(value, &s) || now.Unix() >= s.Exp || s.Generation != c.Generation || !Allowed(s.Email, c.Allowed) {
+	if !m.unseal(value, &s) || now.Unix() >= s.Exp || s.Generation != c.Generation {
+		return Session{}, false
+	}
+	if s.Passkey != "" {
+		// A passkey session lasts only while its credential stays registered.
+		if p, ok := c.Passkey(s.Passkey); !ok || p.Origin != s.Origin || s.Email != "" {
+			return Session{}, false
+		}
+		return s, true
+	}
+	if !c.Ready() || !Allowed(s.Email, c.Allowed) {
 		return Session{}, false
 	}
 	return s, true
+}
+
+// Actor is the audit identity of a session: the email, or the passkey's name.
+func (c Config) Actor(s Session) string {
+	if s.Passkey == "" {
+		return s.Email
+	}
+	p, _ := c.Passkey(s.Passkey)
+	return "passkey:" + p.Name
 }
 func (m *Manager) Session(r *http.Request) (Session, bool) {
 	cookie, err := r.Cookie(SessionCookie)
@@ -140,12 +165,15 @@ func (m *Manager) Session(r *http.Request) (Session, bool) {
 	return m.Verify(cookie.Value, time.Now())
 }
 
-func cookie(w http.ResponseWriter, c Config, name, value, path string, seconds int) {
-	http.SetCookie(w, &http.Cookie{Name: name, Value: value, Path: path, HttpOnly: true, Secure: strings.HasPrefix(c.PublicURL, "https://"), SameSite: http.SameSiteLaxMode, MaxAge: seconds})
+func cookie(w http.ResponseWriter, secure bool, name, value, path string, seconds int) {
+	http.SetCookie(w, &http.Cookie{Name: name, Value: value, Path: path, HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode, MaxAge: seconds})
 }
+func (c Config) secure() bool { return strings.HasPrefix(c.PublicURL, "https://") }
 
-// CSRF checks unsafe cookie-authorized requests against the configured origin.
-func CSRF(r *http.Request, c Config) bool {
+// CSRF checks an unsafe request authorized by session s: the page's header,
+// and, when the browser names an origin, the one the session belongs to. That
+// is the configured public URL, or for a passkey the origin it is bound to.
+func CSRF(r *http.Request, c Config, s Session) bool {
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
 		return true
 	}
@@ -156,8 +184,15 @@ func CSRF(r *http.Request, c Config) bool {
 		if len(origins) != 1 {
 			return false
 		}
-		u, err := url.Parse(c.PublicURL)
-		if err != nil || u == nil || origins[0] != u.Scheme+"://"+u.Host {
+		want := s.Origin
+		if s.Passkey == "" {
+			u, err := url.Parse(c.PublicURL)
+			if err != nil || u == nil {
+				return false
+			}
+			want = u.Scheme + "://" + u.Host
+		}
+		if origins[0] != want {
 			return false
 		}
 	}
@@ -165,13 +200,23 @@ func CSRF(r *http.Request, c Config) bool {
 }
 func (m *Manager) Logout(w http.ResponseWriter, r *http.Request) {
 	c := m.config()
-	if _, err := r.Cookie(SessionCookie); err == nil && !CSRF(r, c) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		io.WriteString(w, "{\"error\":\"missing CSRF header\"}\n")
-		return
+	secure := c.secure()
+	if ck, err := r.Cookie(SessionCookie); err == nil {
+		// The signature is enough to trust which origin the cookie names.
+		var s Session
+		if !m.unseal(ck.Value, &s) {
+			s = Session{}
+		}
+		if !CSRF(r, c, s) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			io.WriteString(w, "{\"error\":\"missing CSRF header\"}\n")
+			return
+		}
+		// Clear the cookie with the flag it was set with.
+		secure = secure || strings.HasPrefix(s.Origin, "https://")
 	}
-	cookie(w, c, SessionCookie, "", "/", -1)
+	cookie(w, secure, SessionCookie, "", "/", -1)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -215,7 +260,7 @@ func (m *Manager) Login(w http.ResponseWriter, r *http.Request) {
 	q.Set("code_challenge", base64.RawURLEncoding.EncodeToString(challenge[:]))
 	q.Set("code_challenge_method", "S256")
 	u.RawQuery = q.Encode()
-	cookie(w, c, stateCookie, m.seal(st), "/auth/", 600)
+	cookie(w, c.secure(), stateCookie, m.seal(st), "/auth/", 600)
 	http.Redirect(w, r, u.String(), http.StatusFound)
 }
 
@@ -253,7 +298,7 @@ func (m *Manager) fail(w http.ResponseWriter, r *http.Request, reason string) {
 func (m *Manager) Callback(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	c := m.config()
-	cookie(w, c, stateCookie, "", "/auth/", -1)
+	cookie(w, c.secure(), stateCookie, "", "/auth/", -1)
 	if !m.allowCallback(r.RemoteAddr, time.Now()) {
 		m.logf("browser sign-in failed: rate_limit")
 		w.Header().Set("Retry-After", "60")
@@ -297,6 +342,6 @@ func (m *Manager) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	session := Session{Email: email, Exp: time.Now().Add(time.Duration(c.SessionHours) * time.Hour).Unix(), Generation: c.Generation}
-	cookie(w, c, SessionCookie, m.seal(session), "/", c.SessionHours*3600)
+	cookie(w, c.secure(), SessionCookie, m.seal(session), "/", c.SessionHours*3600)
 	http.Redirect(w, r, SafeNext(st.Next), http.StatusFound)
 }

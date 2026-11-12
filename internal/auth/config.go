@@ -15,7 +15,9 @@ import (
 )
 
 // Config is a resolved snapshot. Generation changes whenever settings are saved.
+// Passkeys are the credentials that may sign in; they need no provider.
 type Config struct {
+	Passkeys        []Passkey
 	Enabled         bool
 	Issuer          string
 	ClientID        string
@@ -45,6 +47,15 @@ func (c Config) Provider() string {
 	return ""
 }
 func (c Config) Ready() bool { return c.Enabled && len(c.Validate(true)) == 0 }
+
+// sessionHours is the session lifetime for a passkey, which signs in whether
+// or not the provider settings validate.
+func (c Config) sessionHours() int {
+	if c.SessionHours < 1 || c.SessionHours > 720 {
+		return 168
+	}
+	return c.SessionHours
+}
 
 // ValidURL permits TLS everywhere and HTTP only to a literal loopback or localhost.
 func ValidURL(raw string) bool {

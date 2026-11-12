@@ -29,6 +29,12 @@ repository.
 and are limited to 20 at a time and 10 tries a minute per address. Redeeming one
 hands out the shared agent token.
 
+**Passkeys** are added with the API token and grant what a signed-in browser
+has, which includes update offers and restarts where a session may do them. So
+with passkeys in use, whoever holds the API token can reach those too. Each
+passkey is accepted only from the HTTPS address it was added on. Removing one
+ends its sessions.
+
 **Behind a reverse proxy**, set `PUBLIC_URL` to your HTTPS address. Set
 `TRUSTED_PROXY=1` only if the proxy overwrites `X-Forwarded-*` headers and the
 API cannot be reached directly.
