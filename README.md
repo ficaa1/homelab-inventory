@@ -43,7 +43,8 @@ More options, upgrades and removal: [Install](docs/install.md).
 - **History**: what changed on a host, and package versions.
 - **Plugins** for media, household Taste recommendations, Archive and Tdarr
   controls, uploads, network health and speed tests, Cloudflare and security
-  canaries, plus Dusk TV pairing. Enable only the integrations you use.
+  canaries, [distro package vulnerabilities](docs/cve.md), plus Dusk TV pairing.
+  Enable only the integrations you use.
   [Plugins](docs/plugins.md). Archive and Tdarr use the included
   [media-policy service](deploy/mediapolicy/README.md) for library policy and state.
 - **Encrypted backups** in Admin, with previewed restore and private-dashboard

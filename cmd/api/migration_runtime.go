@@ -52,6 +52,7 @@ func (s *server) observePluginRequests(next http.Handler) http.Handler {
 }
 
 func (s *server) bindNetworkInventory() {
+	s.plugins.BindPackageSource(s.pluginPackageHosts)
 	s.plugins.BindVPNPanelSource(func(ctx context.Context) {
 		if s.vpnWatch != nil {
 			go func() {

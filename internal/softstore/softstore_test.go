@@ -145,3 +145,25 @@ func TestRoundTripAndChangeOnlyHistory(t *testing.T) {
 		t.Fatal("forget removed shared blobs")
 	}
 }
+
+func TestFullSetsRetainsSourcesAndUnavailableLists(t *testing.T) {
+	s := New(t.TempDir())
+	sets, _, err := s.FullSets("missing")
+	if err != nil || sets != nil {
+		t.Fatalf("uncollected: %#v %v", sets, err)
+	}
+	now := time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC)
+	inv := &inventory.Inventory{Host: inventory.Host{Hostname: "example"}, CollectedAt: now, Software: &inventory.Software{CollectedAt: now, Host: inventory.PackageSet{Status: "ok", Packages: []inventory.Package{}}, Images: []inventory.ImagePackages{{ImageID: "sha256:example", ImageRef: "example:1", Containers: []string{"web"}, PackageSet: inventory.PackageSet{Status: "ok", Packages: []inventory.Package{{Name: "binary", Version: "1+b1", Source: "source", SourceVersion: "1"}}}}}}}
+	if err := s.Ingest(inv); err != nil {
+		t.Fatal(err)
+	}
+	sets, at, err := s.FullSets("example")
+	if err != nil || !at.Equal(now) || len(sets) != 2 || sets[0].Packages == nil || len(sets[0].Packages) != 0 || sets[1].Packages[0].SourceVersion != "1" || sets[1].Scope != "image:sha256:example" {
+		t.Fatalf("full sets: %+v %v %v", sets, at, err)
+	}
+	sets[1].Packages[0].Name = "modified"
+	again, _, err := s.FullSets("example")
+	if err != nil || again[1].Packages[0].Name != "binary" {
+		t.Fatal("projection aliases stored data", err)
+	}
+}

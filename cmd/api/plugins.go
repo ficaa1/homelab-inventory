@@ -12,6 +12,7 @@ import (
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
 	"github.com/ficaa1/homelab-inventory/internal/plugins/archive"
 	"github.com/ficaa1/homelab-inventory/internal/plugins/cloudflare"
+	"github.com/ficaa1/homelab-inventory/internal/plugins/cve"
 	"github.com/ficaa1/homelab-inventory/internal/plugins/dusk"
 	"github.com/ficaa1/homelab-inventory/internal/plugins/media"
 	"github.com/ficaa1/homelab-inventory/internal/plugins/network"
@@ -24,7 +25,7 @@ import (
 // builtInPlugins is the explicit composition root. No implicit registration or
 // external plugin loading is supported.
 func builtInPlugins() []plugin.Builtin {
-	return []plugin.Builtin{{ID: "tdarr", New: tdarr.New}, {ID: "security", New: security.New}, {ID: "cloudflare", New: cloudflare.New}, {ID: "taste", New: taste.New}, {ID: "archive", New: archive.New}, {ID: "dusk", New: dusk.New}, {ID: "media", New: media.New}, {ID: "uploads", New: uploads.New}, {ID: "network", New: network.New}}
+	return []plugin.Builtin{{ID: "cve", New: cve.New}, {ID: "tdarr", New: tdarr.New}, {ID: "security", New: security.New}, {ID: "cloudflare", New: cloudflare.New}, {ID: "taste", New: taste.New}, {ID: "archive", New: archive.New}, {ID: "dusk", New: dusk.New}, {ID: "media", New: media.New}, {ID: "uploads", New: uploads.New}, {ID: "network", New: network.New}}
 }
 func openPlugins(data string, logger *log.Logger) (*plugin.Registry, error) {
 	r, err := plugin.Open(data, builtInPlugins(), logger)

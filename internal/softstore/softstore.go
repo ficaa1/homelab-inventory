@@ -345,3 +345,18 @@ func (s *Store) Search(hosts []string, name string) (packages.SearchResult, erro
 	}
 	return out, nil
 }
+
+// FullSets loads the latest complete package lists without pagination. A nil
+// list means software has never been collected; a collected empty set stays empty.
+func (s *Store) FullSets(host string) ([]packages.Set, time.Time, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	inv, _, err := s.inventory(host)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	if inv.Software == nil {
+		return nil, inv.CollectedAt, nil
+	}
+	return packages.Sets(inv.Software), inv.CollectedAt, nil
+}
