@@ -358,8 +358,13 @@ func TestSuppressionsExpiryPersistenceAndAlerts(t *testing.T) {
 	}
 	h.now = h.now.Add(24 * time.Hour)
 	alerts, err = p.Alerts(context.Background())
-	if err != nil || len(alerts) != 1 || alerts[0].Rule != "kev:"+primary || alerts[0].Severity != "critical" {
+	if err != nil || len(alerts) == 0 {
 		t.Fatal(alerts, err)
+	}
+	for _, a := range alerts {
+		if a.Rule != "kev" || a.Severity != "critical" || !strings.HasPrefix(a.Summary, a.Subject+": 1 CVE known exploited, 1 fixable ("+primary+")") || a.Detail != primary {
+			t.Fatalf("%+v", a)
+		}
 	}
 	row = decodeAPI[VulnRow](t, api("DELETE", ""))
 	if row.Suppressed != nil {
@@ -732,4 +737,50 @@ func TestRestartKeepsScheduleAndSettingsChangeRescans(t *testing.T) {
 		t.Fatalf("changed settings did not rescan: %s", state)
 	}
 	awaitIdle(t, p2)
+}
+
+func TestAlertsGroupByHost(t *testing.T) {
+	h := &testHost{dir: t.TempDir(), now: time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)}
+	known := map[string]KEV{}
+	for _, id := range []string{"CVE-2026-0001", "CVE-2026-0002", "CVE-2026-0003", "CVE-2026-0004"} {
+		known[id] = KEV{}
+	}
+	p := &Integration{host: h, cfg: config{KEV: "https://kev.example", AlertKEV: true, AlertCritical: true}, suppressions: map[string]Suppression{}, enrich: enrichment{KEV: known, EPSS: map[string]EPSS{}}}
+	affect := func(fixable bool, hosts ...string) []Affected {
+		out := []Affected{}
+		for _, h := range hosts {
+			out = append(out, Affected{Host: h, Fixable: fixable})
+		}
+		return out
+	}
+	for _, id := range []string{"CVE-2026-0001", "CVE-2026-0002", "CVE-2026-0003"} {
+		p.result.Vulns = append(p.result.Vulns, Vulnerability{VulnRow: VulnRow{ID: id, Severity: "high", Fix: "full"}, Affected: affect(true, "plex", "pve")})
+	}
+	p.result.Vulns = append(p.result.Vulns,
+		Vulnerability{VulnRow: VulnRow{ID: "CVE-2026-0004", Severity: "high", Fix: "none"}, Affected: affect(false, "truenas")},
+		Vulnerability{VulnRow: VulnRow{ID: "CVE-2026-0005", Severity: "critical", Fix: "full"}, Affected: affect(true, "plex")},
+		Vulnerability{VulnRow: VulnRow{ID: "CVE-2026-0006", Severity: "critical", Fix: "none"}, Affected: affect(false, "plex")})
+	got := map[string]plugin.Alert{}
+	alerts, err := p.Alerts(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range alerts {
+		got[a.Rule+"/"+a.Subject] = a
+	}
+	if len(got) != 4 {
+		t.Fatalf("%+v", alerts)
+	}
+	if a := got["kev/plex"]; a.Severity != "critical" || a.Summary != "plex: 3 CVEs known exploited, 3 fixable (CVE-2026-0001, CVE-2026-0002 +1)" {
+		t.Fatalf("%+v", a)
+	}
+	if a := got["kev/truenas"]; a.Severity != "warning" || a.Summary != "truenas: 1 CVE known exploited, 0 fixable (CVE-2026-0004)" {
+		t.Fatalf("%+v", a)
+	}
+	if a := got["critical/plex"]; a.Severity != "warning" || a.Summary != "plex: 1 critical CVE with a fix available (CVE-2026-0005)" {
+		t.Fatalf("%+v", a)
+	}
+	if _, ok := got["kev/pve"]; !ok {
+		t.Fatal("pve missing")
+	}
 }

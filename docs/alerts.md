@@ -4,6 +4,10 @@ The alerts below are built in. To hide one you already know about, **silence** i
 from the alert (optionally until a date, with a reason). A silenced alert stays
 visible but stops counting and notifying; it does not fix anything.
 
+Notifications go out only when an alert starts, clears or gets worse. Each run
+sends at most one message for new alerts and one for cleared ones, each listing
+up to 11 alerts and then "…and N more".
+
 | Rule | Severity | Trigger |
 | --- | --- | --- |
 | host.stale | warning / critical | Last inventory older than 45 minutes / 2 hours. |

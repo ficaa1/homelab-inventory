@@ -48,8 +48,8 @@ the scan instead, since that points at an OSV outage.
 | `epss_url` | `https://api.first.org/data/v1/epss` | FIRST API URL; empty disables EPSS |
 | `interval_hours` | `12` | Scan interval, from 1 to 168 hours |
 | `include_images` | `true` | Scan sampled container package sets as well as hosts |
-| `alert_kev` | `true` | One alert per unsuppressed known exploited CVE |
-| `alert_critical` | `false` | Alert on critical CVEs with a published distro fix |
+| `alert_kev` | `true` | One alert per host with unsuppressed known exploited CVEs |
+| `alert_critical` | `false` | One alert per host with critical CVEs that have a published distro fix |
 
 URLs must use HTTP or HTTPS without credentials, query parameters or fragments.
 Settings validation performs no network I/O. Changing settings restarts the worker.
@@ -117,9 +117,14 @@ stop applying on reads, without waiting for another scan. Suppressed CVEs are
 excluded from totals, package/host counts and alerts; the vulnerability filter can
 show suppressed records or all records. Deleting a suppression restores the CVE.
 
-KEV alerts are critical when a fix exists for any occurrence, otherwise warning.
-Optional critical-severity alerts require a fix and are warning. At most 50 alerts
-are returned; the core handles stable keys and transition-only notifications.
+Alerts are per host, keyed by host, never per CVE: a lab carries dozens of known
+exploited CVEs and a line for each makes notifications unreadable (SMS gateways
+reject them). The summary counts the host's CVEs and names the two with the
+highest priority; the detail lists up to 40. A host's KEV alert is critical when
+any of its known exploited CVEs has a fix, otherwise warning. Critical-severity
+alerts are optional, count only fixable CVEs that are not known exploited, and
+are warning. A new CVE on a host that is already alerting changes the summary
+but does not notify again; the core notifies only on transitions.
 
 EOL flags use a static table covering Debian 10–13 (including LTS), Ubuntu
 20.04–26.04 (standard support) and Alpine 3.17–3.24. Future support dates are

@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -412,13 +413,22 @@ func (p *Integration) View(_ context.Context, name string, _ url.Values) (plugin
 		return time.Time{}
 	}(), RefreshSeconds: 30, Blocks: []plugin.Block{{Type: "stats", Items: []plugin.Item{{Label: "Vulnerabilities", Value: strconv.Itoa(o.Totals.Vulns)}, {Label: "Known exploited", Value: strconv.Itoa(o.Totals.KEV)}, {Label: "Fixable", Value: strconv.Itoa(o.Totals.Fixable)}}}, {Type: "notice", Tone: "info", Text: "Distro source-package advisories from OSV. Scan state: " + state + ". Open the Vulnerabilities page for triage and package details."}}}, nil
 }
+
+// Alerts raise one condition per host and kind, not one per CVE: a lab
+// carries dozens of known-exploited CVEs, and a notification per CVE is a wall
+// of text that SMS gateways reject. A newly exploited CVE on a host that is
+// already alerting updates the summary without paging again.
 func (p *Integration) Alerts(ctx context.Context) ([]plugin.Alert, error) {
 	p.mu.RLock()
 	r := p.snapshotLocked()
 	cfg := p.cfg
 	p.mu.RUnlock()
+	if !cfg.AlertKEV && !cfg.AlertCritical {
+		return []plugin.Alert{}, nil
+	}
 	sortVulns(r.Vulns, "priority", "desc")
-	out := []plugin.Alert{}
+	type hostVulns struct{ kev, kevFix, crit []string }
+	byHost := map[string]*hostVulns{}
 	for _, v := range r.Vulns {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -426,36 +436,64 @@ func (p *Integration) Alerts(ctx context.Context) ([]plugin.Alert, error) {
 		if v.Suppressed != nil {
 			continue
 		}
-		fix := v.Fix != "none"
-		suffix := ""
-		if fix {
-			suffix = " · fix available"
-		}
-		if cfg.AlertKEV && v.KEV != nil {
-			sev := "warning"
-			if fix {
-				sev = "critical"
+		fixOn := map[string]bool{}
+		for _, a := range v.Affected {
+			if byHost[a.Host] == nil {
+				byHost[a.Host] = &hostVulns{}
 			}
-			out = append(out, plugin.Alert{Rule: "kev:" + v.ID, Subject: v.ID, Severity: sev, Summary: fmt.Sprintf("%s (KEV) on %s%s", v.ID, hostCount(v.Hosts), suffix)})
+			fixOn[a.Host] = fixOn[a.Host] || a.Fixable
 		}
-		if len(out) >= 50 {
-			break
+		for host, fixable := range fixOn {
+			h := byHost[host]
+			if v.KEV != nil {
+				h.kev = append(h.kev, v.ID)
+				if fixable {
+					h.kevFix = append(h.kevFix, v.ID)
+				}
+			} else if v.Severity == "critical" && fixable {
+				h.crit = append(h.crit, v.ID)
+			}
 		}
-		if cfg.AlertCritical && v.Severity == "critical" && fix {
-			out = append(out, plugin.Alert{Rule: "critical:" + v.ID, Subject: v.ID, Severity: "warning", Summary: fmt.Sprintf("%s (critical) on %s%s", v.ID, hostCount(v.Hosts), suffix)})
+	}
+	hosts := make([]string, 0, len(byHost))
+	for host := range byHost {
+		hosts = append(hosts, host)
+	}
+	sort.Strings(hosts)
+	out := []plugin.Alert{}
+	for _, host := range hosts {
+		h := byHost[host]
+		if cfg.AlertKEV && len(h.kev) > 0 {
+			sev, ids := "warning", h.kev
+			if len(h.kevFix) > 0 {
+				sev, ids = "critical", h.kevFix
+			}
+			out = append(out, plugin.Alert{Rule: "kev", Subject: host, Severity: sev,
+				Summary: fmt.Sprintf("%s: %s known exploited, %d fixable (%s)", host, plural(len(h.kev), "CVE"), len(h.kevFix), idList(ids, 2)),
+				Detail:  idList(h.kev, 40)})
 		}
-		if len(out) >= 50 {
-			break
+		if cfg.AlertCritical && len(h.crit) > 0 {
+			out = append(out, plugin.Alert{Rule: "critical", Subject: host, Severity: "warning",
+				Summary: fmt.Sprintf("%s: %s with a fix available (%s)", host, plural(len(h.crit), "critical CVE"), idList(h.crit, 2)),
+				Detail:  idList(h.crit, 40)})
 		}
 	}
 	return out, nil
 }
 
-func hostCount(n int) string {
+func plural(n int, word string) string {
 	if n == 1 {
-		return "1 host"
+		return "1 " + word
 	}
-	return strconv.Itoa(n) + " hosts"
+	return strconv.Itoa(n) + " " + word + "s"
+}
+
+// idList names the first n IDs, highest priority first, and counts the rest.
+func idList(ids []string, n int) string {
+	if len(ids) <= n {
+		return strings.Join(ids, ", ")
+	}
+	return strings.Join(ids[:n], ", ") + fmt.Sprintf(" +%d", len(ids)-n)
 }
 
 var errInventory = errors.New("package inventory unavailable")
