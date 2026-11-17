@@ -411,3 +411,24 @@ func TestAgentHealthTransitionsStayQuiet(t *testing.T) {
 		t.Fatal("missing recovery", cap.msgs)
 	}
 }
+
+func TestMessagesCapLongBatches(t *testing.T) {
+	var c Change
+	for i := 0; i < 30; i++ {
+		c.New = append(c.New, Entry{Host: "cve", Rule: "cve.kev", Subject: fmt.Sprintf("host-%02d", i), Level: alert.LevelCritical, Message: "known exploited"})
+		c.Resolved = append(c.Resolved, Entry{Host: "cve", Rule: "cve.old", Subject: fmt.Sprintf("host-%02d", i), Level: alert.LevelWarning, Message: "old"})
+	}
+	msgs := Messages(c, time.Now())
+	if len(msgs) != 2 {
+		t.Fatal(msgs)
+	}
+	for _, m := range msgs {
+		lines := strings.Split(m.Body, "\n")
+		if len(lines) != maxLines || lines[maxLines-1] != "- …and 19 more" {
+			t.Fatalf("%q", m.Body)
+		}
+	}
+	if msgs[0].Title != "homelab: 30 new on cve" {
+		t.Fatal(msgs[0].Title)
+	}
+}

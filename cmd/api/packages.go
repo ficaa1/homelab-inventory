@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ficaa1/homelab-inventory/internal/packages"
+	"github.com/ficaa1/homelab-inventory/internal/plugin"
 	"github.com/ficaa1/homelab-inventory/internal/softstore"
 	"github.com/ficaa1/homelab-inventory/internal/store"
 )
@@ -95,4 +96,40 @@ func (s *server) handlePackageChanges(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// pluginPackageHosts passes only package facts through the plugin boundary.
+func (s *server) pluginPackageHosts() ([]plugin.PackageHost, error) {
+	hosts, err := s.store.Hosts()
+	if err != nil {
+		return nil, err
+	}
+	out := []plugin.PackageHost{}
+	for _, host := range hosts {
+		if _, err := s.store.History(host); errors.Is(err, store.ErrNotFound) {
+			continue
+		} else if err != nil {
+			return nil, err
+		}
+		sets, at, err := s.packageStore().FullSets(host)
+		if err != nil {
+			return nil, err
+		}
+		h := plugin.PackageHost{Host: host, CollectedAt: at}
+		if sets != nil {
+			h.Sets = []plugin.PackageSet{}
+		}
+		for _, set := range sets {
+			p := plugin.PackageSet{Scope: set.Scope, ImageRef: set.ImageRef, Containers: append([]string{}, set.Containers...), Manager: set.Manager, Status: set.Status, Distro: plugin.PackageDistro{ID: set.Distro.ID, VersionID: set.Distro.VersionID, Codename: set.Distro.Codename}}
+			if set.Packages != nil {
+				p.Packages = []plugin.Package{}
+			}
+			for _, row := range set.Packages {
+				p.Packages = append(p.Packages, plugin.Package{Name: row.Name, Version: row.Version, Arch: row.Arch, Source: row.Source, SourceVersion: row.SourceVersion})
+			}
+			h.Sets = append(h.Sets, p)
+		}
+		out = append(out, h)
+	}
+	return out, nil
 }

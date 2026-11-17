@@ -178,23 +178,24 @@ func Messages(c Change, now time.Time) []Message {
 	if firing := append(append([]Entry{}, c.New...), c.Escalated...); len(firing) > 0 {
 		sortEntries(firing)
 		worst := firing[0].Level
-		var b strings.Builder
+		var lines []string
 		for _, e := range c.New {
-			fmt.Fprintf(&b, "- **%s** [%s] %s\n", e.Host, e.Level, e.Message)
+			lines = append(lines, fmt.Sprintf("- **%s** [%s] %s", e.Host, e.Level, e.Message))
 		}
 		for _, e := range c.Escalated {
-			fmt.Fprintf(&b, "- **%s** [%s, was lower] %s\n", e.Host, e.Level, e.Message)
+			lines = append(lines, fmt.Sprintf("- **%s** [%s, was lower] %s", e.Host, e.Level, e.Message))
 		}
 		out = append(out, Message{
 			Title: fmt.Sprintf("homelab: %s", summarise(firing, "new")),
-			Body:  strings.TrimRight(b.String(), "\n"),
+			Body:  capLines(lines),
 			Type:  appriseType(worst),
 		})
 	}
 
 	if len(c.Resolved) > 0 {
-		var b strings.Builder
+		var lines []string
 		for _, e := range c.Resolved {
+			var b strings.Builder
 			// "cleared —" in front of the original wording, because the stored
 			// Message describes the problem ("unit nslcd.service has failed")
 			// and reads as a fresh failure without it. Keeping the original
@@ -204,15 +205,28 @@ func Messages(c Change, now time.Time) []Message {
 			if !e.FirstSeen.IsZero() {
 				fmt.Fprintf(&b, " _(outstanding %s)_", roughly(now.Sub(e.FirstSeen)))
 			}
-			b.WriteString("\n")
+			lines = append(lines, b.String())
 		}
 		out = append(out, Message{
 			Title: fmt.Sprintf("homelab: %s", summarise(c.Resolved, "resolved")),
-			Body:  strings.TrimRight(b.String(), "\n"),
+			Body:  capLines(lines),
 			Type:  "success",
 		})
 	}
 	return out
+}
+
+// maxLines bounds one notification's body. Past it the reader is told how
+// many more there are and finds them on the Alerts page; an unbounded list
+// is unreadable on a phone and SMS gateways reject it outright.
+const maxLines = 12
+
+func capLines(lines []string) string {
+	if len(lines) > maxLines {
+		more := len(lines) - (maxLines - 1)
+		lines = append(lines[:maxLines-1:maxLines-1], fmt.Sprintf("- …and %d more", more))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func summarise(es []Entry, verb string) string {

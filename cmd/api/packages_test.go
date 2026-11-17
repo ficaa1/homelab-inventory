@@ -159,3 +159,37 @@ func TestPackageChangesEndpoint(t *testing.T) {
 		t.Fatalf("changes: %s", rec.Body)
 	}
 }
+
+func TestPluginPackageProjectionIncludesOnlyStoredHostsAndPackageFacts(t *testing.T) {
+	s := testServer(t, "inventory-token")
+	now := time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC)
+	for _, name := range []string{"host-a", "host-b"} {
+		inv := &inventory.Inventory{SchemaVersion: inventory.SchemaVersion, Host: inventory.Host{Hostname: name}, CollectedAt: now}
+		if _, err := s.store.Save(inv); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(s.store.Dir(), "auxiliary"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	inv := &inventory.Inventory{Host: inventory.Host{Hostname: "host-a"}, CollectedAt: now, Software: &inventory.Software{CollectedAt: now, Host: inventory.PackageSet{Status: "ok", Manager: "dpkg", Distro: inventory.Distro{ID: "debian", VersionID: "12", Codename: "bookworm"}, Packages: []inventory.Package{{Name: "binary", Version: "1+b1", Arch: "amd64", Source: "source", SourceVersion: "1"}}}, Images: []inventory.ImagePackages{{ImageID: "sha256:example", ImageRef: "example:1", Containers: []string{"web"}, PackageSet: inventory.PackageSet{Status: "failed", Packages: []inventory.Package{}}}}, Runtimes: []inventory.RuntimeVersion{{Name: "private-runtime"}}}}
+	if err := s.packageStore().Ingest(inv); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.pluginPackageHosts()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Host != "host-a" || !got[0].CollectedAt.Equal(now) || len(got[0].Sets) != 2 || got[1].Sets != nil {
+		t.Fatalf("projection: %+v", got)
+	}
+	set := got[0].Sets[0]
+	image := got[0].Sets[1]
+	if set.Packages[0].SourceVersion != "1" || set.Packages[0].Arch != "amd64" || image.Scope != "image:sha256:example" || image.Status != "failed" || image.Packages == nil {
+		t.Fatalf("projection facts: %+v", got)
+	}
+	b, _ := json.Marshal(got)
+	if bytes.Contains(b, []byte("private-runtime")) || bytes.Contains(b, []byte("sample_container")) {
+		t.Fatalf("private/full inventory fields crossed boundary: %s", b)
+	}
+}
