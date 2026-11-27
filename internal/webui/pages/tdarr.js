@@ -266,6 +266,7 @@
     var save = h("button", { id: "tdarr-season-add", class: "btn primary", type: "button", text: "Save", disabled: true, onclick: function () {
       if (draft) st.selected[k] = draft; else delete st.selected[k];
       HI().closeDrawer(); renderRows();
+      HI().toast(draft ? "Season selection saved" : "Season selection cleared", { kind: "ok" });
     } });
     var boxes = (i.seasons || []).map(function (s) {
       var c = h("input", { type: "checkbox", name: "tdarr-season", value: String(s.season), checked: !!chosen && chosen.selection.seasons.indexOf(s.season) >= 0, onchange: inspect });
@@ -355,7 +356,12 @@
       clearTimeout(st.expiry); busy(true);
       queue.disabled = true; queue.textContent = "Queueing…";
       HI().send(ID, "batch/execute", "POST", { plan: v.plan, hash: v.hash, confirmation_token: v.confirmation_token, confirm: true }).then(function (r) {
+        if (!r || r.status !== "queued" || !(r.queued_files > 0)) {
+          st.unknown = true; st.notice = "Outcome unknown · inspect the sidecar and Tdarr before another batch";
+          return;
+        }
         st.selected = {}; st.notice = "Queued · " + num(r.queued_files) + " files";
+        return "queued";
       }, function (e) {
         if (e.canceled) { st.notice = ""; return "canceled"; }
         if (e.status === 409) return "again";
@@ -366,7 +372,10 @@
         st.busy = false;
         if (outcome === "canceled") { queue.disabled = false; queue.textContent = "Queue"; return; }
         if (outcome === "again") { if (epoch === st.epoch && drawerOpen(box)) again("Plan changed or expired"); return; }
-        if (epoch === st.epoch) drawer("Tdarr batch", [h("h3", { text: st.notice }),
+        if (outcome === "queued") {
+          if (epoch === st.epoch && drawerOpen(box)) HI().closeDrawer();
+          HI().toast(st.notice, { kind: "ok" });
+        } else if (epoch === st.epoch && drawerOpen(box)) drawer("Tdarr batch", [h("h3", { text: st.notice }),
           h("div", { class: "actions" }, [h("button", { id: "tdarr-result-close", class: "btn", type: "button", text: "Close", onclick: HI().closeDrawer })])]);
         if (live) { render(); loadStatus(); }
       });

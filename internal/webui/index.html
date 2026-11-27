@@ -826,6 +826,31 @@ pre.code {
   .drawer h3 { margin-right: 0; }
 }
 
+/* ------------------------------------------------------------------ toast */
+.toast {
+  position: fixed; z-index: 82; right: 24px; bottom: calc(84px + var(--safe-b)); width: 360px;
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  background: var(--surface-3); border: 1px solid var(--line-2); border-radius: 14px; box-shadow: var(--shadow);
+}
+.toast-icon {
+  flex: none; display: grid; place-items: center; width: 22px; height: 22px;
+  border-radius: 50%; background: var(--surface-2); color: var(--text-3);
+}
+.toast-icon .ic { width: 14px; height: 14px; }
+.toast.ok .toast-icon { color: var(--ok); background: var(--ok-soft); }
+.toast.error .toast-icon { color: var(--crit); background: var(--crit-soft); }
+.toast-copy { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.toast-title { font-size: 13.5px; font-weight: 600; }
+.toast-sub { font-size: 13px; color: var(--text-3); }
+.toast-action {
+  flex: none; min-height: 44px; padding: 0 6px; border: 0; border-radius: var(--r);
+  color: var(--accent); background: none; font-size: 13.5px; font-weight: 600; cursor: pointer;
+}
+.toast-action:active { background: var(--surface-2); }
+@media (max-width: 640px) {
+  .toast { left: 12px; right: 12px; width: auto; bottom: calc(var(--nav-h) + var(--safe-b) + 12px); }
+}
+
 /* ------------------------------------------------------------------ host view */
 .hhead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
 .hhead h2 { margin: 0; overflow-wrap: anywhere; }
@@ -2061,6 +2086,12 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   </div>
   <div id="drawer-body"></div>
 </aside>
+<div id="toast-status" role="status" aria-live="polite" class="sr-only"></div>
+<div id="toast" class="toast hidden">
+  <span id="toast-icon" class="toast-icon" aria-hidden="true"></span>
+  <div class="toast-copy"><div id="toast-title" class="toast-title"></div><div id="toast-sub" class="toast-sub"></div></div>
+  <button id="toast-action" class="toast-action hidden" type="button"></button>
+</div>
 <input id="up-input" type="file" multiple hidden>
 <button id="up-fab" class="up-fab hidden" type="button" aria-label="Upload" title="Upload">
   <svg class="up-ring" viewBox="0 0 62 62" aria-hidden="true"><circle class="trk" cx="31" cy="31" r="29"/><circle class="bar" id="up-ring-bar" cx="31" cy="31" r="29"/></svg>
@@ -3508,7 +3539,19 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       if (r.status === 401) { showGate(true); closeDrawer(); return; }
       if (r.status === 409 && r.body.preview) { r.body.preview.host = p.host; showRestartPreview(r.body.preview, session, true); return; }
       if (r.body.results && r.body.result) {
-        if (restartVisible(session)) restartSheet(p.target, '<div role="status">' + restartStatus(r.body.result) + '</div>' + (r.body.reason ? '<div class="sub">' + esc(r.body.reason) + '</div>' : '') + restartResults(r.body.results));
+        if (restartVisible(session)) {
+          var result = r.body.result;
+          var details = '<div role="status">' + restartStatus(result) + '</div>' +
+            (r.body.reason ? '<div class="sub">' + esc(r.body.reason) + '</div>' : '') + restartResults(r.body.results);
+          if (r.status < 400 && p.kind !== "vpn_reconnect" && (result === "restarted" || result === "ok")) {
+            var count = r.body.results.length;
+            closeDrawer();
+            toast(p.target + " restarted", { kind: "ok", sub: count + (count === 1 ? " container" : " containers"),
+              action: { label: "Details", fn: function () { restartSheet(p.target, details); } } });
+          } else {
+            restartSheet(p.target, details);
+          }
+        }
         loadActionLog();
         return;
       }
@@ -4349,8 +4392,10 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
 
   function curate(key, body) {
-    write("/services/" + encodeURIComponent(key), "PUT", body)
-      .then(applyCatalog).catch(writeError);
+    write("/services/" + encodeURIComponent(key), "PUT", body).then(function (catalog) {
+      applyCatalog(catalog);
+      toast("Service saved", { kind: "ok" });
+    }).catch(writeError);
   }
 
   function forget(key) {
@@ -4675,6 +4720,64 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     return html + '</div>';
   }
 
+  // ------------------------------------------------------------ toast
+
+  var toastEl = $("toast"), toastAction = $("toast-action"), toastTimer, toastUntil, toastRemaining;
+  var toastHovered = false, toastFocused = false, toastActive = false;
+
+  function dismissToast() {
+    clearTimeout(toastTimer);
+    toastTimer = null;
+    toastActive = false;
+    $("toast-status").textContent = "";
+    conceal(toastEl, reducedMotion.matches ? FADE_OUT :
+      [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(8px)" }], motion.d1, null, true);
+  }
+
+  function timeToast() {
+    if (!toastActive) return;
+    if (toastTimer != null) {
+      clearTimeout(toastTimer);
+      toastRemaining = Math.max(0, toastUntil - performance.now());
+      toastTimer = null;
+    }
+    if (toastHovered || toastFocused) return;
+    toastUntil = performance.now() + toastRemaining;
+    toastTimer = setTimeout(dismissToast, toastRemaining);
+  }
+
+  function toast(title, opts) {
+    opts = opts || {};
+    var kind = opts.kind === "ok" || opts.kind === "error" ? opts.kind : "info";
+    var action = opts.action;
+    $("toast-icon").replaceChildren(iconNode(kind === "ok" ? "check" : kind === "error" ? "x" : "info", "sm"));
+    toastEl.classList.remove("ok", "error", "info");
+    toastEl.classList.add(kind);
+    $("toast-title").textContent = title;
+    $("toast-sub").textContent = opts.sub || "";
+    toastAction.textContent = action ? action.label : "";
+    toastAction.classList.toggle("hidden", !action);
+    toastAction.onclick = action ? function () { dismissToast(); action.fn(); } : null;
+
+    clearTimeout(toastTimer);
+    toastTimer = null;
+    toastRemaining = opts.ms == null ? 4000 : opts.ms;
+    toastActive = true;
+    reveal(toastEl, reducedMotion.matches ? FADE_IN :
+      [{ opacity: 0, transform: "translateY(12px)" }, { opacity: 1, transform: "none" }], motion.d2, motion.out, true);
+    toastHovered = matchMedia("(hover: hover) and (pointer: fine)").matches && toastEl.matches(":hover");
+    toastFocused = toastEl.contains(document.activeElement);
+    $("toast-status").textContent = title + (opts.sub ? ". " + opts.sub : "");
+    timeToast();
+  }
+
+  toastEl.addEventListener("pointerenter", function (e) {
+    if (e.pointerType !== "touch") { toastHovered = true; timeToast(); }
+  });
+  toastEl.addEventListener("pointerleave", function () { toastHovered = false; timeToast(); });
+  toastEl.addEventListener("focusin", function () { toastFocused = true; timeToast(); });
+  toastEl.addEventListener("focusout", function (e) { toastFocused = toastEl.contains(e.relatedTarget); timeToast(); });
+
   // ------------------------------------------------------------ drawer
 
   var drawer = $("drawer"), scrim = $("scrim"), drawerBody = $("drawer-body"), drawerHead = $("drawer-head");
@@ -4952,6 +5055,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         reason: $("s-reason").value.trim(), for: $("s-for").value
       }).then(function () {
         closeDrawer();
+        toast("Silence saved", { kind: "ok" });
         return Promise.all([api("/alerts"), api("/silences")]).then(function (r) {
           data.alerts = r[0]; data.silences = r[1]; renderKPIs(); renderAlerts();
           if (route.view === "host" && hostCache[route.host]) renderHost(route.host);
@@ -4975,6 +5079,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     write("/silences/" + encodeURIComponent(id), "DELETE")
       .then(function () {
         closeDrawer();
+        toast("Silence lifted", { kind: "ok" });
         return Promise.all([api("/alerts"), api("/silences")]).then(function (r) {
           data.alerts = r[0]; data.silences = r[1]; renderKPIs(); renderAlerts();
           if (route.view === "host" && hostCache[route.host]) renderHost(route.host);
@@ -9162,7 +9267,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   window.HI = {
     h: h, str: str, esc: esc, ago: ago, fromNow: fromNow, bytes: bytes, dur: dur,
     iconNode: iconNode, pill: pill, stateBox: stateBox, notice: notice, skeleton: skeleton,
-    openDrawer: openDrawer, closeDrawer: closeDrawer, go: go,
+    openDrawer: openDrawer, closeDrawer: closeDrawer, toast: toast, go: go,
     // GET and mutation helpers for the plugin's own API; a 401 opens the gate.
     get: function (id, path, signal) { return api(pagePath(id, path), signal).catch(pageFail); },
     // opts.operator sends the operator credential (prompted once per session)

@@ -444,6 +444,12 @@
         HI.send(ID, path, "POST", body).then(function (r) {
           if (req !== request || !drawerOpen()) return;
           r = r || {};
+          if (r.applied === true && !r.error) {
+            HI.closeDrawer();
+            HI.toast("Archive action applied", { kind: "ok", sub: r.message });
+            pollNow();
+            return;
+          }
           sheet("<h3>" + head + '</h3><div class="note">' + esc(r.message || r.error || (r.applied ? "Applied." : "The service returned without applying the plan.")) + "</div>");
           pollNow();
         }).catch(function (err) {
@@ -631,7 +637,7 @@
       // Search only seasons that were not already chosen.
       var seasons = it.kind === "radarr" ? [0] : chosen.filter(function (n) { return before.indexOf(n) < 0; });
       $("library-apply").disabled = true;
-      var tagged = false, note = "";
+      var tagged = false, searchFailed = false, note = "";
       var body = it.kind === "sonarr" && !untag ? { kind: it.kind, id: it.id, archive: true, fourK: fourK, seasons: chosen } : { kind: it.kind, id: it.id, archive: !untag, fourK: fourK };
       var live = function () { return req === request && drawerOpen(); };
       HI.send(ID, "tag", "POST", body).then(function (r) {
@@ -641,9 +647,8 @@
         if (r.searchesQueued) {
           libNotice = untag ? "Archive tag removed" : editing ? "Seasons saved" : "Archiving " + it.title;
           if (live()) HI.closeDrawer();
-          var toast = document.createElement("div");
-          toast.className = "archive-toast"; toast.setAttribute("role", "status"); toast.textContent = libNotice;
-          document.body.appendChild(toast); setTimeout(function () { toast.remove(); }, 4000);
+          HI.toast(libNotice, { kind: "ok" });
+          note = "";
           pollNow();
           return;
         }
@@ -667,14 +672,19 @@
         }
         return next(0).then(function () {
           if (searched) note += " " + searched + " search request" + (searched === 1 ? "" : "s") + " accepted.";
-          if (failures.length) note += " " + failures.join(" · ");
+          searchFailed = failures.length > 0;
+          if (searchFailed) note += " " + failures.join(" · ");
           if (!seasons.length && !editing) note += " Search scheduled";
         });
       }).then(function () {
-        if (!tagged) return;
-        libNotice = libNotice || note;
-        if (note) libNotice = note.trim();
-        if (live()) sheet("<h3>" + esc(it.title) + '</h3><div class="note" role="status">' + esc(libNotice) + "</div>");
+        if (!tagged || !note) return;
+        libNotice = note.trim();
+        if (searchFailed) {
+          if (live()) sheet("<h3>" + esc(it.title) + '</h3><div class="note" role="status">' + esc(libNotice) + "</div>");
+          return;
+        }
+        if (live()) HI.closeDrawer();
+        HI.toast(libNotice, { kind: "ok" });
       }).catch(function (err) {
         if (fail(err)) return;
         if (live()) { msg("library-action-msg", (tagged ? "Tags were updated. " : "") + err.message, true); $("library-apply").disabled = false; }

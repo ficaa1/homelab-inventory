@@ -199,7 +199,6 @@
 .library-bar.busy i { animation: none; width: 100%; opacity: .35; }
 }
 .library-progress .library-bar i { transition: width 0.6s ease; }
-.archive-toast {position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:1000;padding:12px 18px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--text);max-width:calc(100vw - 32px);box-shadow:0 4px 20px #0003}
 .arc-strip { position: sticky; top: var(--arc-sticky-top, var(--top-h)); z-index: 6; margin: calc(-1 * var(--s2)) 0 var(--s4); padding: var(--s2) 0 0; background: var(--bg); }
 .arc-strip[hidden] { display: none; }
 .arc-strip-card { background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-lg); padding: 0 14px 4px; box-shadow: var(--shadow); }
