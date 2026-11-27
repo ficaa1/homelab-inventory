@@ -2,12 +2,13 @@
    .cve-drawer; severity has its own five-step scale on top of the dashboard's
    three tones, always shown with a glyph and a word, never colour alone. */
 .cve, .cve-drawer {
-  --sev-critical: var(--crit); --sev-high: #ee8445; --sev-medium: var(--warn); --sev-low: #7fa9d6; --sev-unknown: var(--text-3);
-  --sev-critical-soft: var(--crit-soft); --sev-high-soft: rgba(238,132,69,0.15); --sev-medium-soft: var(--warn-soft); --sev-low-soft: rgba(127,169,214,0.14); --sev-unknown-soft: var(--info-soft);
+  --cve-eol-rule: color-mix(in srgb, var(--warn) 18%, transparent);
+  --sev-critical: var(--crit); --sev-high: #f28b50; --sev-medium: var(--warn); --sev-low: #a2a3d5; --sev-unknown: var(--text-3);
+  --sev-critical-soft: var(--crit-soft); --sev-high-soft: rgba(242,139,80,0.15); --sev-medium-soft: var(--warn-soft); --sev-low-soft: rgba(162,163,213,0.14); --sev-unknown-soft: var(--info-soft);
 }
-:root[data-theme="light"] :is(.cve, .cve-drawer) { --sev-high: #b9500e; --sev-low: #3a6799; --sev-high-soft: rgba(185,80,14,0.10); --sev-low-soft: rgba(58,103,153,0.10); }
+:root[data-theme="light"] :is(.cve, .cve-drawer) { --sev-high: #a3410b; --sev-low: #525482; --sev-high-soft: rgba(163,65,11,0.10); --sev-low-soft: rgba(82,84,130,0.10); }
 @media (prefers-color-scheme: light) {
-  :root:where(:not([data-theme="dark"])) :is(.cve, .cve-drawer) { --sev-high: #b9500e; --sev-low: #3a6799; --sev-high-soft: rgba(185,80,14,0.10); --sev-low-soft: rgba(58,103,153,0.10); }
+  :root:where(:not([data-theme="dark"])) :is(.cve, .cve-drawer) { --sev-high: #a3410b; --sev-low: #525482; --sev-high-soft: rgba(163,65,11,0.10); --sev-low-soft: rgba(82,84,130,0.10); }
 }
 
 /* Header: scan state and the one button */
@@ -49,7 +50,7 @@
 }
 .cve .cve-leg[aria-pressed="true"] b { text-decoration: underline; text-underline-offset: 3px; }
 .cve .cve-leg b { color: var(--text); font-weight: 600; }
-.cve .cve-leg.zero { opacity: 0.55; }
+.cve .cve-leg.zero b { color: var(--text-3); }
 .cve .cve-dot { width: 8px; height: 8px; border-radius: 2px; }
 :is(.cve, .cve-drawer) :is(.cve-sevbar i, .cve-dot).s-critical { background: var(--sev-critical); }
 :is(.cve, .cve-drawer) :is(.cve-sevbar i, .cve-dot).s-high { background: var(--sev-high); }
@@ -87,8 +88,6 @@
 .cve .cve-scoped .chip { min-height: 32px; color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
 
 /* Tables */
-.cve .cve-body { transition: opacity var(--dur-1, 120ms) var(--ease-out, ease-out); }
-.cve .cve-body.cve-dim { opacity: 0.55; }
 .cve .cve-table td { vertical-align: middle; }
 .cve .cve-table tbody tr.clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .cve .cve-table .sub { font-size: var(--fs-xs); }
@@ -100,10 +99,7 @@
   .cve .cve-vulns tbody tr:hover .cve-summary-text { -webkit-line-clamp: 2; }
 }
 .cve .cve-pk { font-family: var(--mono); font-size: var(--fs-xs); }
-.cve .cve-suppressed td { opacity: 0.6; }
-@media (hover: hover) and (pointer: fine) {
-  .cve .cve-suppressed:hover td { opacity: 1; }
-}
+.cve .cve-suppressed td { color: var(--text-3); }
 .cve .c-age { color: var(--text-3); }
 .cve .cve-pager { display: flex; align-items: center; justify-content: flex-end; gap: var(--s2); margin-top: var(--s3); font-variant-numeric: tabular-nums; }
 .cve .cve-pager .sub { margin-right: auto; }
@@ -137,7 +133,7 @@
 :is(.cve, .cve-drawer) .cve-counts .s-high { color: var(--sev-high); background: var(--sev-high-soft); }
 :is(.cve, .cve-drawer) .cve-counts .s-medium { color: var(--sev-medium); background: var(--sev-medium-soft); }
 :is(.cve, .cve-drawer) .cve-counts .s-low { color: var(--sev-low); background: var(--sev-low-soft); }
-:is(.cve, .cve-drawer) .cve-counts .zero { color: var(--text-3); background: none; font-weight: 400; opacity: 0.6; }
+:is(.cve, .cve-drawer) .cve-counts .zero { color: var(--text-3); background: none; font-weight: 400; }
 
 /* Packages */
 .cve .cve-pkgs code, .cve .cve-up { font-family: var(--mono); font-size: var(--fs-xs); }
@@ -192,7 +188,7 @@
 .cve-drawer .cve-trow { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: flex-end; }
 .cve-drawer .cve-lab { display: grid; gap: 4px; font-size: var(--fs-xs); color: var(--text-3); }
 .cve-drawer .cve-lab .sel { height: 36px; }
-.cve-drawer .cve-text { width: 100%; box-sizing: border-box; font: inherit; font-size: var(--fs-sm); color: var(--text); background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); padding: 8px 10px; resize: vertical; }
+.cve-drawer .cve-text { width: 100%; box-sizing: border-box; font: inherit; font-size: var(--fs-sm); color: var(--text); background: var(--surface); border: 1px solid var(--edge-strong); border-radius: var(--r); padding: 8px 10px; resize: vertical; }
 .cve-drawer .cve-text:focus { outline: none; border-color: var(--accent); }
 .cve-drawer .cve-reason { margin: 0; padding: 8px 12px; border-left: 3px solid var(--line-2); color: var(--text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
 .cve-drawer .cve-err:empty { display: none; }
@@ -218,7 +214,7 @@
 .cve .cve-eol-body p { margin: 0 0 10px; color: var(--text-2); max-width: 75ch; }
 .cve .cve-eol-list { width: 100%; border-collapse: collapse; background: none; border: 0; border-radius: 0; box-shadow: none; }
 .cve .cve-eol-list th { color: var(--text-2); font-weight: 500; }
-.cve .cve-eol-list th, .cve .cve-eol-list td { padding: 6px 16px 6px 0; text-align: left; vertical-align: baseline; background: none; border: 0; border-top: 1px solid color-mix(in srgb, var(--warn) 18%, transparent); }
+.cve .cve-eol-list th, .cve .cve-eol-list td { padding: 6px 16px 6px 0; text-align: left; vertical-align: baseline; background: none; border: 0; border-top: 1px solid var(--cve-eol-rule); }
 .cve .cve-eol-list thead th { border-top: 0; }
 .cve .cve-eol-list .c-set { white-space: normal; overflow-wrap: anywhere; font-family: var(--mono); font-size: 11.5px; }
 .cve .cve-eol-list :is(.c-host, .c-distro, .c-eol) { white-space: nowrap; }
@@ -265,7 +261,7 @@
   .cve .cve-eol-body { padding-left: 14px; }
   .cve .cve-eol-list thead { display: none; }
   .cve .cve-eol-list, .cve .cve-eol-list tbody { display: block; }
-  .cve .cve-eol-list tr { display: flex; flex-wrap: wrap; gap: 2px 4px; padding: 8px 0; border-top: 1px solid color-mix(in srgb, var(--warn) 18%, transparent); }
+  .cve .cve-eol-list tr { display: flex; flex-wrap: wrap; gap: 2px 4px; padding: 8px 0; border-top: 1px solid var(--cve-eol-rule); }
   .cve .cve-eol-list td { display: block; padding: 0; border: 0; }
   .cve .cve-eol-list .c-set { order: -1; flex: 1 1 100%; }
   .cve .cve-eol-list :is(.c-host, .c-distro, .c-eol) { color: var(--text-2); font-size: var(--fs-xs); }

@@ -454,7 +454,7 @@
       else slot.replaceChildren(skel(8));
       return;
     }
-    slot.classList.toggle("cve-dim", st.loading);
+    slot.setAttribute("aria-busy", String(st.loading));
     if (st.listErr) { slot.replaceChildren(HI().notice("crit", "Could not refresh: " + st.listErr), current()); return; }
     slot.replaceChildren(current());
   }

@@ -1,7 +1,7 @@
 /* Tdarr page (pages/tdarr.js). The library rows, filters and season picker
    come from archive.css. */
 #drawer:has(.tdarr-drawer) .close { min-width:44px; min-height:44px; }
-#tdarr-search { width:230px; color:var(--text); background:var(--surface); border:1px solid var(--line-2); border-radius:var(--r); padding:9px 12px; font:inherit; }
+#tdarr-search { width:230px; color:var(--text); background:var(--surface); border:1px solid var(--edge-strong); border-radius:var(--r); padding:9px 12px; font:inherit; }
 #tdarr-status, .tdarr-row, .tdarr-selection { padding:12px 14px; }
 #tdarr-queue, #tdarr-cancel, #tdarr-season-add, #tdarr-season-cancel, #tdarr-result-close { min-height:44px; }
 .library-season-picker:has([name="tdarr-season"]) label { min-height:44px; }
@@ -21,7 +21,7 @@
 .tdarr-title > span { min-width:0; overflow-wrap:anywhere; }
 .tdarr-title input, .library-season-picker input { width:20px; height:20px; flex-shrink:0; accent-color:var(--accent); }
 .tdarr-title .sub { display:block; }
-.tdarr-locked { opacity:.55; }
+.tdarr-locked, .tdarr-locked .library-name { color:var(--text-3); }
 .tdarr-lock { font-size:12px; }
 .tdarr-selection { position:sticky; top:calc(var(--arc-sticky-top, var(--top-h)) + 8px); z-index:2; margin-top:16px; box-shadow:var(--shadow); flex-wrap:wrap; }
 .tdarr-selection .library-keep { margin:0; min-height:44px; }
