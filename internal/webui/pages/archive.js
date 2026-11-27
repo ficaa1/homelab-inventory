@@ -412,12 +412,12 @@
       selected = decision.candidates[Number(parts[1])];
       approval = { kind: decision.target.kind, id: decision.target.id, season: decision.target.season || 0, releaseId: selected.id, indexerId: selected.indexerId };
     }
-    sheet("<h3>" + head + '</h3><div class="empty">Loading plan…</div>');
+    var idDrawer = sheet("<h3>" + head + '</h3><div class="empty">Loading plan…</div>');
     function show(p) {
-      if (req !== request || !HI.drawerIsOpen()) return;
+      if (req !== request || !HI.drawerIsOpen() || !HI.drawerExists(idDrawer)) return;
       var dry = v.dryRun && action !== "run" && action !== "clear-job";
       var subject = action === "purge" ? "Delete the originals for " + (p.title || id) + "?" : head;
-      var html = "<h3>" + esc(subject) + "</h3>";
+      var html = "<h3>" + esc(subject) + '</h3><div class="archive-plan">';
       if (approval) {
         var before = fileBytes(decision.target), s = selected.score || {};
         html += '<div class="subtitle">' + esc(title(decision.target)) + '</div><div class="arc-drawer-size">' + esc(gb(before)) + " → " + esc(gb(selected.size)) +
@@ -444,8 +444,9 @@
       }
       html += '<div class="form' + (action === "clear-job" ? ' arc-clear-form' : '') + '">' + (action === "purge" ? '<div><label for="archive-confirm">Type ' + esc(p.confirm) + ' exactly</label><input id="archive-confirm" autocomplete="off" spellcheck="false"></div>' : "") +
         '<div class="actions"><button class="btn primary" id="archive-apply" type="button"' + (dry || action === "purge" ? " disabled" : "") + ">" + (approval ? "Approve" : head) + "</button>" +
-        '<button class="btn" id="archive-cancel" type="button">Cancel</button></div><div id="archive-action-msg" role="status" class="note">' + (dry ? "Dry run" : "") + "</div></div>";
-      sheet(html);
+        '<button class="btn" id="archive-cancel" type="button">Cancel</button></div><div id="archive-action-msg" role="status" class="note">' + (dry ? "Dry run" : "") + "</div></div></div>";
+      HI.updateDrawer(idDrawer, html);
+      HI.fadePlan($("drawer-body").querySelector(".archive-plan"));
       $("archive-cancel").onclick = HI.closeDrawer;
       if (action === "purge") $("archive-confirm").oninput = function () { $("archive-apply").disabled = dry || this.value !== p.confirm; };
       $("archive-apply").onclick = function () {
@@ -476,8 +477,8 @@
     }
     if (action === "run" || action === "clear-job" || approval) { show({}); return; }
     plan(action, id).then(show).catch(function (err) {
-      if (fail(err) || req !== request || !HI.drawerIsOpen()) return;
-      sheet("<h3>" + head + '</h3><div class="empty">' + esc(PREVIEW_ERROR) + "</div>");
+      if (fail(err) || req !== request || !HI.drawerIsOpen() || !HI.drawerExists(idDrawer)) return;
+      HI.updateDrawer(idDrawer, "<h3>" + head + '</h3><div class="empty">' + esc(PREVIEW_ERROR) + "</div>");
     });
   }
 
@@ -502,17 +503,18 @@
 
   function confirmPurgeAll() {
     var req = ++request;
-    sheet('<h3>Delete originals</h3><div class="empty">Loading plan…</div>');
+    var idDrawer = sheet('<h3>Delete originals</h3><div class="empty">Loading plan…</div>');
     HI.send(ID, "purge-all", "POST", {}).then(function (p) {
-      if (req !== request || !HI.drawerIsOpen()) return;
-      if (!p || !(p.entries || []).length) { sheet('<h3>Delete originals</h3><div class="empty">No retained originals to delete</div>'); return; }
+      if (req !== request || !HI.drawerIsOpen() || !HI.drawerExists(idDrawer)) return;
+      if (!p || !(p.entries || []).length) { HI.updateDrawer(idDrawer, '<h3>Delete originals</h3><div class="empty">No retained originals to delete</div>'); return; }
       var count = p.entries.length;
       var subject = count === 1 ? p.entries[0].title : count + " titles";
-      sheet('<h3>Delete the originals for ' + esc(subject) + '?</h3><p>' + esc(DELETE_ORIGINALS) + '</p><ul class="seed-files">' + p.entries.map(function (e) {
+      HI.updateDrawer(idDrawer, '<h3>Delete the originals for ' + esc(subject) + '?</h3><div class="archive-plan"><p>' + esc(DELETE_ORIGINALS) + '</p><ul class="seed-files">' + p.entries.map(function (e) {
         return "<li><b>" + esc(e.title) + '</b><span class="sub">' + esc(size(e.bytes)) + "</span></li>";
       }).join("") + '</ul><div class="seed-sum"><span class="sub">Total</span><strong>' + esc(size(p.bytes)) + "</strong></div>" +
         '<div class="form"><div><label for="purge-all-text">Type purge all</label><input id="purge-all-text" autocomplete="off" spellcheck="false"></div></div><div id="purge-all-message" role="status"></div>' +
-        '<div class="seed-confirm-actions"><button class="btn" id="purge-all-cancel">Cancel</button><button class="btn primary" id="purge-all-confirm" disabled>Delete originals</button></div>');
+        '<div class="seed-confirm-actions"><button class="btn" id="purge-all-cancel">Cancel</button><button class="btn primary" id="purge-all-confirm" disabled>Delete originals</button></div></div>');
+      HI.fadePlan($("drawer-body").querySelector(".archive-plan"));
       $("purge-all-cancel").onclick = HI.closeDrawer;
       $("purge-all-text").oninput = function () { $("purge-all-confirm").disabled = this.value !== "purge all" || (status || {}).dryRun; };
       $("purge-all-confirm").onclick = function () {
@@ -528,7 +530,7 @@
           pollNow();
         }).catch(function (err) { if (!fail(err) && req === request) msg("purge-all-message", archiveWriteError(err, "delete the originals"), true); });
       };
-    }).catch(function (err) { if (!fail(err) && req === request && HI.drawerIsOpen()) sheet('<h3>Delete originals</h3><div class="note">' + esc(PREVIEW_ERROR) + '</div>'); });
+    }).catch(function (err) { if (!fail(err) && req === request && HI.drawerIsOpen() && HI.drawerExists(idDrawer)) HI.updateDrawer(idDrawer, '<h3>Delete originals</h3><div class="note">' + esc(PREVIEW_ERROR) + '</div>'); });
   }
 
   function ownerControl(b) {

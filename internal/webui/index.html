@@ -4056,8 +4056,10 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       return r.error ? '<details class="restart-detail"><summary>' + chip + '</summary><div class="sub">' + esc(r.error) + '</div></details>' : chip;
     }).join("") + '</div>';
   }
-  function restartSheet(target, content) {
-    openDrawer('<div id="restart-sheet"><h3>' + esc(target) + '</h3>' + content + '</div>');
+  function restartSheet(target, content, update) {
+    var html = '<div id="restart-sheet"><h3>' + esc(target) + '</h3>' + content + '</div>';
+    if (update) updateDrawer(drawerID, html);
+    else openDrawer(html);
   }
   function restartVisible(session) { return session === restartSession && drawerOpen && !!$("restart-sheet"); }
   function showRestartPreview(p, session, changed) {
@@ -4068,8 +4070,9 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       return '<details class="restart-detail"><summary><span class="pill warning">' + esc(x.name) + ' · ' + (x.kind === "network" ? 'network down' : 'unavailable') + '</span></summary><div class="sub">' + esc(x.target) + ' · ' + esc(x.effect) + '</div></details>';
     }).join("");
     var title = (reconnect ? "Reconnect VPN for " : "Restart ") + p.target + "?";
-    restartSheet(title, (changed ? '<div class="note warning" role="status">The affected containers changed. Review the new list before confirming.</div>' : '') + chips + (impact ? '<div class="sub">Impact</div><div class="restart-chips">' + impact + '</div>' : '') +
-      '<button type="button" class="btn primary" id="restart-confirm"' + (!p.container_set_hash || !p.containers.length ? ' disabled' : '') + '>' + (reconnect ? 'Reconnect VPN' : 'Restart') + '</button>');
+    restartSheet(title, '<div id="restart-plan">' + (changed ? '<div class="note warning" role="status">The affected containers changed. Review the new list before confirming.</div>' : '') + chips + (impact ? '<div class="sub">Impact</div><div class="restart-chips">' + impact + '</div>' : '') +
+      '<button type="button" class="btn primary" id="restart-confirm"' + (!p.container_set_hash || !p.containers.length ? ' disabled' : '') + '>' + (reconnect ? 'Reconnect VPN' : 'Restart') + '</button></div>', true);
+    fadePlan($("restart-plan"));
     $("restart-confirm").onclick = function () { executeRestart(p, session); };
   }
   function beginRestart(kind, target, host) {
@@ -5660,6 +5663,11 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     Array.prototype.forEach.call(drawerBody.querySelectorAll("[data-list] tr:not(.clickable) .c-list-open"), function (button) {
       button.setAttribute("aria-expanded", "false");
     });
+  }
+
+  function fadePlan(body) {
+    if (!drawerOpen || drawer.motionIn || sheet.frame !== null) return;
+    animateIn(body, [{ opacity: reducedMotion.matches ? 0.9 : 0.75 }, { opacity: 1 }], motion.d1, motion.out, 0, true);
   }
 
   function drawerExists(id) { return id === drawerID; }
@@ -9248,7 +9256,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
 
   function openPreview(name, fromHistory) {
-    if (!preview.open) {
+    var opening = !preview.open;
+    if (opening) {
       preview.from = document.activeElement;
       if (!fromHistory) history.pushState({ pv: true, name: name }, "");
     }
@@ -9258,7 +9267,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var live = function () { return preview.open && seq === preview.seq; };
     pvRelease();
     $("pv-name").textContent = name;
-    $("pv-sheet").classList.remove("hidden");
+    reveal($("pv-sheet"), opening && (reducedMotion.matches ?
+      [{ opacity: 0.85 }, { opacity: 1 }] : FADE_IN), motion.d1, motion.out, true);
     setModal("pv-sheet", true);
     $("pv-close").focus();
     var kind = PV_KIND[upExt(name)];
@@ -9284,6 +9294,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     if (!preview.open) return;
     preview.open = false; preview.seq++;
     pvRelease();
+    stopEntrance($("pv-sheet"));
     $("pv-sheet").classList.add("hidden");
     setModal("pv-sheet", false);
     var back = preview.from;
@@ -10354,7 +10365,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     h: h, str: str, esc: esc, ago: ago, fromNow: fromNow, bytes: bytes, dur: dur,
     iconNode: iconNode, pill: pill, stateBox: stateBox, notice: notice, skeleton: skeleton,
     openDrawer: openDrawer, closeDrawer: closeDrawer, drawerIsOpen: drawerIsOpen,
-    drawerExists: drawerExists, updateDrawer: updateDrawer, toast: toast, go: go,
+    drawerExists: drawerExists, updateDrawer: updateDrawer, fadePlan: fadePlan, toast: toast, go: go,
     prepareListTable: prepareListTable,
     // GET and mutation helpers for the plugin's own API; a 401 opens the gate.
     get: function (id, path, signal) { return api(pagePath(id, path), signal).catch(pageFail); },

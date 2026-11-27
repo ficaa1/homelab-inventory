@@ -348,9 +348,12 @@
     var box = drawer("Tdarr batch review", [
       h("div", { class: "arc-eyebrow", text: "Tdarr · " + (st.pcLabel || "Secondary") + (v.plan.withPc ? " on" : " off") }),
       h("h3", { text: n + (n === 1 ? " file · " : " files · ") + lb(v.plan.total_bytes) }),
-      fileList(v.plan), msg,
-      h("div", { class: "actions" }, [h("button", { id: "tdarr-cancel", class: "btn", type: "button", text: "Cancel", onclick: HI().closeDrawer }), queue])
+      h("div", { class: "tdarr-plan" }, [
+        fileList(v.plan), msg,
+        h("div", { class: "actions" }, [h("button", { id: "tdarr-cancel", class: "btn", type: "button", text: "Cancel", onclick: HI().closeDrawer }), queue])
+      ])
     ], id);
+    HI().fadePlan(box.querySelector(".tdarr-plan"));
     function expired() { var t = Date.parse(v.expires_at); return !isFinite(t) || Date.now() >= t; }
     function again(text) {
       clearTimeout(st.expiry); msg.textContent = text;
