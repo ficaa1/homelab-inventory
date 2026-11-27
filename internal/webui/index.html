@@ -1831,8 +1831,8 @@ button.ops-tile { cursor:pointer; }
 
 /* A plugin's chart: lines on the card's own surface, axes in the table's
    small caps colour, and a legend that doubles as the readout. */
-.pv-chart > h3 { justify-content: space-between; }
-.pv-chart > h3 .when { font-weight: 500; color: var(--text-3); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pv-chart > h3 { justify-content: space-between; flex-wrap: wrap; }
+.pv-chart > h3 .when { font-weight: 500; color: var(--text-3); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; min-width: 0; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 4px 18px; padding: 10px 16px 0; margin: 0; list-style: none; font-size: var(--fs-xs); color: var(--text-2); }
 .chart-legend li { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
 .chart-legend .nm { overflow-wrap: anywhere; }
@@ -6735,6 +6735,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     if (pv.ctrl) pv.ctrl.abort();
     clearTimeout(pv.timer);
     pv = { key: "", plugin: "", view: "", data: null, err: null, at: 0, ctrl: null, timer: 0 };
+    chartGesture = null;
     releaseImages();
   }
 
@@ -6814,6 +6815,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   });
 
   function renderPluginView() {
+    if (chartGesture && chartGesture.view === pv) { chartGesture.redraw = true; return; }
+    chartGesture = null;
     var root = $("plugin-body"), info = pluginInfo(pv.plugin), views = pluginViews(info);
     if (chartRO) chartRO.disconnect();   // the charts being replaced; new ones observe themselves
     var name = info ? str(info.tab.title) || str(info.name) : pv.plugin;
@@ -7098,7 +7101,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   // A null point breaks its line, and a stretch where no series has data is
   // shaded and labelled rather than bridged.
 
-  var chartRO = null, chartAt = {};
+  var chartRO = null, chartAt = {}, chartGesture = null;
   var SVG_NS = "http://www.w3.org/2000/svg";
   function svgEl(tag, attrs) {
     var el = document.createElementNS(SVG_NS, tag);
@@ -7210,6 +7213,14 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
     var geo = null, cursor = null, dots = [], at = pv.plugin + "/" + pv.view + "/" + fk;
     var idx = chartAt[at] != null ? m.ts.indexOf(chartAt[at]) : -1;
+    var pinned = idx, cursorX = null, pointerFrame = null, pendingX, drag = null;
+
+    function paintCursor() {
+      if (!geo) return;
+      if (idx < 0) { cursor.setAttribute("visibility", "hidden"); return; }
+      var x = cursorX == null ? geo.x(m.ts[idx]) : Math.max(geo.left, Math.min(geo.right, cursorX));
+      cursor.setAttribute("x1", x); cursor.setAttribute("x2", x); cursor.setAttribute("visibility", "visible");
+    }
 
     function readout() {
       var t = idx >= 0 ? m.ts[idx] : null, parts = [];
@@ -7223,9 +7234,9 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       plot.setAttribute("aria-valuenow", String(idx >= 0 ? idx : m.ts.length - 1));
       plot.setAttribute("aria-valuetext", (t == null ? "Latest, " + chartWhen(lt, span) : chartWhen(t, span)) + ": " + parts.join(", "));
       if (!geo) return;
-      if (t == null) { cursor.setAttribute("visibility", "hidden"); dots.forEach(function (d) { d.setAttribute("visibility", "hidden"); }); return; }
+      paintCursor();
+      if (t == null) { dots.forEach(function (d) { d.setAttribute("visibility", "hidden"); }); return; }
       var x = geo.x(t);
-      cursor.setAttribute("x1", x); cursor.setAttribute("x2", x); cursor.setAttribute("visibility", "visible");
       m.series.forEach(function (s, i) {
         var v = valueAt(s, t, m.step);
         if (v == null) { dots[i].setAttribute("visibility", "hidden"); return; }
@@ -7233,6 +7244,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       });
     }
     function setIdx(i) {
+      if (i === idx) { paintCursor(); return; }
       idx = i;
       if (i < 0) delete chartAt[at]; else chartAt[at] = m.ts[i];
       readout();
@@ -7256,7 +7268,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       var t0 = m.ts[0], t1 = Math.max(m.ts[m.ts.length - 1], t0 + 60);
       var X = function (t) { return L + (t - t0) / (t1 - t0) * pw; };
       var Y = function (val) { return T + ph - (val / sc.div - y0) / (y1 - y0) * ph; };
-      geo = { x: X, y: Y };
+      geo = { x: X, y: Y, left: L, right: W - R };
 
       var svg = svgEl("svg", { width: W, height: H, viewBox: "0 0 " + W + " " + H, "aria-hidden": "true" });
       yt.forEach(function (tv, i) {
@@ -7315,15 +7327,72 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       readout();
     }
 
-    function fromPointer(e) {
-      if (!geo) return;
-      var r = plot.getBoundingClientRect(), x = e.clientX - r.left, best = 0, bd = Infinity;
-      for (var i = 0; i < m.ts.length; i++) { var dd = Math.abs(geo.x(m.ts[i]) - x); if (dd < bd) { bd = dd; best = i; } }
-      setIdx(best);
+    function fromPointer(clientX) {
+      if (!geo || !plot.isConnected) return;
+      cursorX = clientX - plot.getBoundingClientRect().left;
+      var lo = 0, hi = m.ts.length - 1;
+      while (lo < hi) {
+        var mid = (lo + hi) >> 1;
+        if (geo.x(m.ts[mid]) < cursorX) lo = mid + 1; else hi = mid;
+      }
+      if (lo > 0 && cursorX - geo.x(m.ts[lo - 1]) <= geo.x(m.ts[lo]) - cursorX) lo--;
+      setIdx(lo);
     }
-    plot.addEventListener("pointermove", fromPointer);
-    plot.addEventListener("pointerdown", fromPointer);
-    plot.addEventListener("pointerleave", function (e) { if (e.pointerType === "mouse") setIdx(-1); });
+    function stopPointerFrame() {
+      if (pointerFrame !== null) cancelAnimationFrame(pointerFrame);
+      pointerFrame = null;
+    }
+    function capture(e) {
+      plot.setPointerCapture(e.pointerId);
+      drag.claimed = true;
+    }
+    plot.addEventListener("pointerdown", function (e) {
+      if (!e.isPrimary || e.button !== 0 || drag) return;
+      stopPointerFrame();
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, idx: idx, cursorX: cursorX, claimed: false, moved: false };
+      chartGesture = { view: pv, redraw: false };
+      if (e.pointerType === "mouse") { capture(e); fromPointer(e.clientX); }
+    });
+    plot.addEventListener("pointermove", function (e) {
+      if (drag && drag.id === e.pointerId) {
+        var dx = Math.abs(e.clientX - drag.x), dy = Math.abs(e.clientY - drag.y);
+        if (Math.max(dx, dy) >= 8) drag.moved = true;
+        if (!drag.claimed && dx >= 8 && dx > dy) capture(e);
+        if (!drag.claimed) return;
+      } else if (drag || e.pointerType !== "mouse") return;
+      pendingX = e.clientX;
+      if (pointerFrame === null) pointerFrame = requestAnimationFrame(function () {
+        pointerFrame = null;
+        fromPointer(pendingX);
+      });
+    });
+    function finishScrub(e, cancelled) {
+      if (!drag || drag.id !== e.pointerId) return;
+      var finished = drag;
+      drag = null;
+      stopPointerFrame();
+      if (cancelled) {
+        cursorX = finished.cursorX;
+        setIdx(finished.idx);
+      } else if (finished.claimed || !finished.moved) {
+        fromPointer(e.clientX);
+        pinned = idx;
+      }
+      var deferred = chartGesture && chartGesture.view === pv && chartGesture.redraw;
+      chartGesture = null;
+      if (deferred) renderPluginView();
+    }
+    plot.addEventListener("pointerup", function (e) { finishScrub(e, false); });
+    plot.addEventListener("pointercancel", function (e) { finishScrub(e, true); });
+    plot.addEventListener("lostpointercapture", function (e) {
+      if (e.target === plot) finishScrub(e, true);
+    });
+    plot.addEventListener("pointerleave", function (e) {
+      if (drag || e.pointerType !== "mouse") return;
+      stopPointerFrame();
+      cursorX = null;
+      setIdx(pinned);
+    });
     plot.addEventListener("keydown", function (e) {
       var last = m.ts.length - 1, cur = idx < 0 ? last : idx, big = Math.max(1, Math.round(m.ts.length / 10)), next = null;
       if (e.key === "ArrowLeft" || e.key === "ArrowDown") next = Math.max(0, cur - 1);
@@ -7335,6 +7404,9 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       else if (e.key === "Escape" && idx >= 0) next = -1;
       if (next === null) return;
       e.preventDefault();
+      stopPointerFrame();
+      cursorX = null;
+      pinned = next;
       setIdx(next);
     });
 
