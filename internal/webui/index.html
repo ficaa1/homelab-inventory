@@ -1523,6 +1523,37 @@ button.ops-tile { cursor:pointer; }
   .pv-card td.txt { max-width: 200px; }
 }
 
+.phone-options { display: none; }
+@media (max-width: 640px) {
+  select.has-phone-options { display: none; }
+  #alerts-current > .filters { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .phone-options {
+    display: flex; flex: 1 1 100%; min-width: 0; gap: 2px;
+    padding: 2px; background: var(--surface-2); border-radius: 9px;
+  }
+  .phone-option {
+    flex: 1 1 0; min-width: 0; min-height: 44px; padding: 2px 6px;
+    border: 0; border-radius: 7px; background: transparent; color: var(--text-3);
+    font-size: 13px; cursor: pointer;
+    transition: background-color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+  }
+  .phone-option[aria-pressed="true"] {
+    background: var(--surface-3); color: var(--text); font-weight: 600;
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 14%, transparent);
+  }
+  .phone-option:active { background: var(--surface-3); transform: scale(0.97); }
+  .phone-option:focus-visible { outline-offset: -2px; }
+  .phone-options.phone-chips {
+    border-radius: 0; background: none; overflow-x: auto; overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity; scrollbar-width: thin;
+  }
+  .phone-chips .phone-option {
+    flex: none; padding: 2px 12px; border: 1px solid var(--line-2); border-radius: 20px;
+    background: var(--surface-2); scroll-snap-align: start;
+  }
+  #panel-admin .settings-row:has(.phone-options) { grid-template-columns: minmax(0, 1fr); padding-block: 8px; }
+}
+
 /* Admin setting rows share the desktop form and its controls. */
 .settings-group { display: contents; }
 @media (max-width: 640px) {
@@ -2705,7 +2736,46 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     silenceLiftButtons();
   }
 
+  // The original select remains the source of truth for both layouts.
+  function syncPhoneSelect(select) {
+    if (!select) return;
+    var options = Array.prototype.slice.call(select.options);
+    if (!options.length) {
+      if (select.phoneOptions) select.phoneOptions.remove();
+      select.phoneOptions = null;
+      select.classList.remove("has-phone-options");
+      return;
+    }
+    var group = select.phoneOptions;
+    if (!group) {
+      var label = select.getAttribute("aria-label") || (select.labels[0] && select.labels[0].textContent);
+      group = h("div", { class: "phone-options", role: "group", "aria-label": label });
+      select.insertAdjacentElement("afterend", group);
+      select.phoneOptions = group;
+      select.classList.add("has-phone-options");
+      select.addEventListener("change", function () { syncPhoneSelect(select); });
+    }
+
+    var key = JSON.stringify(options.map(function (opt) { return [opt.value, opt.text, opt.disabled]; }));
+    if (group.optionKey !== key) {
+      group.optionKey = key;
+      group.classList.toggle("phone-chips", options.length > 4);
+      group.replaceChildren.apply(group, options.map(function (opt) {
+        return h("button", { class: "phone-option", type: "button", "data-value": opt.value, disabled: opt.disabled,
+          text: opt.text, onclick: function () {
+            select.value = this.dataset.value;
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+          } });
+      }));
+    }
+    Array.prototype.forEach.call(group.children, function (button) {
+      button.setAttribute("aria-pressed", button.dataset.value === select.value ? "true" : "false");
+    });
+  }
+
   function renderAlerts() {
+    syncPhoneSelect($("f-level"));
+    syncPhoneSelect($("f-group"));
     renderTriage();
     var rep = data.alerts;
     if (!rep) return;
@@ -3174,6 +3244,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     $("f-porthost").innerHTML = names.map(function (n) {
       return '<option value="' + esc(n) + '"' + (n === portHost ? " selected" : "") + ">" + esc(n) + "</option>";
     }).join("");
+    syncPhoneSelect($("f-porthost"));
     renderGrid("ports-grid", portHost);
     renderPortsTable();
   }
@@ -5437,6 +5508,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     renderActionLog();
     wireStorage();
     wireAdmin();
+    syncPhoneSelect($("a-level"));
   }
 
   function mountPluginAdmins() {
