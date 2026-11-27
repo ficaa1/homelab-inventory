@@ -924,6 +924,8 @@ pre.code {
 .toast-icon .ic { width: 14px; height: 14px; }
 .toast.ok .toast-icon { color: var(--ok); background: var(--ok-soft); }
 .toast.error .toast-icon { color: var(--crit); background: var(--crit-soft); }
+.toast.refresh-error { border-color: var(--crit); }
+.toast.refresh-error .toast-title, #refresh.refresh-error { color: var(--crit); }
 .toast-copy { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .toast-title, .toast-action { font-size: var(--fs-md); line-height: 1.4; font-weight: 600; }
 .toast-sub { font-size: var(--fs-sm); line-height: 1.45; font-weight: 400; color: var(--text-3); }
@@ -5322,19 +5324,20 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   // ------------------------------------------------------------ toast
 
   var toastEl = $("toast"), toastAction = $("toast-action"), toastTimer, toastUntil, toastRemaining;
-  var toastHovered = false, toastFocused = false, toastActive = false;
+  var toastHovered = false, toastFocused = false, toastActive = false, toastPersistent = false;
 
   function dismissToast() {
     clearTimeout(toastTimer);
     toastTimer = null;
     toastActive = false;
+    toastPersistent = false;
     $("toast-status").textContent = "";
     conceal(toastEl, reducedMotion.matches ? FADE_OUT :
       [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(8px)" }], 120, null, true, "ease-in");
   }
 
   function timeToast() {
-    if (!toastActive) return;
+    if (!toastActive || toastPersistent) return;
     if (toastTimer != null) {
       clearTimeout(toastTimer);
       toastRemaining = Math.max(0, toastUntil - performance.now());
@@ -5347,16 +5350,22 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   function toast(title, opts) {
     opts = opts || {};
+    if (toastPersistent && !opts.persistent) return;
+    toastPersistent = !!opts.persistent;
     var kind = opts.kind === "ok" || opts.kind === "error" ? opts.kind : "info";
     var action = opts.action;
     $("toast-icon").replaceChildren(iconNode(kind === "ok" ? "check" : kind === "error" ? "x" : "info", "sm"));
     toastEl.classList.remove("ok", "error", "info");
     toastEl.classList.add(kind);
+    toastEl.classList.toggle("refresh-error", toastPersistent);
     $("toast-title").textContent = title;
     $("toast-sub").textContent = opts.sub || "";
     toastAction.textContent = action ? action.label : "";
     toastAction.classList.toggle("hidden", !action);
-    toastAction.onclick = action ? function () { dismissToast(); action.fn(); } : null;
+    toastAction.onclick = action ? function () {
+      if (!toastPersistent) dismissToast();
+      action.fn();
+    } : null;
 
     clearTimeout(toastTimer);
     toastTimer = null;
@@ -9039,7 +9048,36 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   // ------------------------------------------------------------ loading
 
-  var loading = null, refreshTimer = null;
+  var loading = null, refreshTimer = null, refreshError = "";
+  function setRefreshError(reason) {
+    if (reason === refreshError || reason && refreshError) return;
+    refreshError = reason;
+    var button = $("refresh"), label = reason ? "Refresh failed · Retry" : "Refresh";
+    button.classList.toggle("refresh-error", !!reason);
+    button.setAttribute("aria-label", label);
+    button.title = label;
+    if (reason) {
+      toast("Couldn't refresh · " + reason, {
+        kind: "error", persistent: true, action: { label: "Retry", fn: refreshDashboard }
+      });
+    } else if (toastPersistent) {
+      var retryFocused = document.activeElement === toastAction;
+      dismissToast();
+      if (retryFocused) button.focus({ preventScroll: true });
+    }
+  }
+
+  function refreshDashboard() {
+    // Plugins poll on their own schedule. Manual refresh also reloads the visible view.
+    if (route.view === "plugin") fetchPluginView();
+    return load();
+  }
+
+  function refreshFailure(err) {
+    if (err.status) return "HTTP " + err.status;
+    if (!navigator.onLine) return "Offline";
+    return err instanceof SyntaxError ? "Invalid server response" : "Could not connect to the dashboard";
+  }
   function scheduleRefresh() {
     clearTimeout(refreshTimer);
     if (!document.hidden && !$('app').classList.contains('hidden')) {
@@ -9080,7 +9118,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         $("gate").classList.add("hidden");
         $("app").classList.remove("hidden");
         $("live-dot").classList.add("live");
-        $("refresh").classList.remove("spin");
+        setRefreshError("");
         $("meta").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         $("meta").parentNode.title = "Updated " + new Date().toLocaleString();
         auth.retried = false; auth.tokenOpen = false;
@@ -9095,14 +9133,18 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         if (err.unauthorized) { showGate(!!token); return; }
         // The server lost its owner (fresh data dir) or never had one.
         if (err.status === 503 && err.message === "setup required") { boot(); return; }
-        $("refresh").classList.remove("spin");
-        $("meta").textContent = "error: " + err.message;
+        setRefreshError(refreshFailure(err));
+        $("meta").textContent = "Refresh failed";
         $("live-dot").classList.remove("live");
-      }).finally(function () { loading = null; scheduleRefresh(); });
+      }).finally(function () {
+        $("refresh").classList.remove("spin");
+        loading = null; scheduleRefresh();
+      });
     return loading;
   }
 
   function showGate(failed, note) {
+    setRefreshError("");
     closePalette(true);
     closeMore(false);
     auth.passkeyBusy = false; auth.passkeyMsg = "";
@@ -9680,12 +9722,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     load();
   });
 
-  $("refresh").addEventListener("click", function () {
-    // The 60-second refresh leaves a plugin view to its own schedule; a
-    // press of the button is a request to reload whatever is on screen.
-    if (route.view === "plugin") fetchPluginView();
-    load();
-  });
+  $("refresh").addEventListener("click", refreshDashboard);
   $("home").addEventListener("click", function () { go("#/"); });
   $("host-back").addEventListener("click", function () { go("#/hosts"); });
 
