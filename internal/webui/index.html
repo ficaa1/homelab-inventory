@@ -796,8 +796,34 @@ pre.code {
 .dl dd { margin: 0; color: var(--text); word-break: break-word; }
 .drawer .note { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: var(--fs-sm); color: var(--text-3); overflow-wrap: anywhere; }
 .drawer .note b { color: var(--text-2); font-weight: 600; }
+.drawer-handle, .drawer-done { display: none; }
 @media (max-width: 640px) {
-  .drawer { width: 100%; border-left: 0; padding-left: 16px; padding-right: 16px; }
+  .drawer {
+    top: auto; left: 0; width: 100%; height: auto;
+    max-height: calc(100vh - var(--safe-t) - 12px);
+    max-height: calc(100dvh - var(--safe-t) - 12px);
+    display: flex; flex-direction: column; overflow: hidden;
+    border: 0; border-top: 1px solid var(--line-2); border-radius: 16px 16px 0 0;
+    padding: 0 16px calc(16px + var(--safe-b)); box-shadow: 0 -12px 40px rgba(0,0,0,.4);
+  }
+  .drawer.sheet-lg {
+    height: calc(100vh - var(--safe-t) - 12px);
+    height: calc(100dvh - var(--safe-t) - 12px);
+  }
+  .drawer-head { position: sticky; top: 0; min-height: 44px; flex: none; touch-action: none; }
+  .drawer-handle {
+    display: block; position: absolute; left: calc(50% - 18px); top: 10px;
+    width: 36px; height: 5px; border-radius: 3px; background: var(--line-2);
+  }
+  .drawer .close {
+    position: absolute; inset: 0 -6px auto auto; width: auto; min-width: 44px; height: 44px;
+    padding: 0 6px; background: transparent; color: var(--accent); font-weight: 600;
+  }
+  .drawer .close .ic { display: none; }
+  .drawer-done { display: inline; }
+  #drawer-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .drawer.sheet-lg #drawer-body { flex: 1; }
+  .drawer h3 { margin-right: 0; }
 }
 
 /* ------------------------------------------------------------------ host view */
@@ -2029,7 +2055,10 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 <div id="tip" class="tip hidden" role="status" aria-live="polite"></div>
 <div id="scrim" class="scrim hidden"></div>
 <aside id="drawer" class="drawer hidden" role="dialog" aria-modal="true" aria-label="Details">
-  <button class="close" id="drawer-close" type="button" aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
+  <div class="drawer-head" id="drawer-head">
+    <span class="drawer-handle" aria-hidden="true"></span>
+    <button class="close" id="drawer-close" type="button" aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg><span class="drawer-done" aria-hidden="true">Done</span></button>
+  </div>
   <div id="drawer-body"></div>
 </aside>
 <input id="up-input" type="file" multiple hidden>
@@ -2242,6 +2271,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
 
   function go(hash) {
+    if (drawerPopping) { drawerNextRoute = hash; return; }
     if (location.hash === hash) applyRoute();
     else location.hash = hash;
   }
@@ -3493,7 +3523,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       if (err.canceled) { if (restartVisible(session)) showRestartPreview(p, session, false); return; }
       if (restartVisible(session)) {
         restartSheet(p.target, '<div role="status">' + restartStatus("running") + '</div><div id="restart-health" class="sub">Checking API…</div><a class="btn" href="#/admin" id="restart-check">Recent actions</a>');
-        $("restart-check").onclick = closeDrawer;
+        $("restart-check").onclick = function (e) { e.preventDefault(); closeDrawer(); go("#/admin"); };
       }
       pollRestartHealth(session, 0);
     }).finally(function () { restartBusy = false; });
@@ -4549,10 +4579,10 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     if (el.motionIn) { el.motionIn.cancel(); el.motionIn = null; }
   }
 
-  function animateIn(el, frames, dur, easing, delay) {
+  function animateIn(el, frames, dur, easing, delay, fadeReduced) {
     if (!el) return null;
     stopEntrance(el);
-    if (!moving()) return null;
+    if (!moving() && !(fadeReduced && el.animate)) return null;
     var a = el.animate(frames, { duration: dur, easing: easing || motion.out, delay: delay || 0, fill: "backwards" });
     el.motionIn = a;
     a.onfinish = a.oncancel = function () {
@@ -4562,21 +4592,21 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     return a;
   }
 
-  function reveal(el, frames, dur, easing) {
+  function reveal(el, frames, dur, easing, fadeReduced) {
     clearTimeout(el.motionTimer);
     if (el.motionOut) { var old = el.motionOut; el.motionOut = null; old.cancel(); }
     stopEntrance(el);
     el.inert = false;
     el.classList.remove("hidden");
-    return frames ? animateIn(el, frames, dur, easing) : null;
+    return frames ? animateIn(el, frames, dur, easing, 0, fadeReduced) : null;
   }
 
-  function conceal(el, frames, dur, after) {
+  function conceal(el, frames, dur, after, fadeReduced, interactive) {
     if (el.classList.contains("hidden") || el.motionOut) return;
     stopEntrance(el);
     function done() { el.inert = false; el.classList.add("hidden"); if (after) after(); }
-    if (!moving() || !frames) { done(); return; }
-    el.inert = true;
+    if ((!moving() && !(fadeReduced && el.animate)) || !frames) { done(); return; }
+    el.inert = !interactive;
     var a = el.animate(frames, { duration: dur, easing: motion.inn, fill: "forwards" });
     el.motionOut = a;
     function finish() {
@@ -4647,33 +4677,199 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   // ------------------------------------------------------------ drawer
 
-  var drawerReturnFocus = null;
+  var drawer = $("drawer"), scrim = $("scrim"), drawerBody = $("drawer-body"), drawerHead = $("drawer-head");
+  var drawerOpen = false, drawerReturnFocus = null, drawerPopping = false, drawerNextRoute = "";
+  var drawerDrag = null, drawerDragged = false;
+  var drawerPhone = matchMedia("(max-width: 640px)");
+
+  function sizeDrawer() {
+    if (!drawerOpen || !phone()) return;
+    drawer.classList.remove("sheet-lg");
+    var viewport = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    var padding = parseFloat(getComputedStyle(drawer).paddingBottom);
+    drawer.classList.toggle("sheet-lg", drawerHead.offsetHeight + drawerBody.scrollHeight + padding > viewport * 0.7);
+  }
+
+  function markDrawerHistory() {
+    if (!drawerPopping && !(history.state && history.state.hiDrawer)) {
+      history.pushState(Object.assign({}, history.state, { hiDrawer: true }), "", location.href);
+    }
+  }
+
+  function clearDrawerMarker() {
+    var state = Object.assign({}, history.state);
+    delete state.hiDrawer;
+    history.replaceState(Object.keys(state).length ? state : null, "", location.href);
+  }
+
+  // Closing and routing can happen in the same click. Apply the route only
+  // once the same-URL history entry for the sheet has been popped.
+  window.addEventListener("popstate", function () {
+    if (drawerPopping) {
+      drawerPopping = false;
+      var next = drawerNextRoute;
+      drawerNextRoute = "";
+      if (drawerOpen && phone()) markDrawerHistory();
+      if (next) go(next);
+    } else if (drawerOpen && phone() && !(history.state && history.state.hiDrawer)) {
+      closeDrawer(true);
+    } else if (!drawerOpen && history.state && history.state.hiDrawer) {
+      clearDrawerMarker();
+    }
+  });
+  if (history.state && history.state.hiDrawer) clearDrawerMarker();
+
+  function resizeDrawer() {
+    if (!phone() && history.state && history.state.hiDrawer) {
+      clearDrawerMarker();
+    } else if (drawerOpen && phone()) {
+      markDrawerHistory();
+    }
+    sizeDrawer();
+  }
+  if (drawerPhone.addEventListener) drawerPhone.addEventListener("change", resizeDrawer);
+  else drawerPhone.addListener(resizeDrawer);
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", sizeDrawer);
+  else window.addEventListener("resize", sizeDrawer);
+
+  function drawerY(y) { return "translateY(" + y + "px)"; }
 
   function openDrawer(html, label) {
-    var opening = $("drawer").classList.contains("hidden") || !!$("drawer").motionOut;
+    var opening = !drawerOpen;
     if (opening) drawerReturnFocus = document.activeElement;
-    $("drawer").setAttribute("aria-label", label || "Details");
-    if (typeof html === "string") $("drawer-body").innerHTML = html;
-    else $("drawer-body").replaceChildren(html);
-    reveal($("drawer"), opening && (phone() ? [{ opacity: 0, transform: "translateY(40px)" }, { opacity: 1, transform: "none" }]
-      : [{ opacity: 0, transform: "translateX(28px)" }, { opacity: 1, transform: "none" }]), motion.d3);
-    reveal($("scrim"), opening && FADE_IN, motion.d2);
+    drawerOpen = true;
+    drawer.setAttribute("aria-label", label || "Details");
+    if (typeof html === "string") drawerBody.innerHTML = html;
+    else drawerBody.replaceChildren(html);
+    resetDrawerDrag();
+    var onPhone = phone();
+    var frames = onPhone ? (reducedMotion.matches ? FADE_IN :
+      [{ transform: "translateY(100%)" }, { transform: "none" }]) :
+      [{ opacity: 0, transform: "translateX(28px)" }, { opacity: 1, transform: "none" }];
+    reveal(drawer, opening && frames, motion.d3, motion.out, onPhone);
+    reveal(scrim, opening && FADE_IN, motion.d2, motion.out, onPhone);
+    if (onPhone) {
+      drawerBody.scrollTop = 0;
+      sizeDrawer();
+      markDrawerHistory();
+    }
     syncScrollLock();
     $("drawer-close").focus();
   }
 
-  function closeDrawer() {
+  function closeDrawer(fromHistory) {
+    if (!drawerOpen) return;
+    var onPhone = phone();
+    var current = onPhone ? getComputedStyle(drawer).transform : "none";
+    var opacity = getComputedStyle(scrim).opacity;
+    drawerOpen = false;
+    resetDrawerDrag();
     restartSession++; stopRestartHealth();
     if (enrollSession && enrollSession.fromAdmin) {
       var arrived = Object.keys(enrollSession.reporting).length;
       stopEnroll();
       if (arrived) load();
     }
-    conceal($("drawer"), phone() ? [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(40px)" }]
-      : [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(28px)" }], motion.d2, syncScrollLock);
-    conceal($("scrim"), FADE_OUT, motion.d2);
-    if (drawerReturnFocus && drawerReturnFocus.isConnected) drawerReturnFocus.focus();
+    var frames = onPhone ? (reducedMotion.matches ? FADE_OUT :
+      [{ transform: current }, { transform: "translateY(100%)" }]) :
+      [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(28px)" }];
+    conceal(drawer, frames, motion.d2, syncScrollLock, onPhone, onPhone && moving());
+    conceal(scrim, [{ opacity: opacity }, { opacity: 0 }], motion.d2, null, onPhone);
+    if (fromHistory !== true && history.state && history.state.hiDrawer) {
+      drawerPopping = true;
+      history.back();
+    }
+    if (drawerReturnFocus && drawerReturnFocus.isConnected) drawerReturnFocus.focus({ preventScroll: true });
   }
+
+  function resetDrawerDrag() {
+    if (drawerDrag && drawer.hasPointerCapture(drawerDrag.id)) drawer.releasePointerCapture(drawerDrag.id);
+    drawerDrag = null;
+    drawer.style.transform = "";
+    scrim.style.opacity = "";
+  }
+
+  function drawerDragAllowed(target) {
+    if (target.closest("input, textarea, select, button, a, label, summary, [role='button'], [contenteditable]")) return false;
+    for (var node = target; node && node !== drawer; node = node.parentElement) {
+      if (node.scrollWidth > node.clientWidth + 1 && /auto|scroll/.test(getComputedStyle(node).overflowX)) return false;
+    }
+    return true;
+  }
+
+  drawer.addEventListener("pointerdown", function (e) {
+    if (!phone() || !e.isPrimary || e.button !== 0 || !drawerDragAllowed(e.target)) return;
+    var header = drawerHead.contains(e.target);
+    if (!header && drawerBody.scrollTop > 0) return;
+    drawerDragged = false;
+    var transform = getComputedStyle(drawer).transform;
+    var offset = transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m42;
+    var wasClosing = !!drawer.motionOut;
+    if (wasClosing || drawer.motionIn) {
+      var opacity = getComputedStyle(scrim).opacity;
+      reveal(drawer);
+      reveal(scrim);
+      drawer.style.transform = drawerY(offset);
+      scrim.style.opacity = opacity;
+      if (wasClosing) {
+        drawerOpen = true;
+        markDrawerHistory();
+      }
+    }
+    drawerDrag = { id: e.pointerId, x: e.clientX, y: e.clientY, lastY: e.clientY, lastT: e.timeStamp,
+      offset: offset, height: drawer.offsetHeight, velocity: 0, header: header, active: false };
+  });
+
+  drawer.addEventListener("pointermove", function (e) {
+    var d = drawerDrag;
+    if (!d || d.id !== e.pointerId) return;
+    var dx = e.clientX - d.x, dy = e.clientY - d.y;
+    if (!d.active) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 6) return;
+      if (Math.abs(dx) >= Math.abs(dy) || (!d.header && dy < 0)) { endDrawerDrag(e, true); return; }
+      d.active = true;
+      drawerDragged = true;
+      drawer.setPointerCapture(e.pointerId);
+    }
+    var y = d.offset + dy;
+    var gap = e.timeStamp - d.lastT;
+    if (gap > 0 && e.clientY !== d.lastY) {
+      d.velocity = (e.clientY - d.lastY) / gap;
+      d.lastY = e.clientY; d.lastT = e.timeStamp;
+    }
+    drawer.style.transform = drawerY(y < 0 ? Math.max(-24, y * 0.2) : y);
+    scrim.style.opacity = Math.max(0, Math.min(1, 1 - y / d.height));
+  });
+
+  // Keep native upward scrolling in the content. At scrollTop zero only a
+  // downward vertical touch is eligible to cancel the browser's pan.
+  drawerBody.addEventListener("touchmove", function (e) {
+    var d = drawerDrag, touch = e.touches[0];
+    if (!d || !touch || e.touches.length !== 1 || !e.cancelable) return;
+    var dy = touch.clientY - d.y;
+    if (d.active || (dy >= 6 && dy > Math.abs(touch.clientX - d.x))) e.preventDefault();
+  }, { passive: false });
+
+  function endDrawerDrag(e, cancelled) {
+    var d = drawerDrag;
+    if (!d || d.id !== e.pointerId) return;
+    var y = d.offset + e.clientY - d.y;
+    var flick = e.timeStamp - d.lastT < 100 && d.velocity > 0.5;
+    if (!cancelled && d.active && (y > d.height * 0.3 || flick)) { closeDrawer(); return; }
+    var transform = drawer.style.transform, opacity = scrim.style.opacity;
+    resetDrawerDrag();
+    if (transform && moving()) {
+      reveal(drawer, [{ transform: transform }, { transform: "none" }], motion.d2);
+      reveal(scrim, [{ opacity: opacity }, { opacity: 1 }], motion.d2);
+    }
+  }
+  window.addEventListener("pointerup", function (e) { endDrawerDrag(e, false); });
+  window.addEventListener("pointercancel", function (e) { endDrawerDrag(e, true); });
+  drawer.addEventListener("click", function (e) {
+    if (drawerDragged && e.detail) { e.stopPropagation(); e.preventDefault(); }
+    drawerDragged = false;
+  }, true);
+  drawer.addEventListener("pointerdown", function () { drawerDragged = false; }, true);
 
   function row(k, v) { return v ? "<dt>" + esc(k) + "</dt><dd>" + esc(v) + "</dd>" : ""; }
 
