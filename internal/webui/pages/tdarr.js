@@ -98,7 +98,7 @@
       (n.active || []).forEach(function (a) {
         var pct = typeof a.pct === "number" && isFinite(a.pct) ? Math.max(0, Math.min(100, a.pct)) : null;
         row.appendChild(h("div", { class: "tdarr-active" }, [
-          h("span", { title: a.file || "", text: base(a.file) || "Current file" }),
+          filePath(a.file),
           h("b", { text: pct == null ? "—" : Math.round(pct) + "%" })
         ]));
         if (pct != null) row.appendChild(bar(pct));
@@ -106,6 +106,14 @@
       card.appendChild(row);
     });
     return card;
+  }
+  function filePath(path) {
+    var name = h("bdi", { dir: "auto", text: base(path) || "Current file", title: path || "" });
+    if (!path || path === base(path)) return name;
+    return h("details", {}, [
+      h("summary", {}, [name]),
+      h("div", { class: "sub tdarr-path" }, [h("bdi", { dir: "auto", text: path })])
+    ]);
   }
   function metric(n, label) { return h("span", {}, [h("b", { text: num(n) }), " " + label]); }
   function bar(pct) {
@@ -419,7 +427,7 @@
       var k = KIND[c.kind] || [c.kind, "info"], dir = c.path.split("/").slice(-2, -1)[0] || "";
       el.appendChild(h("div", { class: "tdarr-cand" }, [
         h("div", { class: "tdarr-name" }, [
-          h("span", { class: "tdarr-line" }, [h("b", { title: c.path, text: base(c.path) }), HI().pill(k[0], k[1])]),
+          h("span", { class: "tdarr-line" }, [filePath(c.path), HI().pill(k[0], k[1])]),
           h("span", { class: "sub", text: [dir, c.codec, c.resolution, c.reason].filter(Boolean).join(" · ") })
         ]),
         h("div", { class: "tdarr-size" }, [h("strong", { text: "≈" + gb(c.est_save_gb) }), bar((c.est_save_gb || 0) / max * 100)]),

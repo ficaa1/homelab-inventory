@@ -7,7 +7,7 @@
 .taste-card.judged :is(h3, .taste-reason) { color: var(--text-3); }
 .taste-card.judged .tposter img { opacity: .6; }
 .taste-card h3 { margin: 0 0 2px; font-size: var(--fs-md); font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
-.taste-reason { margin-top: 6px; font-size: var(--fs-sm); color: var(--text-2); line-height: 1.35; }
+.taste-reason { margin-top: 6px; font-size: var(--fs-sm); color: var(--text-2); line-height: 1.5; text-wrap: pretty; }
 .tposter { width: 76px; aspect-ratio: 2 / 3; border-radius: var(--r-sm); overflow: hidden; background: var(--surface-2); display: grid; place-items: center; }
 .tposter.sm { width: 40px; flex: none; }
 .tposter img { width: 100%; height: 100%; object-fit: cover; display: block; }

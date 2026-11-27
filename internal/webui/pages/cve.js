@@ -267,7 +267,7 @@
     var unsupported = (cov.unsupported || []).length, skipped = (cov.skipped || []).length;
     slot.appendChild(h("div", { class: "cve-kpis" }, [
       lead,
-      tile("Known exploited", fmt(t.kev), t.kev ? "In CISA's KEV catalog" : "None in CISA's KEV catalog", t.kev ? "crit" : "ok", t.kev ? function () { nav("vulns", { kev: true, sev: [], sup: "" }); } : null),
+      tile("Known exploited", fmt(t.kev), t.kev ? "In CISA’s KEV catalog" : "None in CISA’s KEV catalog", t.kev ? "crit" : "ok", t.kev ? function () { nav("vulns", { kev: true, sev: [], sup: "" }); } : null),
       tile("Fix available", fmt(t.fixable), t.vulns ? Math.round(100 * n(t.fixable) / n(t.vulns)) + "% of open CVEs" : "", "", t.fixable ? function () { nav("vulns", { fix: true, sup: "" }); } : null),
       tile("Affected", plural(t.hosts_affected, "host"), plural(t.sets_affected, "package set") + " · " + plural(t.packages_affected, "package"), "", function () { nav("hosts", {}); }),
       tile("Coverage", cov.sets ? fmt(cov.sets_scanned) + " / " + fmt(cov.sets) : "—",
@@ -579,7 +579,7 @@
     if (v.summary) kids.push(h("p", { class: "cve-lede-d", text: v.summary }));
     if (v.kev) kids.push(h("div", { class: "cve-kevbox", role: "note" }, [
       h("b", { text: "Known exploited" + (v.kev.ransomware ? " · used in ransomware" : "") }),
-      h("div", { text: (v.kev.name ? v.kev.name + ". " : "") + "In CISA's catalog since " + day(v.kev.date_added) + (v.kev.due_date ? "; US federal agencies must patch by " + day(v.kev.due_date) + "." : ".") })]));
+      h("div", { text: (v.kev.name ? v.kev.name + ". " : "") + "In CISA’s catalog since " + day(v.kev.date_added) + (v.kev.due_date ? "; US federal agencies must patch by " + day(v.kev.due_date) + "." : ".") })]));
     kids.push(facts);
     if (v.cvss && /^CVSS:3/.test(v.cvss.vector || "")) kids.push(vector(v.cvss.vector));
     kids.push(remediation(v.affected || []));

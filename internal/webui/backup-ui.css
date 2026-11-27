@@ -30,7 +30,7 @@
   #backup-admin .backup-check input { order: 1; margin-left: auto; }
   #backup-admin summary { line-height: 1.4; font-weight: 500; }
   #backup-admin details > p { color: var(--text-3); font-size: var(--fs-sm); line-height: 1.45; }
-  #backup-admin .backup-field input { min-height: 44px; font-size: 16px; }
+  #backup-admin .backup-field input { min-height: 44px; font-size: 1rem; }
   #backup-admin .backup-restore input[type="file"] { overflow: hidden; }
   #backup-admin :is(.backup-controls, #backup-plan) > .btn { min-height: 48px; width: 100%; margin-inline: 0; }
 }

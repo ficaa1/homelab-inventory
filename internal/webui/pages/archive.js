@@ -343,8 +343,8 @@
       nowCard(v) + tiles(v) +
       ((a.abandonedDownloads || []).length ? '<div class="arc-queue"><h4>Rejected downloads</h4>' + a.abandonedDownloads.map(function(d) { return '<div class="arc-q"><span class="what"><b>' + esc(d.title) + '</b><br><span class="arc-code">' + esc(d.release) + '</span><br>Removes ' + esc(new Date(d.removeAfter).getFullYear() > 1 ? new Date(d.removeAfter).toLocaleDateString() : 'Awaiting completion') + '</span></div>'; }).join('') + '</div>' : '') +
       (a.cleanupError ? '<div class="arc-msg warn">' + esc(a.cleanupError) + '</div>' : '') +
-      '<div class="arc-section"><h3>Tagged titles</h3></div>' + titles(v) +
-      '<div class="arc-section"><h3>Completed</h3>' + purgeAllButton(v) + '</div>' + history(v) +
+      '<div class="arc-section"><h2>Tagged titles</h2></div>' + titles(v) +
+      '<div class="arc-section"><h2>Completed</h2>' + purgeAllButton(v) + '</div>' + history(v) +
       (a.notificationError ? '<div class="freebar">' + esc(a.notificationError) + '</div>' : ''));
     focusPending();
   }

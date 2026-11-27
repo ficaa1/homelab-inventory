@@ -320,7 +320,7 @@
     var rs = source("quality") && panelStale("pingRtt"), ls = source("quality") && panelStale("pingLoss"), ds = source("quality") && panelStale("dnsLatency");
     var body = [];
     function sub(a, b, c) { return h("div", { class: "net-sub" }, [h("span", { text: a }), h("span", { text: b }), h("span", { text: c })]); }
-    function row(name, a, b) { return h("div", { class: "net-row" }, [h("span", { class: "net-name", text: name, title: name }), a, b]); }
+    function row(name, a, b) { return h("div", { class: "net-row" }, [h("bdi", { class: "net-name", dir: "auto", text: name, title: name }), a, b]); }
     function cell(dim, pts, value, opts, extra) {
       return h("span", { class: "net-cell" + (extra || "") + (dim ? " net-dim" : "") }, [spark(pts, opts), h("b", { text: value })]);
     }
@@ -488,7 +488,7 @@
     if (cs.length) {
       var top = Math.max.apply(null, cs.map(function (c) { return num(c.bytesPerSecond) ? c.bytesPerSecond : 0; })) || 1;
       out.push(card("", "box", "Busiest containers", [], cs.map(function (c) {
-        return h("div", { class: "hn-crow" }, [h("span", { class: "net-name", text: c.name, title: c.name }), meter((c.bytesPerSecond || 0) / top * 100), h("b", { text: bytesPs(c.bytesPerSecond) })]);
+        return h("div", { class: "hn-crow" }, [h("bdi", { class: "net-name", dir: "auto", text: c.name, title: c.name }), meter((c.bytesPerSecond || 0) / top * 100), h("b", { text: bytesPs(c.bytesPerSecond) })]);
       })));
     }
     return out;

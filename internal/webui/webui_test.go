@@ -99,7 +99,7 @@ func TestBindScopeIsExplained(t *testing.T) {
 	// expected to infer from a colour. Asserted on the concept rather than one
 	// phrasing, so trimming the prose does not fail this for the wrong reason —
 	// what must not happen is the explanation disappearing.
-	for _, want := range []string{"kernel's dynamic", "claimable"} {
+	for _, want := range []string{"kernel’s dynamic", "claimable"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the kernel ephemeral range explanation no longer mentions %q", want)
 		}

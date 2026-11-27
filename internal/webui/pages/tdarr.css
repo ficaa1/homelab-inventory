@@ -8,21 +8,23 @@
 /* Tdarr reuses Library's typography, meters, season picker and drawer. */
 .tdarr-metrics, .tdarr-node > div:first-child, .tdarr-selection { display:flex; align-items:center; gap:16px; }
 .tdarr-metrics { padding:4px 0 16px; justify-content:space-between; }
-.tdarr-metrics b { font-size:24px; font-variant-numeric:tabular-nums; }
+.tdarr-metrics b { font-size:var(--fs-xl); font-variant-numeric:tabular-nums; }
 .tdarr-node { padding:12px 0; border-top:1px solid var(--line); }
 .tdarr-node > div:first-child { gap:8px; flex-wrap:wrap; }
 .tdarr-dot { width:7px; height:7px; border-radius:50%; background:var(--muted); }
 .tdarr-dot.on { background:var(--good); }
 .tdarr-dot.paused { background:var(--warning); }
 .tdarr-active { display:flex; gap:12px; justify-content:space-between; margin-top:10px; }
-.tdarr-active span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tdarr-active details { min-width: 0; }
+.tdarr-path { overflow-wrap: anywhere; }
+.tdarr-node, .tdarr-selection, .tdarr-size { font-variant-numeric: tabular-nums; }
 .tdarr-row { display:grid; grid-template-columns:minmax(0,1fr) 130px auto; align-items:center; gap:16px; margin-bottom:8px; }
 .tdarr-title { display:flex; align-items:center; gap:12px; min-height:44px; cursor:pointer; min-width:0; }
 .tdarr-title > span { min-width:0; overflow-wrap:anywhere; }
 .tdarr-title input, .library-season-picker input { width:20px; height:20px; flex-shrink:0; accent-color:var(--accent); }
 .tdarr-title .sub { display:block; }
 .tdarr-locked, .tdarr-locked .library-name { color:var(--text-3); }
-.tdarr-lock { font-size:12px; }
+.tdarr-lock { font-size:var(--fs-xs); }
 .tdarr-selection { position:sticky; top:calc(var(--arc-sticky-top, var(--top-h)) + 8px); z-index:2; margin-top:16px; box-shadow:var(--shadow); flex-wrap:wrap; }
 .tdarr-selection .library-keep { margin:0; min-height:44px; }
 .tdarr-file > summary { min-height:44px; cursor:pointer; }
@@ -30,15 +32,15 @@
 .tdarr-file > summary > .tdarr-skip { display:inline-block; margin-top:6px; }
 .tdarr-file .tdarr-path { color:var(--text-3); font-size:var(--fs-xs); }
 .tdarr-file { padding:12px 0; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:6px; overflow-wrap:anywhere; }
-.tdarr-skip { border:1px solid var(--line); border-radius:var(--r); padding:4px 8px; font-size:11px; align-self:flex-start; color:var(--muted); }
+.tdarr-skip { border:1px solid var(--line); border-radius:var(--r); padding:4px 8px; font-size:var(--fs-sm); align-self:flex-start; color:var(--muted); }
 #archive-tdarr button, #archive-tdarr input[type=search] { min-height:44px; }
 @media(max-width:600px) {
   .tdarr-row { grid-template-columns:minmax(0,1fr) auto; gap:8px 12px; }
   .tdarr-title { grid-column:1/-1; }
   #tdarr-search { width:100%; min-width:0; flex:1; }
   .tdarr-selection { gap:8px; }
-  .tdarr-metrics { gap:8px; font-size:12px; }
-  .tdarr-node .sub { font-size:11px; }
+  .tdarr-metrics { gap:8px; font-size:var(--fs-xs); }
+  .tdarr-node .sub { font-size:var(--fs-sm); }
 }
 
 /* Beyond the Tdarr section: an Archive-busy pill on a title, and the "Worth compressing"
@@ -56,9 +58,9 @@
 #archive-tdarr .tdarr-cand > :last-child { justify-self: end; }
 #archive-tdarr .tdarr-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 #archive-tdarr .tdarr-line { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--fs-sm); }
-#archive-tdarr .tdarr-line b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-#archive-tdarr .tdarr-line .pill { flex: none; font-size: 11px; padding: 0 6px; line-height: 16px; }
-#archive-tdarr .tdarr-name .sub { font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#archive-tdarr .tdarr-line b { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+#archive-tdarr .tdarr-line .pill { flex: none; font-size: var(--fs-xs); padding: 0 6px; line-height: 1.35; }
+#archive-tdarr .tdarr-name .sub { font-size: var(--fs-xs); overflow-wrap: anywhere; }
 #archive-tdarr .tdarr-cand .tdarr-size { display: grid; gap: 5px; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 #archive-tdarr .tdarr-cand .tdarr-size strong { font-weight: 500; }
 #archive-tdarr .tdarr-cand .library-bar { margin-top: 0; }
