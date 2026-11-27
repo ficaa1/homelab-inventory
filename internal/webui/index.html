@@ -547,6 +547,7 @@ td .sub { font-size: var(--fs-xs); }
 td.num, th.num { text-align: right; }
 .pkg td { white-space: normal; vertical-align: top; }
 .pkg code { word-break: break-all; }
+[data-list] td.c-sub { display: none; }
 .why { cursor: help; border-bottom: 1px dotted var(--text-3); text-transform: none; letter-spacing: 0; color: var(--text-3); }
 @media (hover: hover) and (pointer: fine) {
   .why:hover { color: var(--text); }
@@ -562,7 +563,48 @@ td.num, th.num { text-align: right; }
   table.trend td:nth-child(2) .spark { width: 84px; height: 22px; }
   table.trend td:nth-child(n+4) { grid-column: 1 / -1; text-align: left; }
   table.trend td:nth-child(4) .sub, table.trend td:nth-child(4) { display: inline; }
-  .ptable .c-proto, .ptable .c-bind, .ptable .c-kind { display: none; }
+  table.trend td { white-space: normal; overflow-wrap: anywhere; }
+  table.trend td:nth-child(4), table.trend td:nth-child(4) .sub { display: inline; }
+  .scroll:has(> [data-list]) { overflow: visible; }
+  table[data-list], [data-list] > tbody { display: block; }
+  table[data-list] { min-width: 0; border-radius: 12px; }
+  [data-list] > thead { display: none; }
+  [data-list] > tbody > tr {
+    position: relative; display: grid; grid-template-columns: minmax(0, 1fr) fit-content(42%);
+    grid-template-areas: "main end" "sub end"; align-items: center; align-content: center;
+    min-height: 52px; column-gap: 10px; padding: 10px 38px 10px 14px;
+    transition: background-color var(--dur-1) var(--ease-out);
+  }
+  [data-list] > tbody > tr:first-child { border-radius: 12px 12px 0 0; }
+  [data-list] > tbody > tr:last-child { border-radius: 0 0 12px 12px; }
+  [data-list] > tbody > tr:only-child { border-radius: 12px; }
+  [data-list] > tbody > tr + tr::before {
+    content: ""; position: absolute; inset: 0 0 auto 14px; border-top: 1px solid var(--line);
+  }
+  [data-list] > tbody > tr:active { background: var(--surface-3); }
+  [data-list] > tbody > tr > td { display: block; min-width: 0; padding: 0; border: 0; }
+  [data-list] > tbody > tr > .c-main {
+    grid-area: main; max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 15px; font-weight: 600; color: var(--text);
+  }
+  [data-list] .c-main b, [data-list] .c-main code { color: inherit; font-size: inherit; font-weight: inherit; }
+  [data-list] > tbody > tr > .c-end {
+    grid-area: end; max-width: none; text-align: right; white-space: normal; overflow-wrap: anywhere;
+  }
+  [data-list] .c-end .pill { white-space: normal; }
+  [data-list] > tbody > tr > .c-detail, [data-list] .c-extra { display: none; }
+  [data-list] > tbody > tr > .c-sub { grid-area: sub; color: var(--text-3); font-size: 12.5px; white-space: normal; }
+  [data-list] .c-sub > span {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+    overflow: hidden; overflow-wrap: anywhere;
+  }
+  [data-list] .c-list-open {
+    position: absolute; inset: 0 0 0 auto; display: grid; place-items: center; width: 40px;
+    border: 0; border-radius: var(--r); background: none; color: var(--text-3); cursor: pointer;
+  }
+  [data-list] .c-list-open:focus-visible { outline-offset: -3px; }
+  [data-list] .c-list-open .ic { width: 14px; height: 14px; }
+
   th, td { padding: 9px 10px; }
 }
 
@@ -1070,7 +1112,7 @@ button.ops-tile { cursor:pointer; }
   body:not(:has(#view-plugin:not(.hidden) #panel-archive:not(.hidden))) #drawer input:not([type="checkbox"]) { min-height: 44px; }
   body:not(:has(#view-plugin:not(.hidden) #panel-archive:not(.hidden))) #drawer label[for="e-hide"] { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
   #pal [data-pal] { min-height: 44px; }
-  #view-host tr[data-cfile] td { height: 44px; }
+  #view-host tr[data-cfile] td:not(.c-main, .c-sub, .c-detail, .c-end) { height: 44px; }
   #panel-home .svc:has(.edit) .txt { padding-right: 0; }
   #panel-home .svc .edit { position: static; align-self: flex-start; }
   #panel-home .svc:has(.edit) .top { align-items: flex-start; }
@@ -2007,7 +2049,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           <div class="filters">
             <label class="field"><svg class="ic sm" aria-hidden="true"><use href="#i-search"/></svg><input id="f-ports" enterkeyhint="search" type="search" placeholder="Filter ports" aria-label="Filter ports"></label>
           </div>
-          <div class="scroll"><table class="ptable">
+          <div class="scroll"><table class="ptable" data-list="3,6">
             <thead><tr>
               <th class="num">Port</th><th class="c-proto">Proto</th><th>Host</th>
               <th>Owner</th>
@@ -2710,6 +2752,60 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   // Flat rows are still the right shape for "find me this owner across the
   // fleet", and they are the keyboard- and screen-reader path to everything
   // the grid shows. The grid is the default; this is one toggle away.
+  // Keep the original cells and markup. The phone subtitle combines cells
+  // without asking the desktop table to provide additional columns.
+  function listText(el) {
+    return Array.prototype.map.call(el.childNodes, function (node) {
+      return node.textContent;
+    }).join(" ").replace(/\s+/g, " ").trim();
+  }
+
+  function prepareListTable(table) {
+    var columns = table.dataset.list.split(",").map(Number);
+    var names = table.tHead ? Array.prototype.map.call(table.tHead.rows[0].cells, listText)
+      : (table.dataset.listLabels || "").split("|");
+    Array.prototype.forEach.call(table.tBodies, function (body) {
+      Array.prototype.forEach.call(body.rows, function (tr) {
+        if (tr.querySelector(".c-sub")) return;
+        var cells = Array.prototype.slice.call(tr.cells);
+        var main = cells[tr.hasAttribute("data-list-main") ? Number(tr.dataset.listMain) : columns[0]], end = cells[columns[1]];
+        if (!main) return;
+        var details = cells.map(function (cell, i) {
+          return [names[i], listText(cell)];
+        });
+        main.classList.add("c-main");
+        if (end) end.classList.add("c-end");
+        var parts = [];
+        Array.prototype.forEach.call(main.children, function (child) {
+          if (!child.matches("div.sub")) return;
+          child.classList.add("c-extra");
+          parts.push(listText(child));
+        });
+        cells.forEach(function (cell, i) {
+          if (cell === main || cell === end) return;
+          cell.classList.add("c-detail");
+          if (details[i][1]) parts.push(cell.dataset.listText || details[i][1]);
+        });
+        var title = Array.prototype.filter.call(main.childNodes, function (node) {
+          return node.nodeType === 3 || !node.classList.contains("c-extra");
+        }).map(function (node) { return node.textContent; }).join(" ").trim();
+        var open = h("button", { class: "c-list-open", type: "button", "aria-label": "View details for " + title },
+          [iconNode("chevron", "sm")]);
+        if (!tr.classList.contains("clickable")) {
+          open.addEventListener("click", function () {
+            openDrawer("<h3>" + esc(title) + '</h3><dl class="dl">' +
+              details.map(function (field) { return row(field[0] || "Details", field[1]); }).join("") + "</dl>", title);
+          });
+        }
+        tr.appendChild(h("td", { class: "c-sub" }, [h("span", { text: parts.filter(Boolean).join(" · ") }), open]));
+      });
+    });
+  }
+
+  function prepareListTables(root) {
+    Array.prototype.forEach.call(root.querySelectorAll("table[data-list]"), prepareListTable);
+  }
+
   function renderPortsTable() {
     var pm = data.ports;
     if (!pm) return;
@@ -2740,7 +2836,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       var binds = (p.addresses || []).slice(0, 2).join(", ") +
         ((p.addresses || []).length > 2 ? " +" + ((p.addresses || []).length - 2) : "");
       return '<tr class="clickable" data-port-host="' + esc(r.host) + '" data-port="' + esc(p.port) +
-        '"><td class="num"><b>' + esc(p.port) + "</b></td>" +
+        '"><td class="num" data-list-text="Port ' + esc(p.port) + '"><b>' + esc(p.port) + "</b></td>" +
         '<td class="c-proto"><code>' + esc(p.protocol) + "</code></td>" +
         "<td>" + esc(r.host) + "</td>" +
         "<td>" + owner + "</td>" +
@@ -2752,6 +2848,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           : '<span class="pill" title="Loopback-only: reachable from this machine and nowhere else.">loopback</span>') +
         "</td></tr>";
     }).join("");
+    prepareListTable($("ports").closest("table"));
   }
 
   // ------------------------------------------------------------ ports: grid
@@ -3135,7 +3232,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           fact("Oldest", new Date(hist[hist.length - 1].collected_at).toLocaleString()) +
           fact("Typical gap", median ? Math.round(median) + " min" : "—") +
         "</div>" +
-        '<div class="scroll"><table><thead><tr><th>Collected</th><th>Ago</th>' +
+        '<div class="scroll"><table data-list="0,2"><thead><tr><th>Collected</th><th>Ago</th>' +
         '<th class="num">Size</th><th>Run id</th></tr></thead><tbody>' +
         hist.slice(0, 25).map(function (r) {
           return "<tr><td>" + esc(new Date(r.collected_at).toLocaleString()) + "</td>" +
@@ -3160,7 +3257,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           '<span class="pill" title="Pinned to a version tag">' + k.tag + " tag</span>" +
           '<span class="pill' + (k.floating ? " warning" : "") + '" title="On a moving tag such as :latest"><span class="glyph" aria-hidden="true">' + GLYPH.warning + "</span>" + k.floating + " floating</span>" +
           "</div>" +
-        '<div class="scroll"><table><thead><tr><th>Container</th><th>Image</th>' +
+        '<div class="scroll"><table data-list="0,3"><thead><tr><th>Container</th><th>Image</th>' +
         '<th>Tag</th><th>Pinning</th></tr></thead><tbody>' +
         im.containers.map(function (x) {
           var pin = x.image.pinning;
@@ -3215,7 +3312,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     if (timers.length || cron.length) {
       scheduleHTML = "";
       if (timers.length) {
-        scheduleHTML += '<div class="scroll"><table><thead><tr><th>Timer</th>' +
+        scheduleHTML += '<div class="scroll"><table data-list="0,2"><thead><tr><th>Timer</th>' +
           "<th>Last run</th><th>Next run</th></tr></thead><tbody>" +
           timers.map(function (t) {
             // A timer that has never fired, or has no next run, is the
@@ -3229,7 +3326,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           }).join("") + "</tbody></table></div>";
       }
       if (cron.length) {
-        scheduleHTML += '<div class="scroll" style="margin-top:10px"><table><thead><tr>' +
+        scheduleHTML += '<div class="scroll" style="margin-top:10px"><table data-list="0,-1"><thead><tr>' +
           "<th>Source</th><th>Entry</th></tr></thead><tbody>" +
           cron.map(function (c) {
             return "<tr><td><code>" + esc(c.path) + "</code>" +
@@ -3244,7 +3341,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var sh = inv.shares || {};
     var nfs = sh.nfs || [], smb = sh.smb || [];
     if (nfs.length || smb.length) {
-      sharesHTML = '<div class="scroll"><table><thead><tr><th>Kind</th><th>Name</th>' +
+      sharesHTML = '<div class="scroll"><table data-list="2,0"><thead><tr><th>Kind</th><th>Name</th>' +
         "<th>Path</th><th>Clients / options</th></tr></thead><tbody>" +
         nfs.map(function (x) {
           // Spec is the host/network/netgroup; read_only is promoted out of
@@ -3264,7 +3361,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           var guest = (o["guest ok"] || o["public"] || "").toLowerCase();
           var bits = [ro === "yes" ? "read only" : "writable"];
           if (guest === "yes") bits.push("guest ok");
-          return '<tr><td><span class="sub">SMB</span></td>' +
+          return '<tr data-list-main="1"><td><span class="sub">SMB</span></td>' +
             "<td><b>" + esc(x.name || "") + "</b>" +
             (x.comment ? '<div class="sub">' + esc(x.comment) + "</div>" : "") + "</td>" +
             "<td><code>" + esc(x.path || "—") + "</code></td>" +
@@ -3327,6 +3424,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           }).join(""), false)
         : "");
 
+    prepareListTables($("host-body"));
     alertList(mine, "level", "host-alerts", "host");
     gridView = { level: 0, lo: 0 };
     renderGrid("host-grid", name);
@@ -3381,6 +3479,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         '<div class="filters"><label class="field">' + ic("search", "sm") + '<input id="pkg-q" enterkeyhint="search" type="search" placeholder="Package name" aria-label="Package name"></label>' +
         '<select id="pkg-scope" class="sel" aria-label="Package set">' + opts + "</select></div>" +
         '<div id="pkg-list"></div>';
+      prepareListTables(el);
       $("pkg-q").value = pkgView.q;
       $("pkg-scope").value = pkgView.scope;
       if ($("pkg-scope").value !== pkgView.scope) pkgView.scope = "";
@@ -3411,7 +3510,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       });
     });
     if (!rows.length) return '<div class="empty">' + (entries && entries.length ? "No package changes." : "Only the baseline scan is stored.") + "</div>";
-    return '<div class="scroll"><table class="pkg"><tbody>' + rows.slice(0, 50).join("") + "</tbody></table></div>";
+    return '<div class="scroll"><table class="pkg" data-list="2,0" data-list-labels="Age|Set|Change"><tbody>' + rows.slice(0, 50).join("") + "</tbody></table></div>";
   }
   function pkgPage() {
     var v = pkgView, seq = ++v.seq;
@@ -3429,11 +3528,12 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       });
       var end = Math.min(r.offset + rows.length, r.total);
       el.innerHTML = rows.length
-        ? '<div class="scroll"><table class="pkg"><thead><tr><th>Package</th><th>Version</th>' + (many ? "<th>Set</th>" : "") + "</tr></thead><tbody>" + rows.join("") + "</tbody></table></div>" +
+        ? '<div class="scroll"><table class="pkg" data-list="0,-1"><thead><tr><th>Package</th><th>Version</th>' + (many ? "<th>Set</th>" : "") + "</tr></thead><tbody>" + rows.join("") + "</tbody></table></div>" +
           '<div class="filters"><span class="sub">' + (r.offset + 1) + "–" + end + " of " + r.total + '</span><span class="spacer"></span>' +
           (r.offset > 0 ? '<button type="button" class="btn" id="pkg-prev">Previous</button>' : "") +
           (end < r.total ? '<button type="button" class="btn" id="pkg-next">Next</button>' : "") + "</div>"
         : '<div class="empty">No matching packages.</div>';
+      prepareListTables(el);
       if ($("pkg-prev")) $("pkg-prev").onclick = function () { pkgView.offset = Math.max(0, r.offset - 200); pkgPage(); };
       if ($("pkg-next")) $("pkg-next").onclick = function () { pkgView.offset = r.offset + 200; pkgPage(); };
     }).catch(function (err) {
@@ -3688,7 +3788,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       '<div class="freebar"><span class="lab">' + d.files.length + " files · " +
         d.runs + " runs · " + (changed ? "<b>" + changed + "</b> changed" : "none changed") +
         "</span></div>" +
-      '<div class="scroll"><table><thead><tr><th>Project</th><th>File</th>' +
+      '<div class="scroll"><table data-list="0,2"><thead><tr><th>Project</th><th>File</th>' +
       '<th class="num">Versions</th><th>Last change</th></tr></thead><tbody>' +
       d.files.map(function (f) {
         var newest = f.versions[0] || {};
@@ -3709,6 +3809,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
               esc(new Date(newest.first_seen).toLocaleString()) + "</div>"
             : '<span class="sub">never changed</span>') + "</td></tr>";
       }).join("") + "</tbody></table></div>";
+    prepareListTables(el);
   }
 
   // Every file opens, whether or not it has ever changed. Only offering a
@@ -5223,6 +5324,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     // public-only dashboard and host enrolment cards follow.
     $("admin").innerHTML = recentActionsHTML() + adminVerdict(s) +
       '<div class="admin-grid"><div>' + adminNotify(s) + adminLog(s) + adminGeneral(s) + adminVPN(s) + '</div><div><div id="plugin-admin-sections"></div>' + adminStorage() + "</div></div>" + adminHostsHTML();
+    prepareListTables($("admin"));
     mountPluginAdmins();
     renderActionLog();
     wireStorage();
@@ -5272,9 +5374,9 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         '<input type="number" inputmode="numeric" min="0" step="1" id="rs-' + k + '" value="' + p[k] + '"></div>';
     }).join("");
     var rows = s.hosts.map(function (h) {
-      return '<tr><td>' + esc(h.host) + '</td><td>' + h.runs.toLocaleString() +
+      return '<tr><td>' + esc(h.host) + '</td><td data-list-text="' + h.runs.toLocaleString() + ' runs">' + h.runs.toLocaleString() +
         '</td><td>' + storageSize(h.bytes) + '</td><td>' + esc(h.oldest.slice(0,10)) +
-        '</td><td>' + h.compressed.toLocaleString() + '</td></tr>';
+        '</td><td data-list-text="' + h.compressed.toLocaleString() + ' compressed">' + h.compressed.toLocaleString() + '</td></tr>';
     }).join("");
     var stale = s.hosts.filter(function (h) { return h.stale; }).map(function (h) {
       return '<div class="storage-stale"><span>' + esc(h.host) + ' · last run ' +
@@ -5285,7 +5387,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       '<div class="kpis" style="margin:10px 0 12px;grid-template-columns:repeat(2,minmax(0,1fr))">' +
         '<div class="tile"><div class="label">Size</div><div class="value">' + storageSize(s.totalBytes) + '</div></div>' +
         '<div class="tile"><div class="label">Runs</div><div class="value">' + s.totalRuns.toLocaleString() + '</div></div></div>' +
-      '<div class="scroll"><table><thead><tr><th>Host</th><th>Runs</th><th>Size</th>' +
+      '<div class="scroll"><table data-list="0,2"><thead><tr><th>Host</th><th>Runs</th><th>Size</th>' +
       '<th>Oldest</th><th>Compressed</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
       '<div class="form"><div class="storage-policy">' + inputs + '</div>' +
       '<details class="src storage-help"><summary>Retention</summary><p>Keep every run through Keep days, hourly samples through Hourly days, then daily samples through Daily days. Daily 0 = forever. Compress days sets when retained runs are gzipped. Latest runs and compose changes always stay.</p></details>' +
@@ -6209,7 +6311,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var rows = items(b, "rows"), card = cardFor(b, rows.length ? rows.length : null);
     if (!rows.length || !cols.length) { card.appendChild(h("div", { class: "pv-empty", text: str(b.empty) || "Nothing to show" })); return card; }
     function align(c) { return c.align === "right" || c.align === "left" ? c.align : NUMERIC[c.format] ? "right" : "left"; }
-    var table = h("table", {}, [
+    var numeric = cols.findIndex(function (c, i) { return i > 0 && align(c) === "right"; });
+    var table = h("table", { "data-list": "0," + numeric }, [
       h("thead", {}, [h("tr", {}, cols.map(function (c) { return h("th", { class: align(c) === "right" ? "num" : null, scope: "col", text: str(c.label) || c.key }); }))]),
       h("tbody", {}, rows.map(function (r) {
         return h("tr", {}, cols.map(function (c) {
@@ -6218,6 +6321,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
             title: ct.title || (ct.text.length > 40 ? ct.text : null), text: ct.text });
         }));
       }))]);
+    prepareListTable(table);
     card.appendChild(h("div", { class: "scroll", tabindex: "0", role: "region", "aria-label": str(b.title) || "Table" }, [table]));
     return card;
   }
