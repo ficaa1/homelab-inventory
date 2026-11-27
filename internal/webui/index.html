@@ -556,7 +556,7 @@ td .sub { font-size: var(--fs-xs); }
 td.num, th.num { text-align: right; }
 .pkg td { white-space: normal; vertical-align: top; }
 .pkg code { word-break: break-all; }
-[data-list] td.c-sub { display: none; }
+[data-list] td.c-sub, [data-list] td.c-list-inline { display: none; }
 .why { cursor: help; border-bottom: 1px dotted var(--text-3); text-transform: none; letter-spacing: 0; color: var(--text-3); }
 @media (hover: hover) and (pointer: fine) {
   .why:hover { color: var(--text); }
@@ -612,6 +612,12 @@ td.num, th.num { text-align: right; }
   }
   [data-list] .c-list-open:focus-visible { outline-offset: -3px; }
   [data-list] .c-list-open .ic { width: 14px; height: 14px; transform: rotate(-90deg); }
+  [data-list] .c-list-open[aria-expanded] { bottom: auto; min-height: 52px; }
+  [data-list] .c-list-open[aria-expanded="true"] .ic { transform: none; }
+  [data-list] > tbody > tr > .c-list-inline {
+    display: block; grid-column: 1 / -1; min-width: 0; padding: 10px 0 0; border: 0; white-space: normal;
+  }
+  [data-list] .c-list-inline dd { overflow-wrap: anywhere; }
 
   th, td { padding: 9px 10px; }
 }
@@ -3087,14 +3093,34 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         var open = h("button", { class: "c-list-open", type: "button", "aria-label": "View details for " + title },
           [iconNode("chevron", "sm")]);
         if (!tr.classList.contains("clickable")) {
+          if (drawer.contains(table)) open.setAttribute("aria-expanded", "false");
           open.addEventListener("click", function () {
-            openDrawer("<h3>" + esc(title) + '</h3><dl class="dl">' +
-              details.map(function (field) { return row(field[0] || "Details", field[1]); }).join("") + "</dl>", title);
+            var fields = '<dl class="dl">' +
+              details.map(function (field) { return row(field[0] || "Details", field[1]); }).join("") + "</dl>";
+            if (phone() && drawerOpen && drawer.contains(tr)) {
+              toggleListRowDetails(tr, open, fields);
+              return;
+            }
+            openDrawer("<h3>" + esc(title) + "</h3>" + fields, title);
           });
         }
         tr.appendChild(h("td", { class: "c-sub", role: "cell" }, [h("span", { text: parts.filter(Boolean).join(" · ") }), open]));
       });
     });
+  }
+
+  function toggleListRowDetails(tr, button, fields) {
+    var detail = tr.querySelector(".c-list-inline");
+    if (!detail) {
+      detail = h("td", { class: "c-list-inline hidden", role: "cell" });
+      detail.innerHTML = fields;
+      tr.appendChild(detail);
+    }
+    var expand = button.getAttribute("aria-expanded") !== "true";
+    button.setAttribute("aria-expanded", String(expand));
+    if (expand) reveal(detail, FADE_IN, motion.d1);
+    else conceal(detail);
+    sizeDrawer();
   }
 
   function prepareListTables(root) {
@@ -5324,6 +5350,9 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     drawer.setAttribute("aria-label", label || "Details");
     if (typeof html === "string") drawerBody.innerHTML = html;
     else drawerBody.replaceChildren(html);
+    Array.prototype.forEach.call(drawerBody.querySelectorAll("[data-list] tr:not(.clickable) .c-list-open"), function (button) {
+      button.setAttribute("aria-expanded", "false");
+    });
   }
 
   function drawerExists(id) { return id === drawerID; }
