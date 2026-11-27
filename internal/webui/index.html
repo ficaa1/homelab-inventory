@@ -9486,11 +9486,18 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   function copyText(text, btn, source) {
     function label(html, cls) {
       btn.innerHTML = html;
-      btn.classList.toggle("ok", cls === "ok");
+      var copied = cls === "ok";
+      btn.classList.toggle("ok", copied);
+      if (copied) {
+        var frames = reducedMotion.matches ? [{ opacity: 0.85 }, { opacity: 1 }] :
+          [{ opacity: 0.5, transform: "scale(0.8)" }, { opacity: 1, transform: "none" }];
+        animateIn(btn.querySelector(".ic"), frames, motion.d1, motion.out, 0, true);
+        announce("Copied");
+      }
       clearTimeout(btn.copyTimer);
       btn.copyTimer = setTimeout(function () {
         btn.innerHTML = ic("copy", "sm") + "Copy"; btn.classList.remove("ok");
-      }, 2500);
+      }, copied ? 1500 : 2500);
     }
     function fallback() {
       var ta = document.createElement("textarea");
