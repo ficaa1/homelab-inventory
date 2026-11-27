@@ -361,7 +361,7 @@
           return;
         }
         st.selected = {}; st.notice = "Queued · " + num(r.queued_files) + " files";
-        return "queued";
+        return r.queued_files;
       }, function (e) {
         if (e.canceled) { st.notice = ""; return "canceled"; }
         if (e.status === 409) return "again";
@@ -372,9 +372,9 @@
         st.busy = false;
         if (outcome === "canceled") { queue.disabled = false; queue.textContent = "Queue"; return; }
         if (outcome === "again") { if (epoch === st.epoch && drawerOpen(box)) again("Plan changed or expired"); return; }
-        if (outcome === "queued") {
+        if (outcome > 0) {
           if (epoch === st.epoch && drawerOpen(box)) HI().closeDrawer();
-          HI().toast(st.notice, { kind: "ok" });
+          HI().toast(num(outcome) + (outcome === 1 ? " file queued in Tdarr" : " files queued in Tdarr"), { kind: "ok" });
         } else if (epoch === st.epoch && drawerOpen(box)) drawer("Tdarr batch", [h("h3", { text: st.notice }),
           h("div", { class: "actions" }, [h("button", { id: "tdarr-result-close", class: "btn", type: "button", text: "Close", onclick: HI().closeDrawer })])]);
         if (live) { render(); loadStatus(); }

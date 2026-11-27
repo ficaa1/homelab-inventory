@@ -648,7 +648,7 @@
         if (r.searchesQueued) {
           libNotice = untag ? "Archive tag removed" : editing ? "Seasons saved" : "Archiving " + it.title;
           if (live()) HI.closeDrawer();
-          HI.toast(libNotice, { kind: "ok" });
+          HI.toast(untag || editing ? libNotice : it.title + " archived", { kind: "ok" });
           note = "";
           pollNow();
           return;
@@ -685,7 +685,7 @@
           return;
         }
         if (live()) HI.closeDrawer();
-        HI.toast(libNotice, { kind: "ok" });
+        HI.toast(untag || editing ? libNotice : it.title + " archived", { kind: "ok" });
       }).catch(function (err) {
         if (fail(err)) return;
         if (live()) { msg("library-action-msg", (tagged ? "Tags were updated. " : "") + err.message, true); $("library-apply").disabled = false; }

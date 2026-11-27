@@ -34,6 +34,7 @@
   --surface-3: #27292c;
   --line:      rgba(236,238,240,0.07);
   --line-2:    rgba(236,238,240,0.12);
+  --edge-strong: #858991;
   --text:      #eceef0;
   --text-2:    #b3b7bc;
   --text-3:    #969ba2;
@@ -87,7 +88,7 @@
   :root:where(:not([data-theme="dark"])) {
     color-scheme: light;
     --bg: #f4f4f5; --surface: #ffffff; --surface-2: #f7f7f8; --surface-3: #ececee;
-    --line: rgba(20,22,26,0.08); --line-2: rgba(20,22,26,0.14);
+    --line: rgba(20,22,26,0.08); --line-2: rgba(20,22,26,0.14); --edge-strong: #787d85;
     --text: #16181b; --text-2: #4a4f56; --text-3: #5f646b;
     --accent: #1663c7; --accent-ink: #ffffff; --accent-soft: rgba(22,99,199,0.09);
     --ink-fill: #16181b; --ink-on: #ffffff;
@@ -109,7 +110,7 @@
 :root[data-theme="light"] {
   color-scheme: light;
   --bg: #f4f4f5; --surface: #ffffff; --surface-2: #f7f7f8; --surface-3: #ececee;
-  --line: rgba(20,22,26,0.08); --line-2: rgba(20,22,26,0.14);
+  --line: rgba(20,22,26,0.08); --line-2: rgba(20,22,26,0.14); --edge-strong: #787d85;
   --text: #16181b; --text-2: #4a4f56; --text-3: #5f646b;
   --accent: #1663c7; --accent-ink: #ffffff; --accent-soft: rgba(22,99,199,0.09);
   --ink-fill: #16181b; --ink-on: #ffffff;
@@ -588,7 +589,7 @@ td.num, th.num { text-align: right; }
   [data-list] > tbody > tr > :is(td.c-main, td.c-sub, td.c-end) { display: block; min-width: 0; padding: 0; border: 0; }
   [data-list] > tbody > tr > .c-main {
     grid-area: main; max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font-size: 15px; font-weight: 600; color: var(--text);
+    font-size: var(--fs-md); line-height: 1.4; font-weight: 600; color: var(--text);
   }
   [data-list] .c-main b, [data-list] .c-main code { color: inherit; font-size: inherit; font-weight: inherit; }
   [data-list] > tbody > tr > .c-end {
@@ -596,7 +597,7 @@ td.num, th.num { text-align: right; }
   }
   [data-list] .c-end .pill { white-space: normal; }
   [data-list] > tbody > tr > .c-detail, [data-list] .c-extra { display: none; }
-  [data-list] > tbody > tr > .c-sub { display: block; grid-area: sub; color: var(--text-3); font-size: 12.5px; white-space: normal; }
+  [data-list] > tbody > tr > .c-sub { display: block; grid-area: sub; color: var(--text-3); font-size: var(--fs-sm); line-height: 1.45; font-weight: 400; white-space: normal; }
   [data-list] .c-sub > span {
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
     overflow: hidden; overflow-wrap: anywhere;
@@ -876,7 +877,7 @@ pre.code {
 .toast {
   position: fixed; z-index: 82; right: 24px; bottom: calc(24px + var(--safe-b)); width: 360px;
   display: flex; align-items: center; gap: 10px; padding: 10px 12px;
-  background: var(--surface-3); border: 1px solid var(--line-2); border-radius: 14px; box-shadow: var(--shadow);
+  background: var(--surface-3); border: 1px solid var(--edge-strong); border-radius: 14px; box-shadow: var(--shadow);
 }
 .toast-icon {
   flex: none; display: grid; place-items: center; width: 22px; height: 22px;
@@ -886,11 +887,11 @@ pre.code {
 .toast.ok .toast-icon { color: var(--ok); background: var(--ok-soft); }
 .toast.error .toast-icon { color: var(--crit); background: var(--crit-soft); }
 .toast-copy { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.toast-title { font-size: 13.5px; font-weight: 600; }
-.toast-sub { font-size: 13px; color: var(--text-3); }
+.toast-title, .toast-action { font-size: var(--fs-md); line-height: 1.4; font-weight: 600; }
+.toast-sub { font-size: var(--fs-sm); line-height: 1.45; font-weight: 400; color: var(--text-3); }
 .toast-action {
   flex: none; min-height: 44px; padding: 0 6px; border: 0; border-radius: var(--r);
-  color: var(--accent); background: none; font-size: 13.5px; font-weight: 600; cursor: pointer;
+  color: var(--accent); background: none; cursor: pointer;
 }
 .toast-action:active { background: var(--surface-2); }
 @media (min-width: 641px) {
@@ -1541,7 +1542,7 @@ button.ops-tile { cursor:pointer; }
   .phone-option {
     flex: 1 1 0; min-width: 0; min-height: 44px; padding: 2px 6px;
     border: 0; border-radius: 7px; background: transparent; color: var(--text-3);
-    font-size: 13px; cursor: pointer;
+    font-size: var(--fs-sm); cursor: pointer;
     transition: background-color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
   }
   .phone-option[aria-pressed="true"] {
@@ -1570,12 +1571,16 @@ button.ops-tile { cursor:pointer; }
   #panel-admin :is(.setting:has(.settings-group), #signin, #backup-admin) > h4,
   #panel-admin .plug-group > legend {
     padding: 0 14px; margin: 0 0 6px; color: var(--text-3);
-    font-size: 13px; font-weight: 500; text-transform: none; letter-spacing: normal;
+    font-size: var(--fs-sm); line-height: 1.4; font-weight: 500; text-transform: none; letter-spacing: normal;
   }
   #panel-admin :is(.setting:has(.settings-group), #signin, #backup-admin) > h4 .ic { display: none; }
   #panel-admin :is(.setting:has(.settings-group), #signin, #backup-admin) > p { margin: 6px 14px; }
   #panel-admin .settings-group { display: flex; flex-direction: column; min-width: 0; }
   #panel-admin .settings-group > .row, #panel-admin .settings-row-wrap { display: contents; }
+  #panel-admin .settings-group.settings-rules { display: grid; grid-template-columns: minmax(0, 1fr); }
+  #panel-admin .settings-rules > .row:first-child > :first-child { grid-row: 1; }
+  #panel-admin .settings-rules > .row:first-child > :last-child { grid-row: 3; }
+  #panel-admin #severity-source { grid-row: 2; }
   #panel-admin .settings-group .settings-row { flex: none !important; }
   #panel-admin .settings-row, #panel-admin .settings-actions, #panel-admin .settings-group .storage-policy,
   #panel-admin .settings-group .settings-gateways {
@@ -1586,15 +1591,15 @@ button.ops-tile { cursor:pointer; }
     min-height: 48px; gap: 8px; padding-block: 3px;
   }
   #panel-admin .settings-row:has(input[role="switch"]) { grid-template-columns: minmax(0, 1fr) auto; }
-  #panel-admin .settings-row.settings-stack {
+  #panel-admin .settings-row.settings-stack, #panel-admin .settings-row.settings-text {
     grid-template-columns: minmax(0, 1fr); gap: 5px; padding-block: 10px;
   }
   #panel-admin .settings-row label, #panel-admin .settings-row:is(label), #panel-admin .settings-gateways label,
   #panel-admin .plug-form label, #panel-admin .plug-form .flab {
-    margin: 0; color: var(--text); font-size: 15px; font-weight: 400; overflow-wrap: anywhere;
+    margin: 0; color: var(--text); font-size: var(--fs-md); line-height: 1.5; font-weight: 400; overflow-wrap: anywhere;
   }
-  #panel-admin .settings-row:not(.settings-stack) > :is(input:not([type="checkbox"]), select),
-  #panel-admin .plug-group .pf:not(.pf-stack) > :is(input:not([type="checkbox"]), select) {
+  #panel-admin .settings-row:not(.settings-stack, .settings-text) > :is(input:not([type="checkbox"]), select),
+  #panel-admin .plug-group .pf:not(.pf-stack) > :is(input:not([type="checkbox"], [data-settings-text]), select) {
     width: 100%; min-width: 0; padding-inline: 6px; text-align: right;
     border-color: transparent; background-color: transparent; color: var(--text); font-size: 16px;
   }
@@ -1606,27 +1611,34 @@ button.ops-tile { cursor:pointer; }
     background-size: 5px 5px; background-repeat: no-repeat;
   }
   #panel-admin :is(.settings-row, .plug-group .pf) > :is(input, select, textarea):focus { border-color: var(--accent); }
-  #panel-admin .settings-stack > input, #panel-admin .plug-group .pf-stack :is(input, textarea) {
+  #panel-admin :is(.settings-stack, .settings-text) > input, #panel-admin .plug-group .pf-stack :is(input, textarea),
+  #panel-admin .plug-form :is(input[data-settings-text], .secret-row input) {
     min-height: 44px; font-size: 16px; background: var(--surface-2);
   }
+  #panel-admin .plug-group .pf:has(> input[data-settings-text]) { grid-template-columns: minmax(0, 1fr); padding-block: 10px; }
+  #panel-admin .pk-add .pf, #panel-admin .pk-add .secret-row { display: grid; grid-template-columns: minmax(0, 1fr); }
+  #panel-admin .plug-form :is(input, select, textarea):not([type="checkbox"]) { font-size: 16px; }
   #panel-admin input[type="checkbox"][role="switch"] {
     appearance: none; -webkit-appearance: none; width: 51px !important; height: 31px; min-height: 0;
     flex: none; padding: 0; margin: 0; border: 0; border-radius: 16px;
-    background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--line-2); cursor: pointer;
+    background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--edge-strong); cursor: pointer;
     position: relative; transition: background-color var(--dur-1) var(--ease-out);
   }
   #panel-admin input[type="checkbox"][role="switch"]::after {
     content: ""; position: absolute; inset: 2px auto auto 2px; width: 27px; height: 27px;
-    border-radius: 50%; background: var(--text);
-    transition: transform var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out);
+    border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25);
+    transition: transform var(--dur-1) var(--ease-out);
   }
   #panel-admin input[type="checkbox"][role="switch"]:checked { background: var(--accent); box-shadow: none; }
-  #panel-admin input[type="checkbox"][role="switch"]:checked::after { transform: translateX(20px); background: var(--surface); }
+  #panel-admin input[type="checkbox"][role="switch"]:checked::after { transform: translateX(20px); }
+  #panel-admin .switch[aria-checked="false"]::before { box-shadow: inset 0 0 0 1px var(--edge-strong); }
+  #panel-admin .switch[aria-checked]::after { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
   #panel-admin input[type="checkbox"][role="switch"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   #panel-admin label.settings-row, #panel-admin .settings-gateways label:has(input), #panel-admin .plug-group .chk {
     cursor: pointer; touch-action: manipulation;
   }
-  #panel-admin label.settings-row > input, #panel-admin .settings-gateways label > input, #panel-admin .plug-group .chk > input { order: 1; }
+  #panel-admin label.settings-row { display: flex; justify-content: space-between; width: 100%; }
+  #panel-admin label.settings-row > input, #panel-admin .settings-gateways label > input, #panel-admin .plug-group .chk > input { order: 1; margin-left: auto; }
   #panel-admin .settings-first, #panel-admin .settings-policy .settings-row:first-child { border-radius: 12px 12px 0 0; }
   #panel-admin .settings-group .settings-actions {
     display: grid; grid-template-columns: minmax(0, 1fr); padding-block: 10px; border-radius: 0 0 12px 12px;
@@ -1639,9 +1651,17 @@ button.ops-tile { cursor:pointer; }
   }
   #panel-admin .settings-group .settings-policy { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0; border-radius: 12px 12px 0 0; }
   #panel-admin .settings-group .settings-help {
-    order: 1; margin: 6px 14px 0; color: var(--text-3); font-size: 12.5px; overflow-wrap: anywhere;
+    order: 1; margin: 6px 14px 0;
   }
-  #panel-admin .settings-caption { margin: 0; padding: 8px 0 0; color: var(--text-3); font-size: 13px; }
+  #panel-admin .settings-field-note {
+    margin: 0; padding: 0 14px 10px; background: var(--surface);
+  }
+  #panel-admin :is(.settings-help, .settings-field-note, .setting > p, .settings-gateways .src, .plug-form :is(.help, .from), .signin-toggle .src) {
+    color: var(--text-3); font-size: var(--fs-sm); line-height: 1.45; font-weight: 400; overflow-wrap: anywhere;
+  }
+  #panel-admin .settings-caption {
+    margin: 0; padding: 8px 0 0; color: var(--text-3); font-size: var(--fs-sm); line-height: 1.4; font-weight: 500;
+  }
   #panel-admin .settings-gateways .row { display: grid; gap: 0; }
   #panel-admin .settings-gateways label:has(input), #panel-admin .plug-group .chk {
     display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 48px;
@@ -1656,7 +1676,7 @@ button.ops-tile { cursor:pointer; }
   }
   #panel-admin .plug-group > .pf-stack { grid-template-columns: minmax(0, 1fr); padding-block: 10px; }
   #panel-admin .plug-group :is(.chk, .help, .ferr, .from) { grid-column: 1 / -1; }
-  #panel-admin .plug-group .help { font-size: 12.5px; margin: 0; }
+  #panel-admin .plug-group .help { margin: 0; }
   #panel-admin .plug-group .chk { min-height: 40px; }
   #panel-admin .plug-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
   #panel-admin .signin-toggle {
@@ -1664,7 +1684,7 @@ button.ops-tile { cursor:pointer; }
     background: var(--surface); border-radius: 12px; padding: 2px 14px; min-height: 48px;
   }
   #panel-admin .signin-toggle > .switch { grid-column: 2; grid-row: 1; }
-  #panel-admin .signin-toggle > label { grid-column: 1; grid-row: 1; margin: 0; cursor: pointer; }
+  #panel-admin .signin-toggle > label { grid-column: 1; grid-row: 1; margin: 0; font-size: var(--fs-md); line-height: 1.5; font-weight: 400; cursor: pointer; }
   #panel-admin .signin-toggle > .src { grid-column: 1 / -1; }
 }
 
@@ -4947,13 +4967,13 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     return frames ? animateIn(el, frames, dur, easing, 0, fadeReduced) : null;
   }
 
-  function conceal(el, frames, dur, after, fadeReduced, interactive) {
+  function conceal(el, frames, dur, after, fadeReduced, easing) {
     if (el.classList.contains("hidden") || el.motionOut) return;
     stopEntrance(el);
     function done() { el.inert = false; el.classList.add("hidden"); if (after) after(); }
     if ((!moving() && !(fadeReduced && el.animate)) || !frames) { done(); return; }
-    el.inert = !interactive;
-    var a = el.animate(frames, { duration: dur, easing: motion.inn, fill: "forwards" });
+    el.inert = true;
+    var a = el.animate(frames, { duration: dur, easing: easing || motion.inn, fill: "forwards" });
     el.motionOut = a;
     function finish() {
       if (el.motionOut !== a) return;
@@ -5032,7 +5052,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     toastActive = false;
     $("toast-status").textContent = "";
     conceal(toastEl, reducedMotion.matches ? FADE_OUT :
-      [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(8px)" }], motion.d1, null, true);
+      [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(8px)" }], 120, null, true, "ease-in");
   }
 
   function timeToast() {
@@ -5065,7 +5085,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     toastRemaining = opts.ms == null ? 4000 : opts.ms;
     toastActive = true;
     reveal(toastEl, reducedMotion.matches ? FADE_IN :
-      [{ opacity: 0, transform: "translateY(12px)" }, { opacity: 1, transform: "none" }], motion.d2, motion.out, true);
+      [{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }], 180, "ease-out", true);
     toastHovered = matchMedia("(hover: hover) and (pointer: fine)").matches && toastEl.matches(":hover");
     toastFocused = toastEl.contains(document.activeElement);
     $("toast-status").textContent = title + (opts.sub ? ". " + opts.sub : "");
@@ -5704,21 +5724,21 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   function adminGeneral(s) {
     return '<div class="setting"><h4>' + iconNode("sliders", "sm").outerHTML + 'Dashboard</h4>' +
       '<p>Set the name shown in the browser, gate, desktop brand, and installed app.</p>' +
-      '<div class="form"><div class="settings-group"><div class="settings-row settings-first"><label for="a-dashboard-name">Dashboard name</label>' +
+      '<div class="form"><div class="settings-group"><div class="settings-row settings-first settings-text"><label for="a-dashboard-name">Dashboard name</label>' +
       '<input id="a-dashboard-name" value="' + esc(s.dashboard_name || "homelab-inventory") + '" maxlength="80"></div>' +
-      '<div class="row"><label class="settings-row" style="margin:0"><input type="checkbox" role="switch" id="a-icons-fetch" style="width:auto"' +
-      (s.icons_fetch ? " checked" : "") + '> fetch launcher icons</label></div>' +
-      '<div class="src settings-help">Fetching tells a third-party icon repository which service slugs this dashboard uses. It is off unless enabled here or by ICONS_FETCH.</div>' +
+      '<div class="row"><label class="settings-row" style="margin:0"><input type="checkbox" role="switch" id="a-icons-fetch" style="width:auto" aria-describedby="icons-help"' +
+      (s.icons_fetch ? " checked" : "") + '> <span>Fetch launcher icons</span></label></div>' +
+      '<div class="src settings-field-note" id="icons-help">Fetching tells a third-party icon repository which service slugs this dashboard uses. It is off unless enabled here or by ICONS_FETCH.</div>' +
       '<div class="actions settings-actions"><button class="btn" id="a-dashboard-save">Save</button><span id="a-dashboard-msg" class="src"></span></div></div></div></div>';
   }
   function adminVPN(s) {
     return '<section class="setting"><h4>' + ic("shield") + 'VPN recovery</h4>' +
       '<p>Reconnect a persistently unhealthy VPN and its dependent containers. Requires enabled actions on the configured actions host.</p>' +
       '<div class="form"><div class="settings-group"><div class="row"><label class="settings-row settings-first" for="a-vpn-autofix"><input type="checkbox" role="switch" id="a-vpn-autofix" style="width:auto"' +
-      (s.vpn_autofix === true ? ' checked' : '') + '> enable automatic reconnect</label></div>' +
+      (s.vpn_autofix === true ? ' checked' : '') + '> <span>Enable automatic reconnect</span></label></div>' +
       '<div class="settings-row-wrap"><div class="settings-row"><label for="a-vpn-after">Unhealthy for (minutes)</label>' +
-      '<input id="a-vpn-after" type="number" inputmode="numeric" min="1" max="1440" step="1" value="' + esc(s.vpn_autofix_after_minutes == null ? 10 : s.vpn_autofix_after_minutes) + '">' +
-      '</div><div class="src settings-help">Off by default. Delay: 1–1440 minutes. Recovery observes its cooldown and records every attempt in Recent actions.</div></div>' +
+      '<input id="a-vpn-after" aria-describedby="vpn-delay-help" type="number" inputmode="numeric" min="1" max="1440" step="1" value="' + esc(s.vpn_autofix_after_minutes == null ? 10 : s.vpn_autofix_after_minutes) + '">' +
+      '</div><div class="src settings-field-note" id="vpn-delay-help">Off by default. Delay: 1–1440 minutes. Recovery observes its cooldown and records every attempt in Recent actions.</div></div>' +
       adminVPNGateways(s) +
       '<div class="actions settings-actions"><button type="button" class="btn" id="a-vpn-save">Save</button><span id="a-vpn-msg" class="src" role="status"></span></div></div></div></section>';
   }
@@ -5825,20 +5845,19 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         ">" + LEVEL_WORDS[v] + "</option>";
     }).join("");
 
-    var src = function (k) {
-      return s.configured_here && s.configured_here[k]
-        ? '<div class="src settings-help">set here</div>'
-        : '<div class="src settings-help">from env</div>';
+    var src = function (k, id) {
+      return '<div class="src settings-field-note" id="' + id + '">' +
+        (s.configured_here && s.configured_here[k] ? "Set here" : "From env") + '</div>';
     };
 
     return '<div class="setting">' +
       "<h4>" + ic("send") + "Endpoints</h4>" +
       '<div class="form"><div class="settings-group">' +
         '<div class="settings-row settings-first settings-stack"><label for="a-url">Apprise URL</label>' +
-        '<input id="a-url" autocapitalize="none" autocorrect="off" type="url" spellcheck="false" placeholder="' +
+        '<input id="a-url" aria-describedby="apprise-source" autocapitalize="none" autocorrect="off" type="url" spellcheck="false" placeholder="' +
         (s.apprise_set ? esc(s.apprise_hint || "(set)")
                        : "http://apprise-host:8000/notify/your-key") + '"></div>' +
-        src("apprise_url") +
+        src("apprise_url", "apprise-source") +
         '<div class="actions settings-actions">' +
           '<button class="btn" id="a-save-url">Save endpoint</button>' +
           '<button class="btn" id="a-test"' + (s.apprise_set ? "" : " disabled") +
@@ -5846,10 +5865,10 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           '<span id="a-test-msg" class="src"></span>' +
         "</div>" +
         '</div><div class="settings-group"><div class="settings-row settings-first settings-stack" style="margin-top:10px"><label for="a-digest-url">Digest URL</label>' +
-        '<input id="a-digest-url" autocapitalize="none" autocorrect="off" type="url" spellcheck="false" placeholder="' +
+        '<input id="a-digest-url" aria-describedby="digest-source" autocapitalize="none" autocorrect="off" type="url" spellcheck="false" placeholder="' +
         (s.digest_apprise_set ? esc(s.digest_apprise_hint || "(set)")
                               : "Default: alerts URL") + '"></div>' +
-        src("digest_apprise_url") +
+        src("digest_apprise_url", "digest-source") +
         '<div class="actions settings-actions">' +
           '<button class="btn" id="a-save-digest-url">Save endpoint</button>' +
           '<span id="a-digest-url-msg" class="src"></span>' +
@@ -5858,21 +5877,21 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
       '<div class="setting">' +
       "<h4>" + ic("bell") + "Rules</h4>" +
-      '<div class="form"><div class="settings-group">' +
+      '<div class="form"><div class="settings-group settings-rules">' +
         '<div class="row">' +
           '<div class="settings-row settings-first" style="flex:1 1 200px"><label for="a-level">Severity</label>' +
-          '<select id="a-level">' + lvl + "</select></div>" +
+          '<select id="a-level" aria-describedby="severity-source">' + lvl + "</select></div>" +
           '<div class="settings-row" style="flex:1 1 130px"><label for="a-every">Check interval</label>' +
           '<input id="a-every" autocapitalize="none" autocorrect="off" value="' + esc(s.notify_interval) + '" spellcheck="false"></div>' +
         "</div>" +
-        src("notify_level") +
+        src("notify_level", "severity-source") +
         '<div class="row" style="margin-top:8px">' +
           '<label class="settings-row" style="margin:0"><input type="checkbox" role="switch" id="a-enabled" style="width:auto"' +
-          (s.notify_enabled ? " checked" : "") + "> deliver notifications</label>" +
+          (s.notify_enabled ? " checked" : "") + "> <span>Deliver notifications</span></label>" +
         "</div>" +
         '<div class="settings-row-wrap"><div class="settings-row"><label for="a-digest">Digest interval</label>' +
-        '<input id="a-digest" autocapitalize="none" autocorrect="off" value="' + esc(s.digest_interval) + '" spellcheck="false">' +
-        '</div><div class="src settings-help"><code>0</code> = off</div></div>' +
+        '<input id="a-digest" aria-describedby="digest-interval-help" autocapitalize="none" autocorrect="off" value="' + esc(s.digest_interval) + '" spellcheck="false">' +
+        '</div><div class="src settings-field-note" id="digest-interval-help"><code>0</code> = off</div></div>' +
         '<div class="actions settings-actions">' +
           '<button class="btn" id="a-save">Save</button>' +
           '<button class="btn" id="a-reset">Reset overrides</button>' +
@@ -7298,7 +7317,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     } else if (f.type === "secret") {
       control = secretControl(p, ui, f, fid, common, changed);
     } else {
-      var attrs = { type: f.type === "url" ? "url" : f.type === "number" ? "text" : "text", spellcheck: "false", autocapitalize: "none", autocorrect: "off", autocomplete: "off",
+      var attrs = { type: f.type === "url" ? "url" : "text", "data-settings-text": f.type === "text" ? true : null, spellcheck: "false", autocapitalize: "none", autocorrect: "off", autocomplete: "off",
         placeholder: str(f.placeholder) || (f.default != null && typeof f.default !== "object" ? "Default: " + str(f.default) : null) };
       if (f.type === "url") attrs.inputmode = "url";
       if (f.type === "number") attrs.inputmode = f.key === "session_hours" || f.key === "upcoming_days" ? "numeric" : "decimal";
