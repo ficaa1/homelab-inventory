@@ -1118,7 +1118,7 @@ button.ops-tile { cursor:pointer; }
   #panel-home .svc:has(.edit) .top { align-items: flex-start; }
   #panel-network .cell, #view-host .cell { height: 44px; }
   #panel-network .cells, #view-host .cells { gap: 2px; }
-  #panel-network tr[data-port] td, #view-host tr[data-port] td { height: 44px; }
+  #panel-network table:not([data-list]) tr[data-port] td, #view-host tr[data-port] td { height: 44px; }
   .storage-policy > div { min-width: 0; }
   /* The standalone Ports tab (no Network plugin) and declarative plugin views. */
   :is(#panel-ports, #view-plugin:not(:has(#panel-archive))) :is(button, select, summary) { min-height: 44px; min-width: 44px; }
@@ -1521,6 +1521,114 @@ button.ops-tile { cursor:pointer; }
   .pv-card > h3 { padding: 12px; }
   .pv-posters { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 8px; padding: 12px; }
   .pv-card td.txt { max-width: 200px; }
+}
+
+/* Admin setting rows share the desktop form and its controls. */
+.settings-group { display: contents; }
+@media (max-width: 640px) {
+  #panel-admin :is(.setting:has(.settings-group), #signin, #backup-admin) {
+    border: 0; padding: 0; background: transparent;
+  }
+  #panel-admin :is(.setting:has(.settings-group), #signin, #backup-admin) > h4,
+  #panel-admin .plug-group > legend {
+    padding: 0 14px; margin: 0 0 6px; color: var(--text-3);
+    font-size: 13px; font-weight: 500; text-transform: none; letter-spacing: normal;
+  }
+  #panel-admin :is(.setting:has(.settings-group), #signin, #backup-admin) > h4 .ic { display: none; }
+  #panel-admin :is(.setting:has(.settings-group), #signin, #backup-admin) > p { margin: 6px 14px; }
+  #panel-admin .settings-group { display: flex; flex-direction: column; min-width: 0; }
+  #panel-admin .settings-group > .row, #panel-admin .settings-row-wrap { display: contents; }
+  #panel-admin .settings-group .settings-row { flex: none !important; }
+  #panel-admin .settings-row, #panel-admin .settings-actions, #panel-admin .settings-group .storage-policy,
+  #panel-admin .settings-group .settings-gateways {
+    margin: 0; padding: 0 14px; min-width: 0; background: var(--surface); position: relative;
+  }
+  #panel-admin .settings-row, #panel-admin .settings-group .settings-gateways > label:not(.settings-caption) {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 42%); align-items: center;
+    min-height: 48px; gap: 8px; padding-block: 3px;
+  }
+  #panel-admin .settings-row:has(input[role="switch"]) { grid-template-columns: minmax(0, 1fr) auto; }
+  #panel-admin .settings-row.settings-stack {
+    grid-template-columns: minmax(0, 1fr); gap: 5px; padding-block: 10px;
+  }
+  #panel-admin .settings-row label, #panel-admin .settings-row:is(label), #panel-admin .settings-gateways label,
+  #panel-admin .plug-form label, #panel-admin .plug-form .flab {
+    margin: 0; color: var(--text); font-size: 15px; font-weight: 400; overflow-wrap: anywhere;
+  }
+  #panel-admin .settings-row:not(.settings-stack) > :is(input:not([type="checkbox"]), select),
+  #panel-admin .plug-group .pf:not(.pf-stack) > :is(input:not([type="checkbox"]), select) {
+    width: 100%; min-width: 0; padding-inline: 6px; text-align: right;
+    border-color: transparent; background-color: transparent; color: var(--text); font-size: 16px;
+  }
+  #panel-admin :is(.settings-row, .plug-group .pf) > select {
+    appearance: none; padding-inline-end: 23px !important;
+    background-image: linear-gradient(45deg, transparent 49%, var(--text-3) 50% 62%, transparent 63%),
+      linear-gradient(135deg, transparent 37%, var(--text-3) 38% 50%, transparent 51%);
+    background-position: right 12px center, right 7px center;
+    background-size: 5px 5px; background-repeat: no-repeat;
+  }
+  #panel-admin :is(.settings-row, .plug-group .pf) > :is(input, select, textarea):focus { border-color: var(--accent); }
+  #panel-admin .settings-stack > input, #panel-admin .plug-group .pf-stack :is(input, textarea) {
+    min-height: 44px; font-size: 16px; background: var(--surface-2);
+  }
+  #panel-admin input[type="checkbox"][role="switch"] {
+    appearance: none; -webkit-appearance: none; width: 51px !important; height: 31px; min-height: 0;
+    flex: none; padding: 0; margin: 0; border: 0; border-radius: 16px;
+    background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--line-2); cursor: pointer;
+    position: relative; transition: background-color var(--dur-1) var(--ease-out);
+  }
+  #panel-admin input[type="checkbox"][role="switch"]::after {
+    content: ""; position: absolute; inset: 2px auto auto 2px; width: 27px; height: 27px;
+    border-radius: 50%; background: var(--text);
+    transition: transform var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out);
+  }
+  #panel-admin input[type="checkbox"][role="switch"]:checked { background: var(--accent); box-shadow: none; }
+  #panel-admin input[type="checkbox"][role="switch"]:checked::after { transform: translateX(20px); background: var(--surface); }
+  #panel-admin input[type="checkbox"][role="switch"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #panel-admin label.settings-row, #panel-admin .settings-gateways label:has(input), #panel-admin .plug-group .chk {
+    cursor: pointer; touch-action: manipulation;
+  }
+  #panel-admin label.settings-row > input, #panel-admin .settings-gateways label > input, #panel-admin .plug-group .chk > input { order: 1; }
+  #panel-admin .settings-first, #panel-admin .settings-policy .settings-row:first-child { border-radius: 12px 12px 0 0; }
+  #panel-admin .settings-group .settings-actions {
+    display: grid; grid-template-columns: minmax(0, 1fr); padding-block: 10px; border-radius: 0 0 12px 12px;
+  }
+  #panel-admin :is(.settings-actions, .plug-actions) > .btn { width: 100%; min-height: 48px; }
+  #panel-admin .settings-actions > .src:empty { display: none; }
+  #panel-admin .settings-row:not(.settings-first)::before, #panel-admin .settings-actions::before,
+  #panel-admin .settings-gateways::before, #panel-admin .plug-group > .pf + .pf::before {
+    content: ""; position: absolute; inset: 0 0 auto 14px; border-top: 1px solid var(--line);
+  }
+  #panel-admin .settings-row-help { grid-column: 1 / -1; }
+  #panel-admin .settings-group .settings-policy { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0; border-radius: 12px 12px 0 0; }
+  #panel-admin .settings-group .settings-help {
+    order: 1; margin: 6px 14px 0; color: var(--text-3); font-size: 12.5px; overflow-wrap: anywhere;
+  }
+  #panel-admin .settings-caption { margin: 0; padding: 8px 0 0; color: var(--text-3); font-size: 13px; }
+  #panel-admin .settings-gateways .row { display: grid; gap: 0; }
+  #panel-admin .settings-gateways label:has(input), #panel-admin .plug-group .chk {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 48px;
+  }
+  #panel-admin .settings-gateways label + label { border-top: 1px solid var(--line); }
+  #panel-admin .plug-body { padding: 0; margin-inline: 0; background: transparent; }
+  #panel-admin .plug-groups { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  #panel-admin .plug-group { gap: 0; border-radius: 12px; background: var(--surface); }
+  #panel-admin .plug-group > .pf {
+    display: grid; position: relative; grid-template-columns: minmax(0, 1fr) minmax(0, 42%);
+    align-items: center; gap: 4px 8px; min-height: 48px; padding: 4px 14px;
+  }
+  #panel-admin .plug-group > .pf-stack { grid-template-columns: minmax(0, 1fr); padding-block: 10px; }
+  #panel-admin .plug-group :is(.chk, .help, .ferr, .from) { grid-column: 1 / -1; }
+  #panel-admin .plug-group .help { font-size: 12.5px; margin: 0; }
+  #panel-admin .plug-group .chk { min-height: 40px; }
+  #panel-admin .plug-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+  #panel-admin .signin-toggle {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+    background: var(--surface); border-radius: 12px; padding: 2px 14px; min-height: 48px;
+  }
+  #panel-admin .signin-toggle > .switch { grid-column: 2; grid-row: 1; }
+  #panel-admin .signin-toggle > label { grid-column: 1; grid-row: 1; margin: 0; cursor: pointer; }
+  #panel-admin .signin-toggle > .src { grid-column: 1 / -1; }
 }
 
 /* Admin → Plugins. */
@@ -5370,7 +5478,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var labels = {keepAllDays:"Keep days", hourlyDays:"Hourly days",
       dailyDays:"Daily days", compressAfterDays:"Compress days"};
     var inputs = Object.keys(labels).map(function (k) {
-      return '<div><label for="rs-' + k + '">' + labels[k] + '</label>' +
+      return '<div class="settings-row"><label for="rs-' + k + '">' + labels[k] + '</label>' +
         '<input type="number" inputmode="numeric" min="0" step="1" id="rs-' + k + '" value="' + p[k] + '"></div>';
     }).join("");
     var rows = s.hosts.map(function (h) {
@@ -5389,11 +5497,11 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         '<div class="tile"><div class="label">Runs</div><div class="value">' + s.totalRuns.toLocaleString() + '</div></div></div>' +
       '<div class="scroll"><table data-list="0,2"><thead><tr><th>Host</th><th>Runs</th><th>Size</th>' +
       '<th>Oldest</th><th>Compressed</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-      '<div class="form"><div class="storage-policy">' + inputs + '</div>' +
-      '<details class="src storage-help"><summary>Retention</summary><p>Keep every run through Keep days, hourly samples through Hourly days, then daily samples through Daily days. Daily 0 = forever. Compress days sets when retained runs are gzipped. Latest runs and compose changes always stay.</p></details>' +
-      '<div class="actions storage-actions"><button class="btn rs-action" id="rs-save">Save</button>' +
+      '<div class="form"><div class="settings-group"><div class="storage-policy settings-policy">' + inputs + '</div>' +
+      '<details class="src storage-help settings-help"><summary>Retention</summary><p>Keep every run through Keep days, hourly samples through Hourly days, then daily samples through Daily days. Daily 0 = forever. Compress days sets when retained runs are gzipped. Latest runs and compose changes always stay.</p></details>' +
+      '<div class="actions storage-actions settings-actions"><button class="btn rs-action" id="rs-save">Save</button>' +
       '<button class="btn rs-action" id="rs-preview">Preview prune</button>' +
-      '<button class="btn rs-action" id="rs-prune">Prune now</button></div>' +
+      '<button class="btn rs-action" id="rs-prune">Prune now</button></div></div>' +
       '<div class="src" id="rs-msg" role="status">' + (storageBusy ? 'Working…' : '') + '</div>' +
       (storagePreview ? '<div class="src">Preview: ' + pruneSummary(storagePreview) + '</div>' : '') +
       '<div class="src">' + (s.lastPrune ? 'Last prune ' + esc(new Date(s.lastPrune.at).toLocaleString()) +
@@ -5405,29 +5513,29 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   function adminGeneral(s) {
     return '<div class="setting"><h4>' + iconNode("sliders", "sm").outerHTML + 'Dashboard</h4>' +
       '<p>Set the name shown in the browser, gate, desktop brand, and installed app.</p>' +
-      '<div class="form"><div><label for="a-dashboard-name">Dashboard name</label>' +
+      '<div class="form"><div class="settings-group"><div class="settings-row settings-first"><label for="a-dashboard-name">Dashboard name</label>' +
       '<input id="a-dashboard-name" value="' + esc(s.dashboard_name || "homelab-inventory") + '" maxlength="80"></div>' +
-      '<div class="row"><label style="margin:0"><input type="checkbox" id="a-icons-fetch" style="width:auto"' +
+      '<div class="row"><label class="settings-row" style="margin:0"><input type="checkbox" role="switch" id="a-icons-fetch" style="width:auto"' +
       (s.icons_fetch ? " checked" : "") + '> fetch launcher icons</label></div>' +
-      '<div class="src">Fetching tells a third-party icon repository which service slugs this dashboard uses. It is off unless enabled here or by ICONS_FETCH.</div>' +
-      '<div class="actions"><button class="btn" id="a-dashboard-save">Save</button><span id="a-dashboard-msg" class="src"></span></div></div></div>';
+      '<div class="src settings-help">Fetching tells a third-party icon repository which service slugs this dashboard uses. It is off unless enabled here or by ICONS_FETCH.</div>' +
+      '<div class="actions settings-actions"><button class="btn" id="a-dashboard-save">Save</button><span id="a-dashboard-msg" class="src"></span></div></div></div></div>';
   }
   function adminVPN(s) {
     return '<section class="setting"><h4>' + ic("shield") + 'VPN recovery</h4>' +
       '<p>Reconnect a persistently unhealthy VPN and its dependent containers. Requires enabled actions on the configured actions host.</p>' +
-      '<div class="form"><div class="row"><label for="a-vpn-autofix"><input type="checkbox" id="a-vpn-autofix" style="width:auto"' +
+      '<div class="form"><div class="settings-group"><div class="row"><label class="settings-row settings-first" for="a-vpn-autofix"><input type="checkbox" role="switch" id="a-vpn-autofix" style="width:auto"' +
       (s.vpn_autofix === true ? ' checked' : '') + '> enable automatic reconnect</label></div>' +
-      '<div><label for="a-vpn-after">Unhealthy for (minutes)</label>' +
+      '<div class="settings-row-wrap"><div class="settings-row"><label for="a-vpn-after">Unhealthy for (minutes)</label>' +
       '<input id="a-vpn-after" type="number" inputmode="numeric" min="1" max="1440" step="1" value="' + esc(s.vpn_autofix_after_minutes == null ? 10 : s.vpn_autofix_after_minutes) + '">' +
-      '<div class="src">Off by default. Delay: 1–1440 minutes. Recovery observes its cooldown and records every attempt in Recent actions.</div></div>' +
+      '</div><div class="src settings-help">Off by default. Delay: 1–1440 minutes. Recovery observes its cooldown and records every attempt in Recent actions.</div></div>' +
       adminVPNGateways(s) +
-      '<div class="actions"><button type="button" class="btn" id="a-vpn-save">Save</button><span id="a-vpn-msg" class="src" role="status"></span></div></div></section>';
+      '<div class="actions settings-actions"><button type="button" class="btn" id="a-vpn-save">Save</button><span id="a-vpn-msg" class="src" role="status"></span></div></div></div></section>';
   }
   function adminVPNGateways(s) {
     var all = Array.isArray(s.vpn_gateways) ? s.vpn_gateways : [], skip = Array.isArray(s.vpn_autofix_skip) ? s.vpn_autofix_skip : [];
-    if (!all.length) return '<div><label>Gateways</label><div class="src">No VPN gateway has reported yet.</div></div>';
-    return '<div><label>Gateways it may reconnect</label><div class="row" style="column-gap:20px">' + all.map(function (name) {
-      return '<label style="margin:0"><input type="checkbox" class="a-vpn-gw" data-gw="' + esc(name) + '" style="width:auto"' +
+    if (!all.length) return '<div class="settings-gateways"><label class="settings-caption">Gateways</label><div class="src">No VPN gateway has reported yet.</div></div>';
+    return '<div class="settings-gateways"><label class="settings-caption">Gateways it may reconnect</label><div class="row" style="column-gap:20px">' + all.map(function (name) {
+      return '<label style="margin:0"><input type="checkbox" role="switch" class="a-vpn-gw" data-gw="' + esc(name) + '" style="width:auto"' +
         (skip.indexOf(name) < 0 ? ' checked' : '') + '> ' + esc(name) + '</label>';
     }).join("") + '</div><div class="src">Unticked gateways are left alone. Reconnect VPN on the Network tab still works for them.</div></div>';
   }
@@ -5528,58 +5636,58 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
     var src = function (k) {
       return s.configured_here && s.configured_here[k]
-        ? '<div class="src">set here</div>'
-        : '<div class="src">from env</div>';
+        ? '<div class="src settings-help">set here</div>'
+        : '<div class="src settings-help">from env</div>';
     };
 
     return '<div class="setting">' +
       "<h4>" + ic("send") + "Endpoints</h4>" +
-      '<div class="form">' +
-        '<div><label for="a-url">Apprise URL</label>' +
+      '<div class="form"><div class="settings-group">' +
+        '<div class="settings-row settings-first settings-stack"><label for="a-url">Apprise URL</label>' +
         '<input id="a-url" autocapitalize="none" autocorrect="off" type="url" spellcheck="false" placeholder="' +
         (s.apprise_set ? esc(s.apprise_hint || "(set)")
                        : "http://apprise-host:8000/notify/your-key") + '"></div>' +
         src("apprise_url") +
-        '<div class="actions">' +
+        '<div class="actions settings-actions">' +
           '<button class="btn" id="a-save-url">Save endpoint</button>' +
           '<button class="btn" id="a-test"' + (s.apprise_set ? "" : " disabled") +
             ">Send test</button>" +
           '<span id="a-test-msg" class="src"></span>' +
         "</div>" +
-        '<div style="margin-top:10px"><label for="a-digest-url">Digest URL</label>' +
+        '</div><div class="settings-group"><div class="settings-row settings-first settings-stack" style="margin-top:10px"><label for="a-digest-url">Digest URL</label>' +
         '<input id="a-digest-url" autocapitalize="none" autocorrect="off" type="url" spellcheck="false" placeholder="' +
         (s.digest_apprise_set ? esc(s.digest_apprise_hint || "(set)")
                               : "Default: alerts URL") + '"></div>' +
         src("digest_apprise_url") +
-        '<div class="actions">' +
+        '<div class="actions settings-actions">' +
           '<button class="btn" id="a-save-digest-url">Save endpoint</button>' +
           '<span id="a-digest-url-msg" class="src"></span>' +
         "</div>" +
-      "</div></div>" +
+      "</div></div></div>" +
 
       '<div class="setting">' +
       "<h4>" + ic("bell") + "Rules</h4>" +
-      '<div class="form">' +
+      '<div class="form"><div class="settings-group">' +
         '<div class="row">' +
-          '<div style="flex:1 1 200px"><label for="a-level">Severity</label>' +
+          '<div class="settings-row settings-first" style="flex:1 1 200px"><label for="a-level">Severity</label>' +
           '<select id="a-level">' + lvl + "</select></div>" +
-          '<div style="flex:1 1 130px"><label for="a-every">Check interval</label>' +
+          '<div class="settings-row" style="flex:1 1 130px"><label for="a-every">Check interval</label>' +
           '<input id="a-every" autocapitalize="none" autocorrect="off" value="' + esc(s.notify_interval) + '" spellcheck="false"></div>' +
         "</div>" +
         src("notify_level") +
         '<div class="row" style="margin-top:8px">' +
-          '<label style="margin:0"><input type="checkbox" id="a-enabled" style="width:auto"' +
+          '<label class="settings-row" style="margin:0"><input type="checkbox" role="switch" id="a-enabled" style="width:auto"' +
           (s.notify_enabled ? " checked" : "") + "> deliver notifications</label>" +
         "</div>" +
-        '<div><label for="a-digest">Digest interval</label>' +
+        '<div class="settings-row"><label for="a-digest">Digest interval</label>' +
         '<input id="a-digest" autocapitalize="none" autocorrect="off" value="' + esc(s.digest_interval) + '" spellcheck="false">' +
-        '<div class="src"><code>0</code> = off</div></div>' +
-        '<div class="actions">' +
+        '<div class="src settings-row-help"><code>0</code> = off</div></div>' +
+        '<div class="actions settings-actions">' +
           '<button class="btn" id="a-save">Save</button>' +
           '<button class="btn" id="a-reset">Reset overrides</button>' +
           '<span id="a-msg" class="src"></span>' +
         "</div>" +
-      "</div></div>";
+      "</div></div></div>";
   }
 
   function adminLog(s) {
@@ -6981,7 +7089,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var control;
     var common = { id: fid, "aria-describedby": described, "aria-invalid": err ? "true" : null, "aria-required": f.required ? "true" : null };
     if (f.type === "bool") {
-      var cb = h("input", Object.assign({ type: "checkbox" }, common, { onchange: function () { changed(cb.checked); } }));
+      var cb = h("input", Object.assign({ type: "checkbox", role: "switch" }, common, { onchange: function () { changed(cb.checked); } }));
       cb.checked = fieldVal(f, p, ui) === true;
       control = h("label", { class: "chk", for: null }, [cb, str(f.label) || f.key]);
       label = null;
@@ -7002,12 +7110,12 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       var attrs = { type: f.type === "url" ? "url" : f.type === "number" ? "text" : "text", spellcheck: "false", autocapitalize: "none", autocorrect: "off", autocomplete: "off",
         placeholder: str(f.placeholder) || (f.default != null && typeof f.default !== "object" ? "Default: " + str(f.default) : null) };
       if (f.type === "url") attrs.inputmode = "url";
-      if (f.type === "number") attrs.inputmode = "decimal";
+      if (f.type === "number") attrs.inputmode = f.key === "session_hours" || f.key === "upcoming_days" ? "numeric" : "decimal";
       var inp = h("input", Object.assign(attrs, common, { oninput: function () { changed(inp.value); } }));
       inp.value = fieldVal(f, p, ui);
       control = inp;
     }
-    return h("div", { class: "pf" }, [label, control,
+    return h("div", { class: "pf" + (f.type === "url" || f.type === "secret" ? " pf-stack" : "") }, [label, control,
       str(f.help) ? h("div", { class: "help", id: helpID, text: str(f.help) }) : null,
       h("div", { class: "ferr", id: errID, text: err })]);
   }
@@ -7546,7 +7654,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           syncSignin();
         } });
       ta.value = Object.prototype.hasOwnProperty.call(ui.vals, f.key) ? ui.vals[f.key] : allowedText(d.allowed);
-      return h("div", { class: "pf" }, [
+      return h("div", { class: "pf pf-stack" }, [
         h("label", { for: fid, id: fid + "-label" }, [f.label, h("span", { class: "req", "aria-hidden": "true", text: "*" }), h("span", { class: "sr-only", text: " (required)" })]),
         ta, h("div", { class: "help", id: fid + "-help", text: f.help }), fromEnv(f),
         h("div", { class: "ferr", id: fid + "-err", text: err })]);
@@ -7561,7 +7669,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var sets = groups.map(function (g) {
       var kids = [h("legend", { text: g.name })].concat(g.fields.map(field));
       if (g.name === "This dashboard") {
-        kids.push(h("div", { class: "pf" }, [
+        kids.push(h("div", { class: "pf pf-stack" }, [
           h("span", { class: "flab", id: "signin-redirect-label", text: "Redirect URI" }),
           h("div", { class: "redirect" + (redirect ? "" : " none"), id: "signin-redirect", role: "group", "aria-labelledby": "signin-redirect-label" }, [
             redirectCode(redirect),
