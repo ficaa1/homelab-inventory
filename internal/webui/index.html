@@ -144,7 +144,11 @@ html.locked { overflow: hidden; }
 html.locked-gutter { scrollbar-gutter: stable; }
 @media (pointer: coarse) {
   input, select, textarea { font-size: 16px !important; }
-  .tab, .drawer-head, .drawer-handle, .phone-option { -webkit-user-select: none; user-select: none; }
+}
+@media (max-width: 640px) and (pointer: coarse) {
+  .tab, .drawer-head, .drawer-handle, .phone-option, .seg > .btn, .library-nav > .btn {
+    -webkit-user-select: none; user-select: none;
+  }
 }
 a { color: var(--accent); text-underline-offset: 2px; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -871,7 +875,7 @@ pre.code {
     position: absolute; inset: 0 -6px auto auto; width: auto; min-width: 44px; height: 44px;
     padding: 0 6px; background: transparent; color: var(--accent); font-weight: 600;
   }
-  .drawer .close .ic { display: none; }
+  .drawer .close :is(.ic, .drawer-close-label) { display: none; }
   .drawer-done { display: inline; }
   #drawer-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   .drawer.sheet-lg #drawer-body { flex: 1; }
@@ -1684,6 +1688,7 @@ button.ops-tile { cursor:pointer; }
   #panel-admin .plug-group .help { margin: 0; }
   #panel-admin .plug-group .chk { min-height: 40px; }
   #panel-admin .plug-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+  #panel-admin .signin-body > h5 { line-height: 1.4; font-weight: 500; }
   #panel-admin .signin-toggle {
     display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
     background: var(--surface); border-radius: 12px; padding: 2px 14px; min-height: 48px;
@@ -2295,7 +2300,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 <aside id="drawer" class="drawer hidden" role="dialog" aria-modal="true" aria-label="Details">
   <div class="drawer-head" id="drawer-head">
     <span class="drawer-handle" aria-hidden="true"></span>
-    <button class="close" id="drawer-close" type="button" aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg><span class="drawer-done" aria-hidden="true">Done</span></button>
+    <button class="close" id="drawer-close" type="button"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg><span class="sr-only drawer-close-label">Close</span><span class="drawer-done">Done</span></button>
   </div>
   <div id="drawer-body"></div>
 </aside>
@@ -3892,7 +3897,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   function restartSheet(target, content) {
     openDrawer('<div id="restart-sheet"><h3>' + esc(target) + '</h3>' + content + '</div>');
   }
-  function restartVisible(session) { return session === restartSession && !!$("restart-sheet") && !$("drawer").classList.contains("hidden"); }
+  function restartVisible(session) { return session === restartSession && drawerOpen && !!$("restart-sheet"); }
   function showRestartPreview(p, session, changed) {
     if (!restartVisible(session)) return;
     var reconnect = p.kind === "vpn_reconnect";
@@ -5192,13 +5197,13 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   var drawerPhone = matchMedia("(max-width: 640px)");
 
   function sizeDrawer() {
-    if (!drawerOpen || !phone()) return;
+    if (!phone() || drawer.classList.contains("hidden")) return;
     drawer.classList.remove("sheet-lg");
     var viewport = window.visualViewport ? window.visualViewport.height : window.innerHeight;
     var padding = parseFloat(getComputedStyle(drawer).paddingBottom);
     drawer.classList.toggle("sheet-lg", drawerHead.offsetHeight + drawerBody.scrollHeight + padding > viewport * 0.7);
     sheet.height = drawer.offsetHeight;
-    if (!reducedMotion.matches || drawerDrag) paintSheet();
+    if ((!reducedMotion.matches && sheet.frame !== null) || (drawerDrag && drawerDrag.active)) paintSheet();
   }
 
   function markDrawerHistory() {
@@ -5249,6 +5254,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   else drawerPhone.addListener(resizeDrawer);
   if (window.visualViewport) window.visualViewport.addEventListener("resize", sizeDrawer);
   else window.addEventListener("resize", sizeDrawer);
+  if (window.ResizeObserver) new ResizeObserver(sizeDrawer).observe(drawer);
 
   function paintSheet() {
     drawer.style.transform = "translateY(" + sheet.y + "px)";
@@ -5325,7 +5331,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       markDrawerHistory();
       if (hidden) { sheet.y = sheet.height; sheet.v = 0; }
       if (opening || dragging) moveSheet(1, false, opacity);
-      if (!reducedMotion.matches) paintSheet();
+      if (!reducedMotion.matches && sheet.frame !== null) paintSheet();
     } else {
       reveal(drawer, opening && [{ opacity: 0, transform: "translateX(28px)" }, { opacity: 1, transform: "none" }], motion.d3);
       reveal(scrim, opening && FADE_IN, motion.d2);
@@ -5342,7 +5348,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     resetDrawerDrag();
     drawerOpen = false;
     if (phone()) {
-      if (drawerNextRoute) { stopSheet(); settleSheet(); }
+      if (drawerNextRoute) settleSheet();
       else moveSheet(1, released, Number(getComputedStyle(drawer).opacity));
     } else {
       var opacity = getComputedStyle(scrim).opacity;
@@ -5374,6 +5380,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     }
     if (drawerReturnFocus && drawerReturnFocus.isConnected) drawerReturnFocus.focus({ preventScroll: true });
   }
+
+  function drawerIsOpen() { return drawerOpen; }
 
   function resetDrawerDrag() {
     if (drawerDrag && drawer.hasPointerCapture(drawerDrag.id)) drawer.releasePointerCapture(drawerDrag.id);
@@ -5929,8 +5937,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         ">" + LEVEL_WORDS[v] + "</option>";
     }).join("");
 
-    var src = function (k, id) {
-      return '<div class="src settings-field-note" id="' + id + '">' +
+    var src = function (k, noteID) {
+      return '<div class="src settings-field-note" id="' + noteID + '">' +
         (s.configured_here && s.configured_here[k] ? "Set here" : "From env") + '</div>';
     };
 
@@ -5940,7 +5948,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         '<div class="settings-row settings-first settings-stack"><label for="a-url">Apprise URL</label>' +
         '<input id="a-url" aria-describedby="apprise-source" autocapitalize="none" autocorrect="off" type="url" spellcheck="false" placeholder="' +
         (s.apprise_set ? esc(s.apprise_hint || "(set)")
-                       : "http://apprise-host:8000/notify/your-key") + '"></div>' +
+                       : "http://apprise:8000/notify/key") + '"></div>' +
         src("apprise_url", "apprise-source") +
         '<div class="actions settings-actions">' +
           '<button class="btn" id="a-save-url">Save endpoint</button>' +
@@ -9549,7 +9557,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     if (t.id === "svc-review") { reviewNext(); return; }
 
     var pal = t.closest ? t.closest("[data-pal]") : null;
-    if (pal) { activatePalette(+pal.dataset.pal); return; }
+    if (pal) { activatePalette(+pal.dataset.pal, e.detail === 0); return; }
 
     var cd = t.closest ? t.closest("[data-cdiff]") : null;
     if (cd) { openComposeDiff(route.host, cd.dataset.cdiff, cd.dataset.cpath); return; }
@@ -9791,7 +9799,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   window.HI = {
     h: h, str: str, esc: esc, ago: ago, fromNow: fromNow, bytes: bytes, dur: dur,
     iconNode: iconNode, pill: pill, stateBox: stateBox, notice: notice, skeleton: skeleton,
-    openDrawer: openDrawer, closeDrawer: closeDrawer, toast: toast, go: go,
+    openDrawer: openDrawer, closeDrawer: closeDrawer, drawerIsOpen: drawerIsOpen, toast: toast, go: go,
     prepareListTable: prepareListTable,
     // GET and mutation helpers for the plugin's own API; a 401 opens the gate.
     get: function (id, path, signal) { return api(pagePath(id, path), signal).catch(pageFail); },

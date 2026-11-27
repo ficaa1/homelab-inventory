@@ -247,15 +247,11 @@
   // ------------------------------------------------------------ drawers
 
   function drawer(label, kids) {
-    HI().openDrawer('<div class="tdarr-drawer"></div>', label);
-    var box = document.querySelector("#drawer-body .tdarr-drawer");
-    kids.forEach(function (c) { if (c) box.appendChild(c); });
+    var box = h("div", { class: "tdarr-drawer" }, kids);
+    HI().openDrawer(box, label);
     return box;
   }
-  function drawerOpen(box) {
-    var d = document.getElementById("drawer");
-    return !!box && box.isConnected && !!d && !d.classList.contains("hidden") && !d.motionOut;
-  }
+  function drawerOpen(box) { return !!box && box.isConnected && HI().drawerIsOpen(); }
 
   function seasons(k) {
     if (locked()) return;

@@ -31,7 +31,6 @@
 
   function esc(s) { return HI.esc(s); }
   function $(id) { return document.getElementById(id); }
-  function drawerOpen() { var d = $("drawer"); return d && !d.classList.contains("hidden"); }
   function sheet(html, label) { HI.openDrawer(html, label || "Archive"); }
   function msg(id, text, bad) { var el = $(id); if (el) { el.textContent = text; el.style.color = bad ? "var(--crit)" : ""; } }
   function row(k, v) { return "<dt>" + esc(k) + "</dt><dd>" + esc(v == null || v === "" ? "—" : v) + "</dd>"; }
@@ -403,7 +402,7 @@
     }
     sheet("<h3>" + head + '</h3><div class="empty">Loading plan…</div>');
     function show(p) {
-      if (req !== request || !drawerOpen()) return;
+      if (req !== request || !HI.drawerIsOpen()) return;
       var dry = v.dryRun && action !== "run" && action !== "clear-job", html = "<h3>" + head + "</h3>";
       if (approval) {
         var before = fileBytes(decision.target), s = selected.score || {};
@@ -442,7 +441,7 @@
         var body = approval ? { approval: approval } : action === "run" ? {} : action === "clear-job" ? { id: id, apply: true } :
           { id: id, apply: true, hash: p.hash, confirm: action === "purge" ? $("archive-confirm").value : "" };
         HI.send(ID, path, "POST", body).then(function (r) {
-          if (req !== request || !drawerOpen()) return;
+          if (req !== request || !HI.drawerIsOpen()) return;
           r = r || {};
           if (r.applied === true && !r.error) {
             HI.closeDrawer();
@@ -453,7 +452,7 @@
           sheet("<h3>" + head + '</h3><div class="note">' + esc(r.message || r.error || (r.applied ? "Applied." : "The service returned without applying the plan.")) + "</div>");
           pollNow();
         }).catch(function (err) {
-          if (fail(err) || req !== request || !drawerOpen()) return;
+          if (fail(err) || req !== request || !HI.drawerIsOpen()) return;
           msg("archive-action-msg", err.message, true);
           pollNow();
         });
@@ -461,7 +460,7 @@
     }
     if (action === "run" || action === "clear-job" || approval) { show({}); return; }
     plan(action, id).then(show).catch(function (err) {
-      if (fail(err) || req !== request || !drawerOpen()) return;
+      if (fail(err) || req !== request || !HI.drawerIsOpen()) return;
       sheet("<h3>" + head + '</h3><div class="empty">' + esc(err.message) + "</div>");
     });
   }
@@ -639,7 +638,7 @@
       $("library-apply").disabled = true;
       var tagged = false, searchFailed = false, note = "";
       var body = it.kind === "sonarr" && !untag ? { kind: it.kind, id: it.id, archive: true, fourK: fourK, seasons: chosen } : { kind: it.kind, id: it.id, archive: !untag, fourK: fourK };
-      var live = function () { return req === request && drawerOpen(); };
+      var live = function () { return req === request && HI.drawerIsOpen(); };
       HI.send(ID, "tag", "POST", body).then(function (r) {
         r = r || {};
         if (r.error) throw new Error(r.error);
@@ -815,7 +814,7 @@
     var req = ++request;
     sheet('<h3>Move seeding data</h3><div class="empty">Loading…</div>');
     HI.send(ID, "seeding/preview", "POST", { hash: hash }).then(function (p) {
-      if (req !== request || !drawerOpen()) return;
+      if (req !== request || !HI.drawerIsOpen()) return;
       var moves = (p.libraryMoves || []).map(function (m) { return "<li>" + esc(m.from) + " → " + esc(m.to) + "</li>"; }).join("");
       seedSheet('<h3 class="seed-title">' + esc(p.name) + "</h3>" + pill(p.mode === "link" ? "Link" : "Move", p.mode === "link" ? "good" : "info") +
         '<div class="seed-metrics"><div><span class="sub">Frees download disk</span><strong>' + esc(size(p.nvmeBytesFreed)) + '</strong></div><div><span class="sub">Costs NAS</span><strong>' + esc(size(p.nasBytesCost)) + "</strong></div></div>" +
