@@ -1436,7 +1436,7 @@ button.ops-tile { cursor:pointer; }
   as part of the dashboard rather than something embedded in it.
 */
 .tab-more { display: none; }
-.more-scrim { position: fixed; inset: 0 0 calc(var(--nav-h) + var(--safe-b)); z-index: 61; }
+.more-scrim { position: fixed; inset: 0; z-index: 61; }
 .more-sheet {
   position: fixed; z-index: 62; right: 8px; bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
   width: min(280px, calc(100vw - 16px)); padding: 6px; display: grid; gap: 2px;
@@ -5048,12 +5048,72 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     root.classList.toggle("locked", locked);
   }
 
+  // Higher overlays can cover lower ones. Only the front panel and its
+  // dismissing scrim remain interactive.
+  var modalLayers = [
+    ["pal", "pal-scrim"], ["pv-sheet"], ["up-sheet", "up-scrim"],
+    ["drawer", "scrim"], ["more-sheet", "more-scrim"]
+  ];
+  var modalOpen = {}, modalInert = [];
+  function topModal() {
+    return modalLayers.filter(function (layer) { return modalOpen[layer[0]]; })[0];
+  }
+
+  function isTopModal(id) {
+    var layer = topModal();
+    return !!layer && layer[0] === id;
+  }
+
+  function focusModalEdge(panel, last) {
+    var items = Array.prototype.filter.call(panel.querySelectorAll(
+      'a[href], button, input, select, textarea, summary, iframe, [tabindex], [contenteditable="true"]'
+    ), function (el) {
+      return !el.classList.contains("modal-edge") && !el.matches(":disabled, [tabindex='-1']") &&
+        (el.tabIndex >= 0 || !el.hasAttribute("tabindex") && el.matches("summary, [contenteditable='true']")) &&
+        el.getClientRects().length && getComputedStyle(el).visibility === "visible";
+    });
+    (items[last ? items.length - 1 : 0] || panel).focus({ preventScroll: true });
+  }
+
+  function setModal(id, open) {
+    var panel = $(id);
+    if (open && !panel.querySelector(".modal-edge")) {
+      panel.tabIndex = -1;
+      [true, false].forEach(function (last) {
+        // Focus guards also work when Tab leaves the sandboxed preview frame.
+        var edge = h("span", { class: "sr-only modal-edge", tabindex: "0" });
+        edge.addEventListener("focus", function () { focusModalEdge(panel, last); });
+        if (last) panel.prepend(edge); else panel.append(edge);
+      });
+    }
+    modalOpen[id] = open;
+    var top = topModal();
+    modalInert.forEach(function (el) {
+      if (!el.motionOut) el.inert = false;
+    });
+    modalInert = [];
+    if (top) Array.prototype.forEach.call(document.body.children, function (el) {
+      if (top.indexOf(el.id) !== -1 || el.id === "up-fab" || el.inert) return;
+      el.inert = true;
+      modalInert.push(el);
+    });
+    syncFabInert();
+  }
+
+  document.addEventListener("keydown", function (e) {
+    var top = topModal();
+    if (e.key !== "Tab" || !top || $(top[0]).contains(document.activeElement)) return;
+    e.preventDefault();
+    focusModalEdge($(top[0]), e.shiftKey);
+  }, true);
+
   function openPalette(keyboard, opener) {
     if (palOpen) return;
     palReturnFocus = opener || document.activeElement;
     palOpen = true; palIndex = 0;
     reveal($("pal"), keyboard ? null : FADE_IN, 120);
     reveal($("pal-scrim"), keyboard ? null : FADE_IN, 120);
+    setModal("pal", true);
     $("pal-q").value = "";
     renderPalette();
     syncScrollLock();
@@ -5067,6 +5127,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       var frames = keyboard ? null : [{ opacity: getComputedStyle(el).opacity }, { opacity: 0 }];
       conceal(el, frames, 120, syncScrollLock);
     });
+    setModal("pal", false);
     if (palReturnFocus && palReturnFocus.isConnected) palReturnFocus.focus({ preventScroll: true });
     palReturnFocus = null;
   }
@@ -5449,9 +5510,17 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
 
   function setDrawerContent(html, label) {
-    drawer.setAttribute("aria-label", label || "Details");
     if (typeof html === "string") drawerBody.innerHTML = html;
     else drawerBody.replaceChildren(html);
+    var heading = drawerBody.querySelector("h1, h2, h3, h4");
+    if (heading && !label) {
+      if (!heading.id) heading.id = "drawer-title";
+      drawer.setAttribute("aria-labelledby", heading.id);
+      drawer.removeAttribute("aria-label");
+    } else {
+      drawer.removeAttribute("aria-labelledby");
+      drawer.setAttribute("aria-label", label || "Details");
+    }
     Array.prototype.forEach.call(drawerBody.querySelectorAll("[data-list] tr:not(.clickable) .c-list-open"), function (button) {
       button.setAttribute("aria-expanded", "false");
     });
@@ -5490,6 +5559,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       reveal(drawer, opening && [{ opacity: 0, transform: "translateX(28px)" }, { opacity: 1, transform: "none" }], motion.d3);
       reveal(scrim, opening && FADE_IN, motion.d2);
     }
+    setModal("drawer", true);
     syncScrollLock();
     $("drawer-close").focus({ preventScroll: true });
     return id;
@@ -5522,6 +5592,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       conceal(scrim);
       syncScrollLock();
     }
+    setModal("drawer", false);
     restartSession++; stopRestartHealth();
     if (enrollSession && enrollSession.fromAdmin) {
       var arrived = Object.keys(enrollSession.reporting).length;
@@ -6450,7 +6521,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   function fitTopbar() {
     document.querySelector(".tabs").setAttribute("aria-orientation", phone() ? "horizontal" : "vertical");
-    if (!phone()) closeMore();
+    if (!phone() || !document.querySelector(".tabs.has-more")) closeMore();
   }
   window.addEventListener("resize", fitTopbar);
 
@@ -6490,7 +6561,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   function syncFabInert() {
     var fab = $("up-fab");
-    fab.inert = moreOpen() || fab.classList.contains("away");
+    fab.inert = !!topModal() || fab.classList.contains("away");
   }
 
   function overlayPose(el) {
@@ -6505,15 +6576,16 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         "aria-current": entryOn(e) ? "page" : null },
         [iconNode(e.icon), e.title]));
     });
+    if (!items.length) return;
     sheet.replaceChildren.apply(sheet, items);
     var frames = sheetFrames();
     if (!sheet.classList.contains("hidden")) frames[0] = overlayPose(sheet);
     reveal(sheet, frames, motion.d2, motion.out);
     $("more-scrim").classList.remove("hidden");
     $("tab-more").setAttribute("aria-expanded", "true");
-    syncFabInert();
+    setModal("more-sheet", true);
     var first = sheet.querySelector('[aria-current="page"]') || sheet.querySelector("button");
-    if (first) first.focus();
+    first.focus({ preventScroll: true });
   }
   function closeMore(refocus) {
     if (!moreOpen()) return;
@@ -6521,10 +6593,10 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     conceal(sheet, phone() ? [overlayPose(sheet), sheetFrames()[0]] : null, motion.d1);
     $("more-scrim").classList.add("hidden");
     $("tab-more").setAttribute("aria-expanded", "false");
-    syncFabInert();
+    setModal("more-sheet", false);
     if (refocus) $("tab-more").focus();
   }
-  $("more-scrim").addEventListener("click", function () { closeMore(false); });
+  $("more-scrim").addEventListener("click", function () { closeMore(true); });
   $("more-sheet").addEventListener("click", function (e) {
     var b = e.target.closest ? e.target.closest("[data-more]") : null;
     if (!b) return;
@@ -6535,7 +6607,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   $("more-sheet").addEventListener("keydown", function (e) {
     var list = Array.prototype.slice.call($("more-sheet").querySelectorAll("button"));
     var i = list.indexOf(document.activeElement);
-    if (e.key === "Escape" || e.key === "Tab") { e.preventDefault(); e.stopPropagation(); closeMore(true); return; }
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeMore(true); return; }
     var next = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: list.length - 1 }[e.key];
     if (next === undefined) return;
     e.preventDefault();
@@ -8516,14 +8588,14 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       reveal($("up-scrim"), FADE_IN, motion.d2);
       placeThumb(false);
       fab.classList.add("away");
-      syncFabInert();
+      setModal("up-sheet", true);
       animateIn(fab, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(0.6)" }], motion.d1, motion.inn);
       return;
     }
     conceal(sheet, SHEET_OUT, motion.d2);
     conceal($("up-scrim"), FADE_OUT, motion.d2);
     fab.classList.remove("away");
-    syncFabInert();
+    setModal("up-sheet", false);
     fab.motionIn = animateIn(fab, [{ opacity: 0, transform: "scale(0.5)" }, { opacity: 1, transform: "none" }], motion.d3, motion.spring, motion.d2 - 60);
     if (up.fabFx) {
       var fx = up.fabFx;
@@ -8731,7 +8803,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   document.addEventListener("keydown", function (e) {
     if (e.key !== "Escape") return;
     if ($("up-drop").classList.contains("on")) { up.depth = 0; upDrag(false); }
-    else if (!$("up-sheet").classList.contains("hidden") && !$("up-sheet").motionOut) { e.stopImmediatePropagation(); closeUpload(); }
+    else if (isTopModal("up-sheet")) { e.stopImmediatePropagation(); closeUpload(); }
   }, true);
 
   // Drag-and-drop anywhere. The depth counter keeps the overlay from
@@ -8742,7 +8814,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     $("up-fab").classList.toggle("drag", on);
   }
   function upHasFiles(e) {
-    return up.targets.length && appShown() && !$("up-fab").classList.contains("hidden") && e.dataTransfer &&
+    var top = topModal();
+    return (!top || top[0] === "up-sheet") && up.targets.length && appShown() && !$("up-fab").classList.contains("hidden") && e.dataTransfer &&
       Array.prototype.indexOf.call(e.dataTransfer.types || [], "Files") >= 0;
   }
   document.addEventListener("dragenter", function (e) {
@@ -8908,6 +8981,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     pvRelease();
     $("pv-name").textContent = name;
     $("pv-sheet").classList.remove("hidden");
+    setModal("pv-sheet", true);
     $("pv-close").focus();
     var kind = PV_KIND[upExt(name)];
     if (!kind) { pvMsg("No preview", false); return; }
@@ -8933,6 +9007,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     preview.open = false; preview.seq++;
     pvRelease();
     $("pv-sheet").classList.add("hidden");
+    setModal("pv-sheet", false);
     var back = preview.from;
     preview.from = null;
     if (back && back.focus) back.focus();
@@ -8951,7 +9026,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   // Window capture runs before the upload sheet's document-level Escape handler,
   // so one Escape closes the preview and leaves the sheet behind it open.
   window.addEventListener("keydown", function (e) {
-    if (e.key !== "Escape" || !preview.open) return;
+    if (e.key !== "Escape" || !isTopModal("pv-sheet")) return;
     e.preventDefault();
     e.stopPropagation();
     closePreview(false);
@@ -9028,6 +9103,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
 
   function showGate(failed, note) {
+    closePalette(true);
+    closeMore(false);
     auth.passkeyBusy = false; auth.passkeyMsg = "";
     closeDrawer();
     sessionStorage.removeItem(TOKEN_KEY);
@@ -9849,12 +9926,6 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       return;
     }
 
-    if (e.key === "Tab" && drawerOpen && $("restart-sheet")) {
-      var focusable = Array.prototype.slice.call($("drawer").querySelectorAll("button:not([disabled]), input:not([disabled]), summary, a[href]"));
-      var first = focusable[0], last = focusable[focusable.length-1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-    }
     if (e.key === "Escape") { closeDrawer(); hideTip(); return; }
     var cell = document.activeElement;
     if (!cell || !cell.classList || !cell.classList.contains("cell")) return;
