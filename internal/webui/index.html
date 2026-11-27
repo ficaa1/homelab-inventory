@@ -1967,7 +1967,7 @@ button.ops-tile { cursor:pointer; }
 
 .up-scrim { z-index: 72; }
 .up-sheet {
-  position: fixed; z-index: 73; right: 18px; bottom: calc(18px + var(--safe-b));
+  position: fixed; z-index: 73; right: max(18px, env(safe-area-inset-right, 0px)); bottom: calc(18px + var(--safe-b));
   width: min(400px, calc(100% - 24px)); max-height: 70vh; max-height: 70dvh; overflow: auto; overscroll-behavior: contain;
   background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-lg);
   box-shadow: 0 18px 50px var(--shadow-heavy); padding: 14px;
@@ -5532,19 +5532,45 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   else window.addEventListener("resize", sizeDrawer);
   if (window.ResizeObserver) new ResizeObserver(sizeDrawer).observe(drawer);
 
-  function paintSheet() {
-    drawer.style.transform = "translateY(" + sheet.y + "px)";
-    scrim.style.opacity = 1 - Math.max(0, Math.min(1, sheet.y / sheet.height));
+  function paintSlidingSheet(panel, backdrop, pose) {
+    panel.style.transform = "translateY(" + pose.y + "px)";
+    backdrop.style.opacity = 1 - Math.max(0, Math.min(1, pose.y / pose.height));
   }
+
+  function stopSpring(pose) {
+    if (pose.frame !== null) cancelAnimationFrame(pose.frame);
+    pose.frame = null;
+  }
+
+  function moveSpring(pose, goal, damping, paint, done) {
+    stopSpring(pose);
+    var last = performance.now(), w = 2 * Math.PI / 0.30;
+    function frame(now) {
+      pose.frame = null;
+      var target = goal();
+      if (reducedMotion.matches) { done(target); return; }
+      var remaining = Math.max(0, Math.min((now - last) / 1000, 0.064));
+      last = now;
+      while (remaining > 0) {
+        var dt = Math.min(remaining, 0.008);
+        pose.v += (w * w * (target - pose.y) - 2 * damping * w * pose.v) * dt;
+        pose.y += pose.v * dt;
+        remaining -= dt;
+      }
+      if (Math.abs(target - pose.y) < 0.5 && Math.abs(pose.v) < 5) { done(target); return; }
+      paint();
+      pose.frame = requestAnimationFrame(frame);
+    }
+    pose.frame = requestAnimationFrame(frame);
+  }
+
+  function paintSheet() { paintSlidingSheet(drawer, scrim, sheet); }
 
   function clearSheetStyles() {
     drawer.style.transform = drawer.style.opacity = scrim.style.opacity = "";
   }
 
-  function stopSheet() {
-    if (sheet.frame !== null) cancelAnimationFrame(sheet.frame);
-    sheet.frame = null;
-  }
+  function stopSheet() { stopSpring(sheet); }
 
   function settleSheet() {
     stopSheet();
@@ -5557,34 +5583,19 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   function moveSheet(damping, released, fromOpacity) {
     stopSheet();
     sheet.damping = damping;
-    var start = performance.now(), last = start, w = 2 * Math.PI / 0.30;
-    var fade = reducedMotion.matches, opacity = drawerOpen ? 1 : 0;
-    if (fade && released) { settleSheet(); return; }
-    function paintFade(value) { drawer.style.opacity = scrim.style.opacity = value; }
-    if (fade) {
-      drawer.style.transform = "";
-      paintFade(fromOpacity);
+    if (!reducedMotion.matches) {
+      moveSpring(sheet, function () { return drawerOpen ? 0 : sheet.height; }, damping, paintSheet, settleSheet);
+      return;
     }
+    if (released) { settleSheet(); return; }
+    var start = performance.now(), opacity = drawerOpen ? 1 : 0;
+    function paintFade(value) { drawer.style.opacity = scrim.style.opacity = value; }
+    drawer.style.transform = "";
+    paintFade(fromOpacity);
     function frame(now) {
-      sheet.frame = null;
-      if (fade !== reducedMotion.matches) { settleSheet(); return; }
-      if (fade) {
-        var progress = Math.min(1, Math.max(0, (now - start) / 100));
-        if (progress === 1) { settleSheet(); return; }
-        paintFade(fromOpacity + (opacity - fromOpacity) * progress);
-      } else {
-        var target = drawerOpen ? 0 : sheet.height;
-        var remaining = Math.max(0, Math.min((now - last) / 1000, 0.064));
-        last = now;
-        while (remaining > 0) {
-          var dt = Math.min(remaining, 0.008);
-          sheet.v += (w * w * (target - sheet.y) - 2 * damping * w * sheet.v) * dt;
-          sheet.y += sheet.v * dt;
-          remaining -= dt;
-        }
-        if (Math.abs(target - sheet.y) < 0.5 && Math.abs(sheet.v) < 5) { settleSheet(); return; }
-        paintSheet();
-      }
+      var progress = Math.min(1, Math.max(0, (now - start) / 100));
+      if (progress === 1 || !reducedMotion.matches) { settleSheet(); return; }
+      paintFade(fromOpacity + (opacity - fromOpacity) * progress);
       sheet.frame = requestAnimationFrame(frame);
     }
     sheet.frame = requestAnimationFrame(frame);
@@ -8665,31 +8676,52 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     (first || $("up-close")).focus();
   }
 
-  // The panel grows out of the bubble's corner and folds back into it; the
-  // bubble shrinks away as it opens and springs back once it has closed.
-  var SHEET_OUT = [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(0.14)" }];
+  var uploadPose = { y: 0, v: 0, height: 0, frame: null };
+  var uploadOpen = false;
+  var UPLOAD_HIDDEN = { opacity: 0, transform: "scale(0.96)" };
+  var UPLOAD_SHOWN = { opacity: 1, transform: "none" };
+
+  function settleUploadSheet() {
+    stopSpring(uploadPose);
+    var panel = $("up-sheet"), backdrop = $("up-scrim");
+    if (!uploadOpen) { conceal(panel); conceal(backdrop); }
+    panel.style.transform = backdrop.style.opacity = "";
+    uploadPose.y = uploadPose.v = 0;
+  }
+  if (drawerPhone.addEventListener) drawerPhone.addEventListener("change", settleUploadSheet);
+  else drawerPhone.addListener(settleUploadSheet);
+
   function showSheet(on) {
-    var sheet = $("up-sheet"), fab = $("up-fab"), was = !sheet.classList.contains("hidden") && !sheet.motionOut;
-    if (on === was) return;
-    if (on) {
-      if (fab.motionIn) { fab.motionIn.cancel(); fab.motionIn = null; }
-      reveal(sheet, [{ opacity: 0, transform: "scale(0.14)" }, { opacity: 1, offset: 0.35 }, { opacity: 1, transform: "none" }], motion.d3, motion.spring);
-      reveal($("up-scrim"), FADE_IN, motion.d2);
-      placeThumb(false);
-      fab.classList.add("away");
-      setModal("up-sheet", true);
-      animateIn(fab, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(0.6)" }], motion.d1, motion.inn);
-      return;
+    if (on === uploadOpen) return;
+    var panel = $("up-sheet"), backdrop = $("up-scrim"), fab = $("up-fab");
+    var hidden = panel.classList.contains("hidden"), fabOpacity = overlayPose(fab).opacity;
+    var panelPose = hidden ? UPLOAD_HIDDEN : overlayPose(panel);
+    var scrimOpacity = hidden ? 0 : overlayPose(backdrop).opacity;
+    uploadOpen = on;
+    if (uploadPose.frame !== null && !moving()) settleUploadSheet();
+    if (phone() && moving()) {
+      if (on) { reveal(panel); reveal(backdrop); }
+      uploadPose.height = panel.offsetHeight + parseFloat(getComputedStyle(panel).bottom);
+      if (hidden) uploadPose.y = uploadPose.height;
+      function paint() { paintSlidingSheet(panel, backdrop, uploadPose); }
+      paint();
+      moveSpring(uploadPose, function () { return uploadOpen ? 0 : uploadPose.height; }, 1, paint, settleUploadSheet);
+    } else if (on) {
+      reveal(panel, [panelPose, UPLOAD_SHOWN], motion.d2);
+      reveal(backdrop, [{ opacity: scrimOpacity }, { opacity: 1 }], motion.d2);
+    } else {
+      conceal(panel, [panelPose, UPLOAD_HIDDEN], motion.d2, null, false, motion.out);
+      conceal(backdrop, [{ opacity: scrimOpacity }, { opacity: 0 }], motion.d2, null, false, motion.out);
     }
-    conceal(sheet, SHEET_OUT, motion.d2);
-    conceal($("up-scrim"), FADE_OUT, motion.d2);
-    fab.classList.remove("away");
-    setModal("up-sheet", false);
-    fab.motionIn = animateIn(fab, [{ opacity: 0, transform: "scale(0.5)" }, { opacity: 1, transform: "none" }], motion.d3, motion.spring, motion.d2 - 60);
+    fab.classList.toggle("away", on);
+    setModal("up-sheet", on);
+    if (!on && phone() && uploadPose.frame !== null) panel.inert = backdrop.inert = true;
+    animateIn(fab, [{ opacity: fabOpacity }, { opacity: on ? 0 : 1 }], motion.d1);
+    if (on) { placeThumb(false); return; }
     if (up.fabFx) {
       var fx = up.fabFx;
       up.fabFx = "";
-      setTimeout(function () { fabEffect(fx); }, moving() ? motion.d2 + motion.d3 - 60 : 0);
+      setTimeout(function () { fabEffect(fx); }, moving() ? motion.d1 : 0);
     }
   }
 
