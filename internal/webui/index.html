@@ -5380,6 +5380,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
 
   function finishDrawerClose(fromHistory) {
+    var active = document.activeElement;
+    var restoreFocus = !phone() || !active || active === document.body || drawer.contains(active);
     drawerID++;
     if (!drawer.motionOut) {
       conceal(drawer);
@@ -5400,7 +5402,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       drawerNextRoute = "";
       go(next);
     }
-    if (drawerReturnFocus && drawerReturnFocus.isConnected) drawerReturnFocus.focus({ preventScroll: true });
+    if (restoreFocus && drawerReturnFocus && drawerReturnFocus.isConnected) drawerReturnFocus.focus({ preventScroll: true });
   }
 
   function drawerIsOpen() { return drawerOpen; }
