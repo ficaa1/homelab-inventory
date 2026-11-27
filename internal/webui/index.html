@@ -2226,11 +2226,11 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
         <div id="ports-grid"></div>
 
-        <div id="ports-table" class="hidden">
+        <div id="ports-table" class="hidden" data-list-section="ports">
           <div class="filters">
             <label class="field"><svg class="ic sm" aria-hidden="true"><use href="#i-search"/></svg><input id="f-ports" enterkeyhint="search" type="search" placeholder="Filter ports" aria-label="Filter ports"></label>
           </div>
-          <div class="scroll"><table class="ptable" data-list="3,6">
+          <div class="scroll"><table class="ptable" data-list="3,6" data-list-id="ports">
             <thead><tr>
               <th class="num">Port</th><th class="c-proto">Proto</th><th>Host</th>
               <th>Owner</th>
@@ -3101,7 +3101,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
               toggleListRowDetails(tr, open, fields);
               return;
             }
-            openDrawer("<h3>" + esc(title) + "</h3>" + fields, title);
+            openDrawer("<h3>" + esc(title) + "</h3>" + fields, title, open);
           });
         }
         tr.appendChild(h("td", { class: "c-sub", role: "cell" }, [h("span", { text: parts.filter(Boolean).join(" · ") }), open]));
@@ -3125,6 +3125,44 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   function prepareListTables(root) {
     Array.prototype.forEach.call(root.querySelectorAll("table[data-list]"), prepareListTable);
+  }
+
+  function listOpener(button) {
+    var table = button && button.closest("table[data-list-id]");
+    if (!table) return null;
+    var tr = button.closest("tr[data-list-key]");
+    if (!tr) return null;
+    var section = table.closest("[data-list-section], details[data-sect], section[id]");
+    var sectionSelector = "";
+    if (section) {
+      if (section.dataset.listSection) sectionSelector = '[data-list-section="' + CSS.escape(section.dataset.listSection) + '"]';
+      else if (section.dataset.sect) sectionSelector = '[data-sect="' + CSS.escape(section.dataset.sect) + '"]';
+      else sectionSelector = "#" + CSS.escape(section.id);
+    }
+    return {
+      route: location.hash,
+      table: table.dataset.listId,
+      row: tr.dataset.listKey,
+      section: sectionSelector
+    };
+  }
+
+  function findListOpener(opener) {
+    if (opener.route !== location.hash) return null;
+    var table = 'table[data-list-id="' + CSS.escape(opener.table) + '"]';
+    var row = 'tr[data-list-key="' + CSS.escape(opener.row) + '"]';
+    var buttons = document.querySelectorAll(table + " " + row + " .c-list-open");
+    if (buttons.length === 1 && buttons[0].getClientRects().length) return buttons[0];
+
+    var section = opener.section && document.querySelector(opener.section);
+    if (!section || !section.getClientRects().length) {
+      section = route.view === "host" ? $("view-host")
+        : route.view === "plugin" ? $("view-plugin") : $("panel-" + route.tab);
+    }
+    var target = section.querySelector("h1, h2, h3, h4") || section;
+    if (!target.getClientRects().length) target = section;
+    target.setAttribute("tabindex", "-1");
+    return target;
   }
 
   function renderPortsTable() {
@@ -3156,7 +3194,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       if (p.container_port) owner += ' <span class="sub">→:' + esc(p.container_port) + "</span>";
       var binds = (p.addresses || []).slice(0, 2).join(", ") +
         ((p.addresses || []).length > 2 ? " +" + ((p.addresses || []).length - 2) : "");
-      return '<tr class="clickable" data-port-host="' + esc(r.host) + '" data-port="' + esc(p.port) +
+      var key = JSON.stringify([r.host, p.port, p.protocol]);
+      return '<tr class="clickable" data-list-key="' + esc(key) + '" data-port-host="' + esc(r.host) + '" data-port="' + esc(p.port) +
         '"><td class="num" data-list-text="Port ' + esc(p.port) + '"><b>' + esc(p.port) + "</b></td>" +
         '<td class="c-proto"><code>' + esc(p.protocol) + "</code></td>" +
         "<td>" + esc(r.host) + "</td>" +
@@ -3554,10 +3593,10 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           fact("Oldest", new Date(hist[hist.length - 1].collected_at).toLocaleString()) +
           fact("Typical gap", median ? Math.round(median) + " min" : "—") +
         "</div>" +
-        '<div class="scroll"><table data-list="0,2"><thead><tr><th>Collected</th><th>Ago</th>' +
+        '<div class="scroll"><table data-list="0,2" data-list-id="history"><thead><tr><th>Collected</th><th>Ago</th>' +
         '<th class="num">Size</th><th>Run id</th></tr></thead><tbody>' +
         hist.slice(0, 25).map(function (r) {
-          return "<tr><td>" + esc(new Date(r.collected_at).toLocaleString()) + "</td>" +
+          return '<tr data-list-key="' + esc(r.id) + '"><td>' + esc(new Date(r.collected_at).toLocaleString()) + "</td>" +
             "<td>" + esc(ago(r.collected_at)) + "</td>" +
             '<td class="num">' + esc(bytes(r.size_bytes)) + "</td>" +
             "<td><code>" + esc(r.id) + "</code></td></tr>";
@@ -3579,13 +3618,13 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           '<span class="pill" title="Pinned to a version tag">' + k.tag + " tag</span>" +
           '<span class="pill' + (k.floating ? " warning" : "") + '" title="On a moving tag such as :latest"><span class="glyph" aria-hidden="true">' + GLYPH.warning + "</span>" + k.floating + " floating</span>" +
           "</div>" +
-        '<div class="scroll"><table data-list="0,3"><thead><tr><th>Container</th><th>Image</th>' +
+        '<div class="scroll"><table data-list="0,3" data-list-id="images"><thead><tr><th>Container</th><th>Image</th>' +
         '<th>Tag</th><th>Pinning</th></tr></thead><tbody>' +
         im.containers.map(function (x) {
           var pin = x.image.pinning;
           var cls = pin === "digest" ? "good" : pin === "tag" ? "" : "warning";
           var glyph = pin === "floating" ? GLYPH.warning : GLYPH.good;
-          return "<tr><td><b>" + esc(x.name) + "</b>" +
+          return '<tr data-list-key="' + esc(x.name) + '"><td><b>' + esc(x.name) + "</b>" +
             (x.compose_project ? '<div class="sub">' + esc(x.compose_project) + "</div>" : "") +
             "</td><td><code>" + esc((x.image.registry ? x.image.registry + "/" : "") +
               x.image.repository) + "</code></td>" +
@@ -3634,13 +3673,13 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     if (timers.length || cron.length) {
       scheduleHTML = "";
       if (timers.length) {
-        scheduleHTML += '<div class="scroll"><table data-list="0,2"><thead><tr><th>Timer</th>' +
+        scheduleHTML += '<div class="scroll"><table data-list="0,2" data-list-id="timers"><thead><tr><th>Timer</th>' +
           "<th>Last run</th><th>Next run</th></tr></thead><tbody>" +
           timers.map(function (t) {
             // A timer that has never fired, or has no next run, is the
             // interesting one — that is what a stopped job looks like.
             var stalled = !t.next;
-            return "<tr><td><b>" + esc(t.name) + "</b></td>" +
+            return '<tr data-list-key="' + esc(t.name) + '"><td><b>' + esc(t.name) + "</b></td>" +
               "<td>" + (t.last ? esc(ago(t.last)) : '<span class="sub">never</span>') + "</td>" +
               "<td>" + (t.next ? esc(fromNow(t.next))
                 : '<span class="pill warning"><span class="glyph" aria-hidden="true">' +
@@ -3648,10 +3687,11 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           }).join("") + "</tbody></table></div>";
       }
       if (cron.length) {
-        scheduleHTML += '<div class="scroll" style="margin-top:10px"><table data-list="0,-1"><thead><tr>' +
+        scheduleHTML += '<div class="scroll" style="margin-top:10px"><table data-list="0,-1" data-list-id="cron"><thead><tr>' +
           "<th>Source</th><th>Entry</th></tr></thead><tbody>" +
           cron.map(function (c) {
-            return "<tr><td><code>" + esc(c.path) + "</code>" +
+            var key = JSON.stringify([c.path, c.raw, c.owner || ""]);
+            return '<tr data-list-key="' + esc(key) + '"><td><code>' + esc(c.path) + "</code>" +
               (c.owner ? '<div class="sub">' + esc(c.owner) + "</div>" : "") + "</td>" +
               "<td><code>" + esc(c.raw) + "</code></td></tr>";
           }).join("") + "</tbody></table></div>";
@@ -3663,7 +3703,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var sh = inv.shares || {};
     var nfs = sh.nfs || [], smb = sh.smb || [];
     if (nfs.length || smb.length) {
-      sharesHTML = '<div class="scroll"><table data-list="2,0"><thead><tr><th>Kind</th><th>Name</th>' +
+      sharesHTML = '<div class="scroll"><table data-list="2,0" data-list-id="shares"><thead><tr><th>Kind</th><th>Name</th>' +
         "<th>Path</th><th>Clients / options</th></tr></thead><tbody>" +
         nfs.map(function (x) {
           // Spec is the host/network/netgroup; read_only is promoted out of
@@ -3671,7 +3711,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           var who = (x.clients || []).map(function (c) {
             return (c.spec || "?") + (c.read_only ? " (ro)" : " (rw)");
           }).join(", ");
-          return '<tr><td><span class="sub">NFS</span></td><td></td>' +
+          return '<tr data-list-key="' + esc("nfs:" + x.path) + '"><td><span class="sub">NFS</span></td><td></td>' +
             "<td><code>" + esc(x.path || "") + "</code></td>" +
             "<td><code>" + esc(who || "—") + "</code></td></tr>";
         }).join("") +
@@ -3683,7 +3723,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           var guest = (o["guest ok"] || o["public"] || "").toLowerCase();
           var bits = [ro === "yes" ? "read only" : "writable"];
           if (guest === "yes") bits.push("guest ok");
-          return '<tr data-list-main="1"><td><span class="sub">SMB</span></td>' +
+          return '<tr data-list-key="' + esc("smb:" + x.name) + '" data-list-main="1"><td><span class="sub">SMB</span></td>' +
             "<td><b>" + esc(x.name || "") + "</b>" +
             (x.comment ? '<div class="sub">' + esc(x.comment) + "</div>" : "") + "</td>" +
             "<td><code>" + esc(x.path || "—") + "</code></td>" +
@@ -3823,16 +3863,18 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var rows = [];
     (entries || []).forEach(function (e) {
       (e.changes || []).forEach(function (c) {
-        rows.push("<tr><td>" + esc(ago(e.to_collected_at)) + "</td><td>" + esc(label[c.scope] || c.scope) + "</td><td><b>" + esc(c.name) + '</b><div class="sub"><code>' +
+        var key = JSON.stringify([e.to_collected_at, c.scope, c.name]);
+        rows.push('<tr data-list-key="' + esc(key) + '"><td>' + esc(ago(e.to_collected_at)) + "</td><td>" + esc(label[c.scope] || c.scope) + "</td><td><b>" + esc(c.name) + '</b><div class="sub"><code>' +
           esc(c.from ? c.from.version : "new") + "</code> → <code>" + esc(c.to ? c.to.version : "removed") + "</code></div></td></tr>");
       });
       (e.notes || []).forEach(function (n) {
-        rows.push("<tr><td>" + esc(ago(e.to_collected_at)) + "</td><td>" + esc(label[n.scope] || n.scope) + '</td><td class="sub">' +
+        var key = JSON.stringify([e.to_collected_at, n.scope, n.kind]);
+        rows.push('<tr data-list-key="' + esc(key) + '"><td>' + esc(ago(e.to_collected_at)) + "</td><td>" + esc(label[n.scope] || n.scope) + '</td><td class="sub">' +
           esc(n.kind.replace("_", " ")) + (n.to_status && n.to_status !== "ok" ? " · " + esc(n.to_status) : "") + "</td></tr>");
       });
     });
     if (!rows.length) return '<div class="empty">' + (entries && entries.length ? "No package changes." : "Only the baseline scan is stored.") + "</div>";
-    return '<div class="scroll"><table class="pkg" data-list="2,0" data-list-labels="Age|Set|Change"><tbody>' + rows.slice(0, 50).join("") + "</tbody></table></div>";
+    return '<div class="scroll"><table class="pkg" data-list="2,0" data-list-id="package-changes" data-list-labels="Age|Set|Change"><tbody>' + rows.slice(0, 50).join("") + "</tbody></table></div>";
   }
   function pkgPage() {
     var v = pkgView, seq = ++v.seq;
@@ -3844,13 +3886,14 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       (r.software.sets || []).forEach(function (x) {
         var where = pkgScopeLabel(x).split(" · ")[0];
         x.packages.forEach(function (p) {
-          rows.push("<tr><td><b>" + esc(p.name) + "</b>" + (p.source && p.source !== p.name ? '<div class="sub">' + esc(p.source) + "</div>" : "") + "</td><td><code>" + esc(p.version) + "</code></td>" +
+          var key = JSON.stringify([x.scope, p.name, p.arch || "", p.version]);
+          rows.push('<tr data-list-key="' + esc(key) + '"><td><b>' + esc(p.name) + "</b>" + (p.source && p.source !== p.name ? '<div class="sub">' + esc(p.source) + "</div>" : "") + "</td><td><code>" + esc(p.version) + "</code></td>" +
             (many ? "<td>" + esc(where) + "</td>" : "") + "</tr>");
         });
       });
       var end = Math.min(r.offset + rows.length, r.total);
       el.innerHTML = rows.length
-        ? '<div class="scroll"><table class="pkg" data-list="0,-1"><thead><tr><th>Package</th><th>Version</th>' + (many ? "<th>Set</th>" : "") + "</tr></thead><tbody>" + rows.join("") + "</tbody></table></div>" +
+        ? '<div class="scroll"><table class="pkg" data-list="0,-1" data-list-id="packages"><thead><tr><th>Package</th><th>Version</th>' + (many ? "<th>Set</th>" : "") + "</tr></thead><tbody>" + rows.join("") + "</tbody></table></div>" +
           '<div class="filters"><span class="sub">' + (r.offset + 1) + "–" + end + " of " + r.total + '</span><span class="spacer"></span>' +
           (r.offset > 0 ? '<button type="button" class="btn" id="pkg-prev">Previous</button>' : "") +
           (end < r.total ? '<button type="button" class="btn" id="pkg-next">Next</button>' : "") + "</div>"
@@ -4110,7 +4153,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       '<div class="freebar"><span class="lab">' + d.files.length + " files · " +
         d.runs + " runs · " + (changed ? "<b>" + changed + "</b> changed" : "none changed") +
         "</span></div>" +
-      '<div class="scroll"><table data-list="0,2"><thead><tr><th>Project</th><th>File</th>' +
+      '<div class="scroll"><table data-list="0,2" data-list-id="compose"><thead><tr><th>Project</th><th>File</th>' +
       '<th class="num">Versions</th><th>Last change</th></tr></thead><tbody>' +
       d.files.map(function (f) {
         var newest = f.versions[0] || {};
@@ -4122,7 +4165,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         var note = f.resolved_path && f.resolved_path !== f.path
           ? '<div class="sub" title="Path inside Portainer">↳ <code>' + esc(f.path) + "</code></div>"
           : "";
-        return '<tr class="clickable" data-cfile="' + esc(f.project) +
+        var key = JSON.stringify([f.project, f.path]);
+        return '<tr class="clickable" data-list-key="' + esc(key) + '" data-cfile="' + esc(f.project) +
           '" data-cpath="' + esc(f.path) + '"><td><b>' + esc(f.project) + "</b></td>" +
           "<td><code>" + esc(shown) + "</code>" + note + "</td>" +
           '<td class="num">' + f.versions.length + "</td>" +
@@ -4137,8 +4181,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   // Every file opens, whether or not it has ever changed. Only offering a
   // button on changed files meant that on a fleet where nothing had changed
   // yet, nothing was clickable at all.
-  function openComposeFile(host, project, path, sha) {
-    openDrawer("<h3>" + esc(project) + "</h3><div class=\"empty\">Loading…</div>");
+  function openComposeFile(host, project, path, sha, opener) {
+    openDrawer("<h3>" + esc(project) + "</h3><div class=\"empty\">Loading…</div>", null, opener);
     api("/hosts/" + encodeURIComponent(host) + "/compose/file?project=" +
         encodeURIComponent(project) + "&path=" + encodeURIComponent(path) +
         (sha ? "&at=" + encodeURIComponent(sha) : ""))
@@ -5218,7 +5262,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   var drawer = $("drawer"), scrim = $("scrim"), drawerBody = $("drawer-body"), drawerHead = $("drawer-head");
   var drawerOpen = false, drawerReturnFocus = null, drawerPopping = false, drawerNextRoute = "";
-  var drawerDrag = null, drawerDragged = false, drawerID = 0, drawerSkippingHistory = false;
+  var drawerDrag = null, drawerDragged = false, drawerID = 0, drawerSkippingHistory = false, drawerReturnRow = null;
   var sheet = { y: 0, v: 0, height: 0, frame: null, damping: 1 };
   var drawerPhone = matchMedia("(max-width: 640px)");
 
@@ -5364,9 +5408,12 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     else $("drawer-close").focus({ preventScroll: true });
   }
 
-  function openDrawer(html, label) {
+  function openDrawer(html, label, opener) {
     var opening = !drawerOpen, hidden = drawer.classList.contains("hidden"), dragging = !!drawerDrag;
-    if (hidden || (opening && !phone())) drawerReturnFocus = document.activeElement;
+    if (hidden || (opening && !phone())) {
+      drawerReturnFocus = document.activeElement;
+      drawerReturnRow = phone() ? listOpener(opener) : null;
+    }
     var opacity = hidden ? 0 : Number(getComputedStyle(drawer).opacity);
     var id = ++drawerID;
     drawerOpen = true;
@@ -5431,7 +5478,10 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       drawerNextRoute = "";
       go(next);
     }
-    if (restoreFocus && drawerReturnFocus && drawerReturnFocus.isConnected) drawerReturnFocus.focus({ preventScroll: true });
+    if (restoreFocus) {
+      var target = phone() && drawerReturnRow ? findListOpener(drawerReturnRow) : drawerReturnFocus;
+      if (target && target.isConnected) target.focus({ preventScroll: true });
+    }
   }
 
   function drawerIsOpen() { return drawerOpen; }
@@ -5540,7 +5590,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   function row(k, v) { return v ? "<dt>" + esc(k) + "</dt><dd>" + esc(v) + "</dd>" : ""; }
 
-  function openPortDrawer(hostName, port) {
+  function openPortDrawer(hostName, port, opener) {
     var h = hostPortMap(hostName);
     var entries = h ? (indexPorts(h)[port] || []) : [];
     var ephem = h && inEphemeral(h, port);
@@ -5552,7 +5602,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         row("Claimable", ephem ? "no" : "yes") + "</dl>" +
         (ephem
           ? '<div class="note"><b>Kernel ephemeral.</b> ' + esc(DEFS.ephemeral) + "</div>"
-          : '<div class="note">No listener.</div>'));
+          : '<div class="note">No listener.</div>'), null, opener);
       return;
     }
 
@@ -5585,7 +5635,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         esc(shared.hosts.filter(function (n) { return n !== hostName; }).join(", ")) +
         ".</div>";
     }
-    openDrawer(html);
+    openDrawer(html, null, opener);
   }
 
   // Silencing is offered from the alert itself, because that is the moment you
@@ -5838,7 +5888,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         '<input type="number" inputmode="numeric" min="0" step="1" id="rs-' + k + '" value="' + p[k] + '"></div>';
     }).join("");
     var rows = s.hosts.map(function (h) {
-      return '<tr><td>' + esc(h.host) + '</td><td data-list-text="' + h.runs.toLocaleString() + ' runs">' + h.runs.toLocaleString() +
+      return '<tr data-list-key="' + esc(h.host) + '"><td>' + esc(h.host) + '</td><td data-list-text="' + h.runs.toLocaleString() + ' runs">' + h.runs.toLocaleString() +
         '</td><td>' + storageSize(h.bytes) + '</td><td>' + esc(h.oldest.slice(0,10)) +
         '</td><td data-list-text="' + h.compressed.toLocaleString() + ' compressed">' + h.compressed.toLocaleString() + '</td></tr>';
     }).join("");
@@ -5851,7 +5901,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       '<div class="kpis" style="margin:10px 0 12px;grid-template-columns:repeat(2,minmax(0,1fr))">' +
         '<div class="tile"><div class="label">Size</div><div class="value">' + storageSize(s.totalBytes) + '</div></div>' +
         '<div class="tile"><div class="label">Runs</div><div class="value">' + s.totalRuns.toLocaleString() + '</div></div></div>' +
-      '<div class="scroll"><table data-list="0,2"><thead><tr><th>Host</th><th>Runs</th><th>Size</th>' +
+      '<div class="scroll"><table data-list="0,2" data-list-id="run-storage"><thead><tr><th>Host</th><th>Runs</th><th>Size</th>' +
       '<th>Oldest</th><th>Compressed</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
       '<div class="form"><div class="settings-group"><div class="storage-policy settings-policy">' + inputs + '</div>' +
       '<details class="src storage-help settings-help"><summary>Retention</summary><p>Keep every run through Keep days, hourly samples through Hourly days, then daily samples through Daily days. Daily 0 = forever. Compress days sets when retained runs are gzipped. Latest runs and compose changes always stay.</p></details>' +
@@ -6639,7 +6689,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     switch (b.type) {
       case "stats": return statsBlock(b);
       case "list": return listBlock(b, fk);
-      case "table": return tableBlock(b);
+      case "table": return tableBlock(b, fk);
       case "chart": return chartBlock(b, fk);
       case "posters": return postersBlock(b, fk);
       case "notice": return notice(b.tone, b.text);
@@ -6786,16 +6836,19 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     return { text: String(v) };
   }
 
-  function tableBlock(b) {
+  function tableBlock(b, fk) {
+    var id = "plugin:" + fk;
     var cols = items(b, "columns").filter(function (c) { return typeof c.key === "string"; });
     var rows = items(b, "rows"), card = cardFor(b, rows.length ? rows.length : null);
+    card.dataset.listSection = id;
     if (!rows.length || !cols.length) { card.appendChild(h("div", { class: "pv-empty", text: str(b.empty) || "Nothing to show" })); return card; }
     function align(c) { return c.align === "right" || c.align === "left" ? c.align : NUMERIC[c.format] ? "right" : "left"; }
     var numeric = cols.findIndex(function (c, i) { return i > 0 && align(c) === "right"; });
-    var table = h("table", { "data-list": "0," + numeric }, [
+    var table = h("table", { "data-list": "0," + numeric, "data-list-id": id }, [
       h("thead", {}, [h("tr", {}, cols.map(function (c) { return h("th", { class: align(c) === "right" ? "num" : null, scope: "col", text: str(c.label) || c.key }); }))]),
       h("tbody", {}, rows.map(function (r) {
-        return h("tr", {}, cols.map(function (c) {
+        var key = JSON.stringify([r[cols[0].key], r.id]);
+        return h("tr", { "data-list-key": key }, cols.map(function (c) {
           var ct = cellText(r[c.key], c.format);
           return h("td", { class: align(c) === "right" ? "num" : (c.format || "text") === "text" ? "txt" : null,
             title: ct.title || (ct.text.length > 40 ? ct.text : null), text: ct.text });
@@ -9619,7 +9672,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     if (cv) { openComposeFile(route.host, cv.dataset.cfp, cv.dataset.cpp, cv.dataset.cver); return; }
 
     var cf = t.closest ? t.closest("[data-cfile]") : null;
-    if (cf) { openComposeFile(route.host, cf.dataset.cfile, cf.dataset.cpath); return; }
+    if (cf) { openComposeFile(route.host, cf.dataset.cfile, cf.dataset.cpath, null, cf.querySelector(".c-list-open")); return; }
 
     var fwp = t.closest ? t.closest("[data-fwplan]") : null;
     if (fwp) { openFirewallPlan(fwp.dataset.fwplan); return; }
@@ -9654,7 +9707,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     }
 
     var portRow = t.closest ? t.closest("tr[data-port]") : null;
-    if (portRow) { openPortDrawer(portRow.dataset.portHost, +portRow.dataset.port); return; }
+    if (portRow) { openPortDrawer(portRow.dataset.portHost, +portRow.dataset.port, portRow.querySelector(".c-list-open")); return; }
 
     var card = t.closest ? t.closest("[data-alert]") : null;
     if (card) { openAlertDrawer(shownAlerts[+card.dataset.alert]); return; }
