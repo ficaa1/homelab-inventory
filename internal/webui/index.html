@@ -4648,7 +4648,6 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var archive = o.archive;
     if (archive != null) html += opsCard('Archive', 'archive', opsState(archive) ? opsEmpty(archive) : opsDetails('archive-overview', '<span class="ops-name">' + esc(archive.title || 'Archive') + '<span class="ops-sub">' + esc(archive.phase || 'Not collected') + '</span></span><span class="ops-chip">' + opsNumber(archive.pending_approvals) + ' pending</span>', 'Progress ' + opsNumber(archive.progress_pct, '%') + opsMeter(archive.progress_pct) + 'Lifetime savings: ' + opsBytes(archive.saved_bytes_total) + '<br><a href="#/archive">Archive ↗</a>'), 'archive');
     $('home-ops').innerHTML = html + '</div>';
-    countUp($('home-ops'));
     var toggle = $('ops-streams-toggle');
     if (toggle) toggle.addEventListener('click', function () { overviewOpen['streams'] = !streamsOpen; renderOverview(); $('ops-streams-toggle').focus(); });
   }
@@ -5386,25 +5385,6 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       });
     }, 0);
   });
-
-  // The overview's headline numbers count up once, on the first load seen.
-  var opsCounted = false;
-  function countUp(root) {
-    if (opsCounted || $("app").classList.contains("hidden")) return;
-    opsCounted = true;
-    if (!moving()) return;
-    Array.prototype.forEach.call(root.querySelectorAll(".ops-hero .ops-number"), function (el) {
-      var m = /^(\d+)(\D*)$/.exec(el.textContent), to = m ? +m[1] : 0, t0 = performance.now();
-      if (to < 2) return;
-      (function step(t) {
-        if (!el.isConnected) return;
-        if (reducedMotion.matches) { el.textContent = to + m[2]; return; }
-        var p = Math.max(0, Math.min(1, (t - t0) / 600));
-        el.textContent = Math.round(to * (1 - Math.pow(1 - p, 3))) + m[2];
-        if (p < 1) requestAnimationFrame(step);
-      })(t0);
-    });
-  }
 
   function skeleton(rows) {
     var html = '<div class="skel" role="status" aria-label="Loading">';
