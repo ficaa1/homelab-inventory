@@ -54,6 +54,7 @@
   --hover:     rgba(236,238,240,0.045);
   --shadow:    0 12px 32px rgba(0,0,0,0.36);
   --scrim:     rgba(0,0,0,0.55);
+  --sheet-scrim: rgba(0,0,0,0.42);
 
   /* Sequential ramp for "how much of this port range is taken": the accent's hue. */
   --heat-1: #18324a; --heat-2: #1f4c74; --heat-3: #2f6fa6; --heat-4: #5aa2e6; --heat-5: #a9d3ff;
@@ -96,6 +97,7 @@
     --track: rgba(20,22,26,0.08); --hover: rgba(20,22,26,0.035);
     --shadow: 0 12px 32px rgba(20,22,26,0.12);
     --scrim: rgba(20,22,26,0.35);
+    --sheet-scrim: rgba(20,22,26,0.32);
     --heat-1: #dbe9fb; --heat-2: #b2d1f6; --heat-3: #7aaeeb; --heat-4: #3f84d6; --heat-5: #1a56a6;
     --heat-solid: #3f84d6;
     --shine: rgba(255,255,255,0.75);
@@ -117,6 +119,7 @@
   --track: rgba(20,22,26,0.08); --hover: rgba(20,22,26,0.035);
   --shadow: 0 12px 32px rgba(20,22,26,0.12);
   --scrim: rgba(20,22,26,0.35);
+  --sheet-scrim: rgba(20,22,26,0.32);
   --heat-1: #dbe9fb; --heat-2: #b2d1f6; --heat-3: #7aaeeb; --heat-4: #3f84d6; --heat-5: #1a56a6;
   --heat-solid: #3f84d6;
   --shine: rgba(255,255,255,0.75);
@@ -136,11 +139,11 @@ body {
 }
 button, input, select { font: inherit; color: inherit; }
 button, a, summary, [role="button"] { touch-action: manipulation; }
-button, .tab, .chip, .schip, summary { -webkit-user-select: none; user-select: none; }
 html.locked { overflow: hidden; }
 html.locked-gutter { scrollbar-gutter: stable; }
 @media (pointer: coarse) {
   input, select, textarea { font-size: 16px !important; }
+  .tab, .drawer-head, .drawer-handle, .phone-option { -webkit-user-select: none; user-select: none; }
 }
 a { color: var(--accent); text-underline-offset: 2px; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -852,7 +855,8 @@ pre.code {
     height: calc(100vh - var(--safe-t) - 12px);
     height: calc(100dvh - var(--safe-t) - 12px);
   }
-  .drawer-head { position: sticky; top: 0; min-height: 44px; flex: none; touch-action: none; }
+  #scrim { background: var(--sheet-scrim); }
+  .drawer-head { position: sticky; top: 0; min-height: 44px; flex: none; touch-action: pan-x pinch-zoom; }
   .drawer-handle {
     display: block; position: absolute; left: calc(50% - 18px); top: 10px;
     width: 36px; height: 5px; border-radius: 3px; background: var(--line-2);
@@ -2485,7 +2489,11 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
 
   function go(hash) {
-    if (drawerOpen && phone() && location.hash !== hash) closeDrawer();
+    if (phone() && !drawer.classList.contains("hidden") && location.hash !== hash) {
+      drawerNextRoute = hash;
+      closeDrawer();
+      return;
+    }
     if (drawerPopping) { drawerNextRoute = hash; return; }
     if (location.hash === hash) applyRoute();
     else location.hash = hash;
@@ -5076,6 +5084,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   var drawer = $("drawer"), scrim = $("scrim"), drawerBody = $("drawer-body"), drawerHead = $("drawer-head");
   var drawerOpen = false, drawerReturnFocus = null, drawerPopping = false, drawerNextRoute = "";
   var drawerDrag = null, drawerDragged = false;
+  var sheet = { y: 0, v: 0, height: 0, frame: null, damping: 1 };
   var drawerPhone = matchMedia("(max-width: 640px)");
 
   function sizeDrawer() {
@@ -5084,6 +5093,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var viewport = window.visualViewport ? window.visualViewport.height : window.innerHeight;
     var padding = parseFloat(getComputedStyle(drawer).paddingBottom);
     drawer.classList.toggle("sheet-lg", drawerHead.offsetHeight + drawerBody.scrollHeight + padding > viewport * 0.7);
+    sheet.height = drawer.offsetHeight;
+    if (!reducedMotion.matches || drawerDrag) paintSheet();
   }
 
   function markDrawerHistory() {
@@ -5107,7 +5118,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       drawerNextRoute = "";
       if (drawerOpen && phone()) markDrawerHistory();
       if (next) go(next);
-    } else if (drawerOpen && phone() && !(history.state && history.state.hiDrawer)) {
+    } else if (phone() && !drawer.classList.contains("hidden") && !(history.state && history.state.hiDrawer)) {
       closeDrawer(true);
     } else if (!drawerOpen && history.state && history.state.hiDrawer) {
       clearDrawerMarker();
@@ -5116,6 +5127,12 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   if (history.state && history.state.hiDrawer) clearDrawerMarker();
 
   function resizeDrawer() {
+    resetDrawerDrag();
+    stopSheet();
+    clearSheetStyles();
+    if (!drawerOpen && !drawer.classList.contains("hidden") && !drawer.motionOut) finishDrawerClose();
+    else if (drawerOpen && phone()) { reveal(drawer); reveal(scrim); }
+    sheet.y = sheet.v = 0;
     if (!phone() && !drawerPopping && history.state && history.state.hiDrawer) {
       drawerPopping = true;
       history.back();
@@ -5129,52 +5146,127 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   if (window.visualViewport) window.visualViewport.addEventListener("resize", sizeDrawer);
   else window.addEventListener("resize", sizeDrawer);
 
-  function drawerY(y) { return "translateY(" + y + "px)"; }
+  function paintSheet() {
+    drawer.style.transform = "translateY(" + sheet.y + "px)";
+    scrim.style.opacity = 1 - Math.max(0, Math.min(1, sheet.y / sheet.height));
+  }
+
+  function clearSheetStyles() {
+    drawer.style.transform = drawer.style.opacity = scrim.style.opacity = "";
+  }
+
+  function stopSheet() {
+    if (sheet.frame !== null) cancelAnimationFrame(sheet.frame);
+    sheet.frame = null;
+  }
+
+  function settleSheet() {
+    stopSheet();
+    sheet.y = drawerOpen ? 0 : sheet.height;
+    sheet.v = 0;
+    clearSheetStyles();
+    if (!drawerOpen) finishDrawerClose();
+  }
+
+  function moveSheet(damping, released, fromOpacity) {
+    stopSheet();
+    sheet.damping = damping;
+    var start = performance.now(), last = start, w = 2 * Math.PI / 0.30;
+    var fade = reducedMotion.matches, opacity = drawerOpen ? 1 : 0;
+    if (fade && released) { settleSheet(); return; }
+    function paintFade(value) { drawer.style.opacity = scrim.style.opacity = value; }
+    if (fade) {
+      drawer.style.transform = "";
+      paintFade(fromOpacity);
+    }
+    function frame(now) {
+      sheet.frame = null;
+      if (fade !== reducedMotion.matches) { settleSheet(); return; }
+      if (fade) {
+        var progress = Math.min(1, Math.max(0, (now - start) / 100));
+        if (progress === 1) { settleSheet(); return; }
+        paintFade(fromOpacity + (opacity - fromOpacity) * progress);
+      } else {
+        var target = drawerOpen ? 0 : sheet.height;
+        var remaining = Math.max(0, Math.min((now - last) / 1000, 0.064));
+        last = now;
+        while (remaining > 0) {
+          var dt = Math.min(remaining, 0.008);
+          sheet.v += (w * w * (target - sheet.y) - 2 * damping * w * sheet.v) * dt;
+          sheet.y += sheet.v * dt;
+          remaining -= dt;
+        }
+        if (Math.abs(target - sheet.y) < 0.5 && Math.abs(sheet.v) < 5) { settleSheet(); return; }
+        paintSheet();
+      }
+      sheet.frame = requestAnimationFrame(frame);
+    }
+    sheet.frame = requestAnimationFrame(frame);
+  }
 
   function openDrawer(html, label) {
-    var opening = !drawerOpen;
-    if (opening) drawerReturnFocus = document.activeElement;
+    var opening = !drawerOpen, hidden = drawer.classList.contains("hidden"), dragging = !!drawerDrag;
+    if (hidden || (opening && !phone())) drawerReturnFocus = document.activeElement;
+    var opacity = hidden ? 0 : Number(getComputedStyle(drawer).opacity);
     drawerOpen = true;
     drawer.setAttribute("aria-label", label || "Details");
     if (typeof html === "string") drawerBody.innerHTML = html;
     else drawerBody.replaceChildren(html);
     resetDrawerDrag();
-    var onPhone = phone();
-    var frames = onPhone ? (reducedMotion.matches ? FADE_IN :
-      [{ transform: "translateY(100%)" }, { transform: "none" }]) :
-      [{ opacity: 0, transform: "translateX(28px)" }, { opacity: 1, transform: "none" }];
-    reveal(drawer, opening && frames, motion.d3, motion.out, onPhone);
-    reveal(scrim, opening && FADE_IN, motion.d2, motion.out, onPhone);
-    if (onPhone) {
+    if (phone()) {
+      reveal(drawer);
+      reveal(scrim);
       drawerBody.scrollTop = 0;
       sizeDrawer();
       markDrawerHistory();
+      if (hidden) { sheet.y = sheet.height; sheet.v = 0; }
+      if (opening || dragging) moveSheet(1, false, opacity);
+      if (!reducedMotion.matches) paintSheet();
+    } else {
+      reveal(drawer, opening && [{ opacity: 0, transform: "translateX(28px)" }, { opacity: 1, transform: "none" }], motion.d3);
+      reveal(scrim, opening && FADE_IN, motion.d2);
     }
     syncScrollLock();
-    $("drawer-close").focus();
+    $("drawer-close").focus({ preventScroll: true });
   }
 
-  function closeDrawer(fromHistory) {
-    if (!drawerOpen) return;
-    var onPhone = phone();
-    var current = onPhone ? getComputedStyle(drawer).transform : "none";
-    var opacity = getComputedStyle(scrim).opacity;
-    drawerOpen = false;
+  function closeDrawer(fromHistory, released) {
+    if (!drawerOpen && !drawerDrag) {
+      if (drawerNextRoute && phone()) settleSheet();
+      return;
+    }
     resetDrawerDrag();
+    drawerOpen = false;
+    if (phone()) {
+      if (drawerNextRoute) { stopSheet(); settleSheet(); }
+      else moveSheet(1, released, Number(getComputedStyle(drawer).opacity));
+    } else {
+      var opacity = getComputedStyle(scrim).opacity;
+      conceal(drawer, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(28px)" }], motion.d2, syncScrollLock);
+      conceal(scrim, [{ opacity: opacity }, { opacity: 0 }], motion.d2);
+      finishDrawerClose(fromHistory);
+    }
+  }
+
+  function finishDrawerClose(fromHistory) {
+    if (!drawer.motionOut) {
+      conceal(drawer);
+      conceal(scrim);
+      syncScrollLock();
+    }
     restartSession++; stopRestartHealth();
     if (enrollSession && enrollSession.fromAdmin) {
       var arrived = Object.keys(enrollSession.reporting).length;
       stopEnroll();
       if (arrived) load();
     }
-    var frames = onPhone ? (reducedMotion.matches ? FADE_OUT :
-      [{ transform: current }, { transform: "translateY(100%)" }]) :
-      [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(28px)" }];
-    conceal(drawer, frames, motion.d2, syncScrollLock, onPhone, onPhone && moving());
-    conceal(scrim, [{ opacity: opacity }, { opacity: 0 }], motion.d2, null, onPhone);
-    if (fromHistory !== true && history.state && history.state.hiDrawer) {
+    if (fromHistory !== true && !drawerPopping && history.state && history.state.hiDrawer) {
       drawerPopping = true;
       history.back();
+    } else if (!drawerPopping && drawerNextRoute) {
+      var next = drawerNextRoute;
+      drawerNextRoute = "";
+      go(next);
     }
     if (drawerReturnFocus && drawerReturnFocus.isConnected) drawerReturnFocus.focus({ preventScroll: true });
   }
@@ -5182,8 +5274,6 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   function resetDrawerDrag() {
     if (drawerDrag && drawer.hasPointerCapture(drawerDrag.id)) drawer.releasePointerCapture(drawerDrag.id);
     drawerDrag = null;
-    drawer.style.transform = "";
-    scrim.style.opacity = "";
   }
 
   function drawerDragAllowed(target) {
@@ -5198,68 +5288,82 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     if (!phone() || !e.isPrimary || e.button !== 0 || !drawerDragAllowed(e.target)) return;
     var header = drawerHead.contains(e.target);
     if (!header && drawerBody.scrollTop > 0) return;
-    drawerDragged = false;
-    var transform = getComputedStyle(drawer).transform;
-    var offset = transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m42;
-    var wasClosing = !!drawer.motionOut;
-    if (wasClosing || drawer.motionIn) {
-      var opacity = getComputedStyle(scrim).opacity;
-      reveal(drawer);
-      reveal(scrim);
-      drawer.style.transform = drawerY(offset);
-      scrim.style.opacity = opacity;
-      if (wasClosing) {
-        drawerOpen = true;
-        markDrawerHistory();
-        $("drawer-close").focus({ preventScroll: true });
-      }
-    }
-    drawerDrag = { id: e.pointerId, x: e.clientX, y: e.clientY, lastY: e.clientY, lastT: e.timeStamp,
-      offset: offset, height: drawer.offsetHeight, velocity: 0, header: header, active: false };
+    stopSheet();
+    // Invert the rubber band so grabbing a sheet above its rest position
+    // preserves the point under the finger.
+    var offset = reducedMotion.matches ? 0 : sheet.y;
+    var excess = Math.min(0, offset + 23);
+    offset -= excess;
+    if (offset < 0) offset = 24 * offset / (0.55 * (24 + offset));
+    drawerDrag = { id: e.pointerId, x: e.clientX, y: e.clientY, offset: offset, excess: excess,
+      samples: [{ y: e.clientY, t: e.timeStamp }], header: header, active: false };
   });
 
-  drawer.addEventListener("pointermove", function (e) {
+  function verticalDrawerDrag(dx, dy) {
+    return Math.abs(dy) >= 8 && Math.abs(dy) > 1.2 * Math.abs(dx);
+  }
+
+  function sampleDrawerDrag(d, y, t) {
+    var samples = d.samples, cutoff = t - 60;
+    samples.push({ y: y, t: t });
+    while (samples.length > 2 && samples[1].t <= cutoff) samples.shift();
+    var first = samples[0], dt = t - first.t;
+    if (dt <= 0) return;
+    var next = samples[1], start = first.y;
+    if (first.t < cutoff) {
+      start += (next.y - first.y) * (cutoff - first.t) / (next.t - first.t);
+      dt = 60;
+    }
+    sheet.v = (y - start) * 1000 / dt;
+  }
+
+  window.addEventListener("pointermove", function (e) {
     var d = drawerDrag;
     if (!d || d.id !== e.pointerId) return;
     var dx = e.clientX - d.x, dy = e.clientY - d.y;
     if (!d.active) {
-      if (Math.max(Math.abs(dx), Math.abs(dy)) < 6) return;
-      if (Math.abs(dx) >= Math.abs(dy) || (!d.header && dy < 0)) { endDrawerDrag(e, true); return; }
+      if (!verticalDrawerDrag(dx, dy)) return;
+      if (!d.header && dy < 0) { endDrawerDrag(e, true); return; }
       d.active = true;
       drawerDragged = true;
       drawer.setPointerCapture(e.pointerId);
+      drawer.style.opacity = "";
     }
-    var y = d.offset + dy;
-    var gap = e.timeStamp - d.lastT;
-    if (gap > 0 && e.clientY !== d.lastY) {
-      d.velocity = (e.clientY - d.lastY) / gap;
-      d.lastY = e.clientY; d.lastT = e.timeStamp;
-    }
-    drawer.style.transform = drawerY(y < 0 ? Math.max(-24, y * 0.2) : y);
-    scrim.style.opacity = Math.max(0, Math.min(1, 1 - y / d.height));
+    sampleDrawerDrag(d, e.clientY, e.timeStamp);
+    // A spring can travel past the rubber band's range. Let the finger
+    // recover that excess before applying the drag resistance.
+    var y = d.offset + Math.max(0, dy + d.excess) + Math.min(0, dy);
+    sheet.y = (y < 0 ? 24 * 0.55 * y / (24 - 0.55 * y) : y) + Math.min(0, d.excess + Math.max(0, dy));
+    paintSheet();
   });
 
-  // Keep native upward scrolling in the content. At scrollTop zero only a
-  // downward vertical touch is eligible to cancel the browser's pan.
+  // Leave native scrolling available to content. Cancel only a claimed
+  // downward pan that began at the top.
   drawerBody.addEventListener("touchmove", function (e) {
     var d = drawerDrag, touch = e.touches[0];
     if (!d || !touch || e.touches.length !== 1 || !e.cancelable) return;
     var dy = touch.clientY - d.y;
-    if (d.active || (dy >= 6 && dy > Math.abs(touch.clientX - d.x))) e.preventDefault();
+    if (d.active || (dy > 0 && verticalDrawerDrag(touch.clientX - d.x, dy))) e.preventDefault();
   }, { passive: false });
 
   function endDrawerDrag(e, cancelled) {
     var d = drawerDrag;
     if (!d || d.id !== e.pointerId) return;
-    var y = d.offset + e.clientY - d.y;
-    var flick = e.timeStamp - d.lastT < 100 && d.velocity > 0.5;
-    if (!cancelled && d.active && (y > d.height * 0.3 || flick)) { closeDrawer(); return; }
-    var transform = drawer.style.transform, opacity = scrim.style.opacity;
     resetDrawerDrag();
-    if (transform && moving()) {
-      reveal(drawer, [{ transform: transform }, { transform: "none" }], motion.d2);
-      reveal(scrim, [{ opacity: opacity }, { opacity: 1 }], motion.d2);
+    if (!d.active) {
+      moveSheet(sheet.damping, false, Number(getComputedStyle(drawer).opacity));
+      return;
     }
+    if (cancelled) sheet.v = 0;
+    else sampleDrawerDrag(d, e.clientY, e.timeStamp);
+    if (!cancelled && sheet.y + 0.499 * sheet.v > sheet.height / 2) {
+      if (drawerOpen) closeDrawer(false, true);
+      else moveSheet(1, true);
+      return;
+    }
+    drawerOpen = true;
+    markDrawerHistory();
+    moveSheet(0.82, true);
   }
   window.addEventListener("pointerup", function (e) { endDrawerDrag(e, false); });
   window.addEventListener("pointercancel", function (e) { endDrawerDrag(e, true); });
