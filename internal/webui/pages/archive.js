@@ -636,7 +636,7 @@
       // Search only seasons that were not already chosen.
       var seasons = it.kind === "radarr" ? [0] : chosen.filter(function (n) { return before.indexOf(n) < 0; });
       $("library-apply").disabled = true;
-      var tagged = false, searchFailed = false, note = "";
+      var tagged = false, searchFailed = false, note = "", marked = it.title + " marked for archive";
       var body = it.kind === "sonarr" && !untag ? { kind: it.kind, id: it.id, archive: true, fourK: fourK, seasons: chosen } : { kind: it.kind, id: it.id, archive: !untag, fourK: fourK };
       var live = function () { return req === request && HI.drawerIsOpen(); };
       HI.send(ID, "tag", "POST", body).then(function (r) {
@@ -645,9 +645,9 @@
         tagged = true;
         note = untag ? "Archive tag removed." : editing ? "Seasons saved." : "Tagged.";
         if (r.searchesQueued) {
-          libNotice = untag ? "Archive tag removed" : editing ? "Seasons saved" : "Archiving " + it.title;
+          libNotice = untag ? "Archive tag removed" : editing ? "Seasons saved" : marked;
           if (live()) HI.closeDrawer();
-          HI.toast(untag || editing ? libNotice : it.title + " archived", { kind: "ok" });
+          HI.toast(libNotice, { kind: "ok", sub: untag ? "" : "Search queued" });
           note = "";
           pollNow();
           return;
@@ -684,7 +684,7 @@
           return;
         }
         if (live()) HI.closeDrawer();
-        HI.toast(untag || editing ? libNotice : it.title + " archived", { kind: "ok" });
+        HI.toast(untag || editing ? libNotice : marked, { kind: "ok" });
       }).catch(function (err) {
         if (fail(err)) return;
         if (live()) { msg("library-action-msg", (tagged ? "Tags were updated. " : "") + err.message, true); $("library-apply").disabled = false; }
