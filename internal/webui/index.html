@@ -138,6 +138,7 @@ button, input, select { font: inherit; color: inherit; }
 button, a, summary, [role="button"] { touch-action: manipulation; }
 button, .tab, .chip, .schip, summary { -webkit-user-select: none; user-select: none; }
 html.locked { overflow: hidden; }
+html.locked-gutter { scrollbar-gutter: stable; }
 @media (pointer: coarse) {
   input, select, textarea { font-size: 16px !important; }
 }
@@ -564,7 +565,6 @@ td.num, th.num { text-align: right; }
   table.trend td:nth-child(n+4) { grid-column: 1 / -1; text-align: left; }
   table.trend td:nth-child(4) .sub, table.trend td:nth-child(4) { display: inline; }
   table.trend td { white-space: normal; overflow-wrap: anywhere; }
-  table.trend td:nth-child(4), table.trend td:nth-child(4) .sub { display: inline; }
   .scroll:has(> [data-list]) { overflow: visible; }
   table[data-list], [data-list] > tbody { display: block; }
   table[data-list] { min-width: 0; border-radius: 12px; }
@@ -582,7 +582,7 @@ td.num, th.num { text-align: right; }
     content: ""; position: absolute; inset: 0 0 auto 14px; border-top: 1px solid var(--line);
   }
   [data-list] > tbody > tr:active { background: var(--surface-3); }
-  [data-list] > tbody > tr > td { display: block; min-width: 0; padding: 0; border: 0; }
+  [data-list] > tbody > tr > :is(td.c-main, td.c-sub, td.c-end) { display: block; min-width: 0; padding: 0; border: 0; }
   [data-list] > tbody > tr > .c-main {
     grid-area: main; max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-size: 15px; font-weight: 600; color: var(--text);
@@ -593,17 +593,17 @@ td.num, th.num { text-align: right; }
   }
   [data-list] .c-end .pill { white-space: normal; }
   [data-list] > tbody > tr > .c-detail, [data-list] .c-extra { display: none; }
-  [data-list] > tbody > tr > .c-sub { grid-area: sub; color: var(--text-3); font-size: 12.5px; white-space: normal; }
+  [data-list] > tbody > tr > .c-sub { display: block; grid-area: sub; color: var(--text-3); font-size: 12.5px; white-space: normal; }
   [data-list] .c-sub > span {
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
     overflow: hidden; overflow-wrap: anywhere;
   }
   [data-list] .c-list-open {
-    position: absolute; inset: 0 0 0 auto; display: grid; place-items: center; width: 40px;
+    position: absolute; inset: 0 0 0 auto; display: grid; place-items: center; width: 44px;
     border: 0; border-radius: var(--r); background: none; color: var(--text-3); cursor: pointer;
   }
   [data-list] .c-list-open:focus-visible { outline-offset: -3px; }
-  [data-list] .c-list-open .ic { width: 14px; height: 14px; }
+  [data-list] .c-list-open .ic { width: 14px; height: 14px; transform: rotate(-90deg); }
 
   th, td { padding: 9px 10px; }
 }
@@ -870,7 +870,7 @@ pre.code {
 
 /* ------------------------------------------------------------------ toast */
 .toast {
-  position: fixed; z-index: 82; right: 24px; bottom: calc(84px + var(--safe-b)); width: 360px;
+  position: fixed; z-index: 82; right: 24px; bottom: calc(24px + var(--safe-b)); width: 360px;
   display: flex; align-items: center; gap: 10px; padding: 10px 12px;
   background: var(--surface-3); border: 1px solid var(--line-2); border-radius: 14px; box-shadow: var(--shadow);
 }
@@ -889,6 +889,9 @@ pre.code {
   color: var(--accent); background: none; font-size: 13.5px; font-weight: 600; cursor: pointer;
 }
 .toast-action:active { background: var(--surface-2); }
+@media (min-width: 641px) {
+  body:has(.up-fab:not(.hidden)) .toast { bottom: calc(84px + var(--safe-b)); }
+}
 @media (max-width: 640px) {
   .toast { left: 12px; right: 12px; width: auto; bottom: calc(var(--nav-h) + var(--safe-b) + 12px); }
 }
@@ -1630,7 +1633,6 @@ button.ops-tile { cursor:pointer; }
   #panel-admin .settings-gateways::before, #panel-admin .plug-group > .pf + .pf::before {
     content: ""; position: absolute; inset: 0 0 auto 14px; border-top: 1px solid var(--line);
   }
-  #panel-admin .settings-row-help { grid-column: 1 / -1; }
   #panel-admin .settings-group .settings-policy { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0; border-radius: 12px 12px 0 0; }
   #panel-admin .settings-group .settings-help {
     order: 1; margin: 6px 14px 0; color: var(--text-3); font-size: 12.5px; overflow-wrap: anywhere;
@@ -2483,6 +2485,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
 
   function go(hash) {
+    if (drawerOpen && phone() && location.hash !== hash) closeDrawer();
     if (drawerPopping) { drawerNextRoute = hash; return; }
     if (location.hash === hash) applyRoute();
     else location.hash = hash;
@@ -2940,22 +2943,26 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   function prepareListTable(table) {
     var columns = table.dataset.list.split(",").map(Number);
+    table.setAttribute("role", "table");
     var names = table.tHead ? Array.prototype.map.call(table.tHead.rows[0].cells, listText)
       : (table.dataset.listLabels || "").split("|");
     Array.prototype.forEach.call(table.tBodies, function (body) {
+      body.setAttribute("role", "rowgroup");
       Array.prototype.forEach.call(body.rows, function (tr) {
         if (tr.querySelector(".c-sub")) return;
         var cells = Array.prototype.slice.call(tr.cells);
         var main = cells[tr.hasAttribute("data-list-main") ? Number(tr.dataset.listMain) : columns[0]], end = cells[columns[1]];
         if (!main) return;
+        tr.setAttribute("role", "row");
         var details = cells.map(function (cell, i) {
+          cell.setAttribute("role", "cell");
           return [names[i], listText(cell)];
         });
         main.classList.add("c-main");
         if (end) end.classList.add("c-end");
         var parts = [];
         Array.prototype.forEach.call(main.children, function (child) {
-          if (!child.matches("div.sub")) return;
+          if (!child.matches("div.sub, span.sub")) return;
           child.classList.add("c-extra");
           parts.push(listText(child));
         });
@@ -2965,8 +2972,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           if (details[i][1]) parts.push(cell.dataset.listText || details[i][1]);
         });
         var title = Array.prototype.filter.call(main.childNodes, function (node) {
-          return node.nodeType === 3 || !node.classList.contains("c-extra");
-        }).map(function (node) { return node.textContent; }).join(" ").trim();
+          return node.nodeType === 3 || (node.nodeType === 1 && !node.classList.contains("c-extra"));
+        }).map(function (node) { return node.textContent; }).join(" ").trim() || "Row details";
         var open = h("button", { class: "c-list-open", type: "button", "aria-label": "View details for " + title },
           [iconNode("chevron", "sm")]);
         if (!tr.classList.contains("clickable")) {
@@ -2975,7 +2982,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
               details.map(function (field) { return row(field[0] || "Details", field[1]); }).join("") + "</dl>", title);
           });
         }
-        tr.appendChild(h("td", { class: "c-sub" }, [h("span", { text: parts.filter(Boolean).join(" · ") }), open]));
+        tr.appendChild(h("td", { class: "c-sub", role: "cell" }, [h("span", { text: parts.filter(Boolean).join(" · ") }), open]));
       });
     });
   }
@@ -4666,7 +4673,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   function writeError(err) {
     if (err.unauthorized) { showGate(true); return; }
-    var el = document.querySelector(".form .actions") || document.querySelector(".banner");
+    var el = (drawerOpen && drawerBody.querySelector(".form .actions")) ||
+      document.querySelector(".form .actions") || document.querySelector(".banner");
     if (el) el.insertAdjacentHTML("afterend",
       '<div style="color:var(--critical);font-size:13px;margin-top:8px">' + esc(err.message) + "</div>");
   }
@@ -4794,7 +4802,12 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
 
   function syncScrollLock() {
-    document.documentElement.classList.toggle("locked", !$("pal").classList.contains("hidden") || !$("drawer").classList.contains("hidden"));
+    var root = document.documentElement;
+    var locked = !$("pal").classList.contains("hidden") || !$("drawer").classList.contains("hidden");
+    if (locked === root.classList.contains("locked")) return;
+    // Preserve the desktop layout on browsers that draw a classic scrollbar.
+    root.classList.toggle("locked-gutter", locked && window.innerWidth > root.clientWidth);
+    root.classList.toggle("locked", locked);
   }
 
   function openPalette() {
@@ -5103,8 +5116,9 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   if (history.state && history.state.hiDrawer) clearDrawerMarker();
 
   function resizeDrawer() {
-    if (!phone() && history.state && history.state.hiDrawer) {
-      clearDrawerMarker();
+    if (!phone() && !drawerPopping && history.state && history.state.hiDrawer) {
+      drawerPopping = true;
+      history.back();
     } else if (drawerOpen && phone()) {
       markDrawerHistory();
     }
@@ -5197,6 +5211,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       if (wasClosing) {
         drawerOpen = true;
         markDrawerHistory();
+        $("drawer-close").focus({ preventScroll: true });
       }
     }
     drawerDrag = { id: e.pointerId, x: e.clientX, y: e.clientY, lastY: e.clientY, lastT: e.timeStamp,
@@ -5751,9 +5766,9 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           '<label class="settings-row" style="margin:0"><input type="checkbox" role="switch" id="a-enabled" style="width:auto"' +
           (s.notify_enabled ? " checked" : "") + "> deliver notifications</label>" +
         "</div>" +
-        '<div class="settings-row"><label for="a-digest">Digest interval</label>' +
+        '<div class="settings-row-wrap"><div class="settings-row"><label for="a-digest">Digest interval</label>' +
         '<input id="a-digest" autocapitalize="none" autocorrect="off" value="' + esc(s.digest_interval) + '" spellcheck="false">' +
-        '<div class="src settings-row-help"><code>0</code> = off</div></div>' +
+        '</div><div class="src settings-help"><code>0</code> = off</div></div>' +
         '<div class="actions settings-actions">' +
           '<button class="btn" id="a-save">Save</button>' +
           '<button class="btn" id="a-reset">Reset overrides</button>' +
@@ -9552,6 +9567,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     h: h, str: str, esc: esc, ago: ago, fromNow: fromNow, bytes: bytes, dur: dur,
     iconNode: iconNode, pill: pill, stateBox: stateBox, notice: notice, skeleton: skeleton,
     openDrawer: openDrawer, closeDrawer: closeDrawer, toast: toast, go: go,
+    prepareListTable: prepareListTable,
     // GET and mutation helpers for the plugin's own API; a 401 opens the gate.
     get: function (id, path, signal) { return api(pagePath(id, path), signal).catch(pageFail); },
     // opts.operator sends the operator credential (prompted once per session)

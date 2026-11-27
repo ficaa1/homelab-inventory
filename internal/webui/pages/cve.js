@@ -302,22 +302,28 @@
     return box;
   }
 
+  function detailTable(columns, children) {
+    var table = h("table", { class: "cve-mini", "data-list": columns }, children);
+    HI().prepareListTable(table);
+    return h("div", { class: "scroll" }, [table]);
+  }
+
   function openCoverage() {
     var cov = (st.status && st.status.coverage) || {}, rows = cov.unsupported || [], skipped = cov.skipped || [];
     var kids = [h("h3", { text: "Coverage" }),
       h("div", { class: "subtitle", text: "Only distro packages (dpkg, apk, rpm) on Debian, Ubuntu, Alpine, Rocky and Alma are checked. Language packages inside images, static binaries and vendor kernels such as Proxmox's are not." })];
-    if (rows.length) kids.push(section("Package sets not checked", [h("div", { class: "scroll" }, [h("table", { class: "cve-mini" }, [
+    if (rows.length) kids.push(section("Package sets not checked", [detailTable("0,-1", [
       h("thead", {}, [h("tr", {}, [h("th", { text: "Host" }), h("th", { text: "Set" }), h("th", { text: "Reason" })])]),
       h("tbody", {}, rows.map(function (r) {
         return h("tr", {}, [h("td", { class: "cve-wrap", text: r.host }), h("td", { class: "cve-wrap", text: scopeName(r) }), h("td", { class: "cve-wrap sub", text: r.reason || "" })]);
-      }))])])]));
+      }))])]));
     if (skipped.length) kids.push(section("Packages OSV did not answer for", [
       h("p", { class: "sub", text: "These were too large for OSV to return in time and were left out of this scan; their CVEs are not counted. The next scan tries again." }),
-      h("div", { class: "scroll" }, [h("table", { class: "cve-mini" }, [
+      detailTable("0,2", [
         h("thead", {}, [h("tr", {}, [h("th", { text: "Package" }), h("th", { text: "Version" }), h("th", { text: "Sets" })])]),
         h("tbody", {}, skipped.map(function (r) {
           return h("tr", {}, [h("td", { class: "cve-wrap" }, [h("b", { text: r.package }), h("div", { class: "sub", text: r.ecosystem })]), h("td", { class: "cve-wrap" }, [h("code", { text: r.version })]), h("td", { class: "num", text: fmt(r.sets) })]);
-        }))])])]));
+        }))])]));
     HI().openDrawer(h("div", { class: "cve-drawer" }, kids), "Coverage");
   }
 
@@ -623,7 +629,7 @@
   function affectedTable(aff) {
     if (!aff.length) return h("div", { class: "sub", text: "No affected packages in the last scan." });
     var rows = aff.slice().sort(function (a, b) { return a.host < b.host ? -1 : a.host > b.host ? 1 : (a.scope === "host" ? -1 : b.scope === "host" ? 1 : 0); });
-    return h("div", { class: "scroll" }, [h("table", { class: "cve-mini" }, [
+    return detailTable("0,-1", [
       h("thead", {}, [h("tr", {}, [h("th", { text: "Where" }), h("th", { text: "Package" }), h("th", { text: "Installed" }), h("th", { text: "Fixed in" })])]),
       h("tbody", {}, rows.map(function (a) {
         var bins = (a.binaries || []).map(function (b) { return b.name; }).filter(function (x) { return x !== a.package; });
@@ -632,7 +638,7 @@
           h("td", { class: "cve-wrap" }, [h("span", { text: a.package }), bins.length ? h("div", { class: "sub", text: bins.slice(0, 4).join(", ") + (bins.length > 4 ? " +" + (bins.length - 4) : "") }) : null]),
           h("td", { class: "cve-wrap" }, [h("code", { text: a.installed || "—" })]),
           h("td", { class: "cve-wrap" }, a.fixed ? [h("code", { class: a.fixable ? "cve-fixv" : "", text: a.fixed })] : [h("span", { class: "sub", text: a.vendor_status ? a.vendor_status : "Not yet" })])]);
-      }))])]);
+      }))]);
   }
 
   // Suppress with a reason (Dependency-Track's analysis states), or reopen.

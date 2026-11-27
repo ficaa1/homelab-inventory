@@ -642,6 +642,7 @@
       var live = function () { return req === request && drawerOpen(); };
       HI.send(ID, "tag", "POST", body).then(function (r) {
         r = r || {};
+        if (r.error) throw new Error(r.error);
         tagged = true;
         note = untag ? "Archive tag removed." : editing ? "Seasons saved." : "Tagged.";
         if (r.searchesQueued) {
