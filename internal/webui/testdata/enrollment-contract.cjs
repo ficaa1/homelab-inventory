@@ -43,7 +43,7 @@ const settle = () => new Promise(resolve=>setImmediate(resolve));
  fields.host.value='host-b';
  changes.change({target:Object.assign(fields.host,{closest:()=>true})});
  assert.equal(s.commands,null);
- assert.match(fields.cmd.textContent,/Generate a new command/);
+ assert.match(fields.cmd.textContent,/Generate a new install command/);
  fail=true;
  context.mintCode(s,''); await settle();
  assert.equal(s.commands,null,'failed request must not restore an older usable command');

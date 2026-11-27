@@ -244,7 +244,12 @@
     if (!ui) return;
     var slot = clear(ui.wrap.querySelector(".cve-summary")), notes = clear(ui.wrap.querySelector(".cve-notes"));
     var o = st.overview, s = st.status;
-    if (s && s.last_scan && s.last_scan.error) notes.appendChild(HI().notice("crit", "The last scan failed: " + s.last_scan.error + ". The figures below are from the scan before it."));
+    if (s && s.last_scan && s.last_scan.error) {
+      var previous = o && o.generated_at;
+      notes.appendChild(HI().notice("crit", previous ?
+        "Latest scan failed. Showing results from " + new Date(previous).toLocaleString() + ". Select Scan now to retry." :
+        "Scan failed. Select Scan now to retry."));
+    }
     if (s && s.sources) {
       [["osv", "OSV"], ["kev", "CISA KEV"], ["epss", "EPSS"]].forEach(function (x) {
         var src = s.sources[x[0]];
@@ -256,7 +261,7 @@
       if (s && s.state === "scanning") slot.appendChild(HI().stateBox("First scan running", "Matching every host's and image's packages against OSV. The first scan downloads several thousand advisories and can take a few minutes."));
       else if (s || st.statusErr) {
         var b = h("button", { class: "btn primary", type: "button", onclick: function () { scanNow(b); } }, ["Scan now"]);
-        slot.appendChild(HI().stateBox(st.statusErr ? "Vulnerability data unavailable" : "No scan yet", st.statusErr || "Scans run on a schedule. Start the first one now; package names and versions are sent to OSV.dev.", st.statusErr ? null : b, !!st.statusErr));
+        slot.appendChild(HI().stateBox(st.statusErr ? "Vulnerability data unavailable" : "No scan yet", st.statusErr ? "Could not load vulnerability status. Refresh to try again." : "Scans run on a schedule. Start the first one now; package names and versions are sent to OSV.dev.", st.statusErr ? null : b, !!st.statusErr));
       } else slot.appendChild(skel(2));
       return;
     }
@@ -267,7 +272,7 @@
     var unsupported = (cov.unsupported || []).length, skipped = (cov.skipped || []).length;
     slot.appendChild(h("div", { class: "cve-kpis" }, [
       lead,
-      tile("Known exploited", fmt(t.kev), t.kev ? "In CISA's KEV catalog" : "None in CISA's KEV catalog", t.kev ? "crit" : "ok", t.kev ? function () { nav("vulns", { kev: true, sev: [], sup: "" }); } : null),
+      tile("Known exploited", fmt(t.kev), t.kev ? "In CISA’s KEV catalog" : "None in CISA’s KEV catalog", t.kev ? "crit" : "ok", t.kev ? function () { nav("vulns", { kev: true, sev: [], sup: "" }); } : null),
       tile("Fix available", fmt(t.fixable), t.vulns ? Math.round(100 * n(t.fixable) / n(t.vulns)) + "% of open CVEs" : "", "", t.fixable ? function () { nav("vulns", { fix: true, sup: "" }); } : null),
       tile("Affected", plural(t.hosts_affected, "host"), plural(t.sets_affected, "package set") + " · " + plural(t.packages_affected, "package"), "", function () { nav("hosts", {}); }),
       tile("Coverage", cov.sets ? fmt(cov.sets_scanned) + " / " + fmt(cov.sets) : "—",
@@ -302,22 +307,28 @@
     return box;
   }
 
+  function detailTable(columns, children) {
+    var table = h("table", { class: "cve-mini", "data-list": columns }, children);
+    HI().prepareListTable(table);
+    return h("div", { class: "scroll" }, [table]);
+  }
+
   function openCoverage() {
     var cov = (st.status && st.status.coverage) || {}, rows = cov.unsupported || [], skipped = cov.skipped || [];
     var kids = [h("h3", { text: "Coverage" }),
       h("div", { class: "subtitle", text: "Only distro packages (dpkg, apk, rpm) on Debian, Ubuntu, Alpine, Rocky and Alma are checked. Language packages inside images, static binaries and vendor kernels such as Proxmox's are not." })];
-    if (rows.length) kids.push(section("Package sets not checked", [h("div", { class: "scroll" }, [h("table", { class: "cve-mini" }, [
+    if (rows.length) kids.push(section("Package sets not checked", [detailTable("0,-1", [
       h("thead", {}, [h("tr", {}, [h("th", { text: "Host" }), h("th", { text: "Set" }), h("th", { text: "Reason" })])]),
       h("tbody", {}, rows.map(function (r) {
         return h("tr", {}, [h("td", { class: "cve-wrap", text: r.host }), h("td", { class: "cve-wrap", text: scopeName(r) }), h("td", { class: "cve-wrap sub", text: r.reason || "" })]);
-      }))])])]));
+      }))])]));
     if (skipped.length) kids.push(section("Packages OSV did not answer for", [
       h("p", { class: "sub", text: "These were too large for OSV to return in time and were left out of this scan; their CVEs are not counted. The next scan tries again." }),
-      h("div", { class: "scroll" }, [h("table", { class: "cve-mini" }, [
+      detailTable("0,2", [
         h("thead", {}, [h("tr", {}, [h("th", { text: "Package" }), h("th", { text: "Version" }), h("th", { text: "Sets" })])]),
         h("tbody", {}, skipped.map(function (r) {
           return h("tr", {}, [h("td", { class: "cve-wrap" }, [h("b", { text: r.package }), h("div", { class: "sub", text: r.ecosystem })]), h("td", { class: "cve-wrap" }, [h("code", { text: r.version })]), h("td", { class: "num", text: fmt(r.sets) })]);
-        }))])])]));
+        }))])]));
     HI().openDrawer(h("div", { class: "cve-drawer" }, kids), "Coverage");
   }
 
@@ -417,7 +428,9 @@
   }
   function counts(c) {
     return h("span", { class: "cve-counts" }, SEV.slice(0, 4).map(function (s) {
-      return h("span", { class: "s-" + s + (n(c && c[s]) ? "" : " zero"), title: fmt(c && c[s]) + " " + SEV_LABEL[s].toLowerCase(), text: fmt(c && c[s]) });
+      var severity = SEV_LABEL[s].toLowerCase(), value = fmt(c && c[s]);
+      return h("span", { class: "s-" + s + (n(c && c[s]) ? "" : " zero"), title: value + " " + severity }, [
+        value, h("small", { class: "cve-count-label", text: " " + severity })]);
     }));
   }
   function pager(list) {
@@ -444,12 +457,12 @@
     var slot = ui.wrap.querySelector(".cve-body"), o = st.overview;
     if (!o || !o.generated_at) { clear(slot); return; }
     if (!st.list || st.listKey.split("?")[0] !== view) {
-      if (st.listErr) slot.replaceChildren(HI().stateBox("Could not load", st.listErr, retryButton(), true));
+      if (st.listErr) slot.replaceChildren(HI().stateBox("Could not load vulnerability results", "Refresh to try again.", retryButton(), true));
       else slot.replaceChildren(skel(8));
       return;
     }
-    slot.classList.toggle("cve-dim", st.loading);
-    if (st.listErr) { slot.replaceChildren(HI().notice("crit", "Could not refresh: " + st.listErr), current()); return; }
+    slot.setAttribute("aria-busy", String(st.loading));
+    if (st.listErr) { slot.replaceChildren(HI().notice("crit", "Could not refresh vulnerability results. Refresh to try again."), current()); return; }
     slot.replaceChildren(current());
   }
   function retryButton() { return h("button", { class: "btn", type: "button", onclick: function () { loadList(true); } }, ["Try again"]); }
@@ -458,7 +471,7 @@
 
   function vulnsView() {
     var list = st.list, items = list.items || [];
-    if (!items.length) return HI().stateBox(filtered() ? "No vulnerabilities match" : f.sup === "1" ? "Nothing suppressed" : "No open vulnerabilities", filtered() ? "Clear a filter to see more." : "Every scanned package is at a version with no known advisory.", filtered() ? h("button", { class: "btn", type: "button", onclick: function () { nav("vulns", readFilters(null)); } }, ["Clear filters"]) : null);
+    if (!items.length) return HI().stateBox(f.sup === "1" && !f.q && !f.sev.length ? "No suppressed vulnerabilities" : filtered() ? "No vulnerabilities match" : "No open vulnerabilities in the last successful scan", filtered() ? "Clear filters to see all vulnerabilities." : "See Coverage for what was checked.", filtered() ? h("button", { class: "btn", type: "button", onclick: function () { nav("vulns", readFilters(null)); } }, ["Clear filters"]) : null);
     var body = h("tbody", {}, items.map(function (r) {
       var pk = r.packages || [];
       return rowLink(h("tr", { class: r.suppressed ? "cve-suppressed" : null }, [
@@ -482,7 +495,7 @@
   function packagesView() {
     var list = st.list, items = list.items || [];
     var head = h("p", { class: "sub cve-lede", text: "Each row is one source package in one distro release. Upgrading it to the version shown clears every CVE that has a fix; the list is ordered by the risk those upgrades remove." });
-    if (!items.length) return h("div", {}, [head, HI().stateBox(filtered() ? "No packages match" : "No vulnerable packages", filtered() ? "Clear a filter to see more." : "")]);
+    if (!items.length) return h("div", {}, [head, HI().stateBox(filtered() ? "No packages match your filters" : "No packages with open findings in the last successful scan", filtered() ? "Clear filters to see all packages." : "")]);
     var body = h("tbody", {}, items.map(function (r) {
       var inst = r.installed || [];
       return rowLink(h("tr", {}, [
@@ -545,11 +558,11 @@
   function openVuln(id) {
     if (drawerCtrl) drawerCtrl.abort();
     var c = drawerCtrl = new AbortController();
-    HI().openDrawer(h("div", { class: "cve-drawer" }, [h("h3", { class: "cve-id", text: id }), skel(6)]), id);
+    var drawer = HI().openDrawer(h("div", { class: "cve-drawer" }, [h("h3", { class: "cve-id", text: id }), skel(6)]), id);
     HI().get(ID, "vulns/" + encodeURIComponent(id), c.signal).then(function (v) {
-      if (drawerCtrl === c) HI().openDrawer(vulnDetail(v), id);
-    }, function (e) {
-      if (drawerCtrl === c && !c.signal.aborted) HI().openDrawer(h("div", { class: "cve-drawer" }, [h("h3", { class: "cve-id", text: id }), HI().stateBox("Could not load", e.message || "", null, true)]), id);
+      if (drawerCtrl === c) HI().updateDrawer(drawer, vulnDetail(v), id);
+    }, function () {
+      if (drawerCtrl === c && !c.signal.aborted) HI().updateDrawer(drawer, h("div", { class: "cve-drawer" }, [h("h3", { class: "cve-id", text: id }), HI().stateBox("Could not load vulnerability details", "Close this sheet and open it again.", null, true)]), id);
     });
   }
 
@@ -571,7 +584,7 @@
     if (v.summary) kids.push(h("p", { class: "cve-lede-d", text: v.summary }));
     if (v.kev) kids.push(h("div", { class: "cve-kevbox", role: "note" }, [
       h("b", { text: "Known exploited" + (v.kev.ransomware ? " · used in ransomware" : "") }),
-      h("div", { text: (v.kev.name ? v.kev.name + ". " : "") + "In CISA's catalog since " + day(v.kev.date_added) + (v.kev.due_date ? "; US federal agencies must patch by " + day(v.kev.due_date) + "." : ".") })]));
+      h("div", { text: (v.kev.name ? v.kev.name + ". " : "") + "In CISA’s catalog since " + day(v.kev.date_added) + (v.kev.due_date ? "; US federal agencies must patch by " + day(v.kev.due_date) + "." : ".") })]));
     kids.push(facts);
     if (v.cvss && /^CVSS:3/.test(v.cvss.vector || "")) kids.push(vector(v.cvss.vector));
     kids.push(remediation(v.affected || []));
@@ -623,7 +636,7 @@
   function affectedTable(aff) {
     if (!aff.length) return h("div", { class: "sub", text: "No affected packages in the last scan." });
     var rows = aff.slice().sort(function (a, b) { return a.host < b.host ? -1 : a.host > b.host ? 1 : (a.scope === "host" ? -1 : b.scope === "host" ? 1 : 0); });
-    return h("div", { class: "scroll" }, [h("table", { class: "cve-mini" }, [
+    return detailTable("0,-1", [
       h("thead", {}, [h("tr", {}, [h("th", { text: "Where" }), h("th", { text: "Package" }), h("th", { text: "Installed" }), h("th", { text: "Fixed in" })])]),
       h("tbody", {}, rows.map(function (a) {
         var bins = (a.binaries || []).map(function (b) { return b.name; }).filter(function (x) { return x !== a.package; });
@@ -632,7 +645,7 @@
           h("td", { class: "cve-wrap" }, [h("span", { text: a.package }), bins.length ? h("div", { class: "sub", text: bins.slice(0, 4).join(", ") + (bins.length > 4 ? " +" + (bins.length - 4) : "") }) : null]),
           h("td", { class: "cve-wrap" }, [h("code", { text: a.installed || "—" })]),
           h("td", { class: "cve-wrap" }, a.fixed ? [h("code", { class: a.fixable ? "cve-fixv" : "", text: a.fixed })] : [h("span", { class: "sub", text: a.vendor_status ? a.vendor_status : "Not yet" })])]);
-      }))])]);
+      }))]);
   }
 
   // Suppress with a reason (Dependency-Track's analysis states), or reopen.
@@ -682,7 +695,7 @@
     HI().openDrawer(h("div", { class: "cve-drawer" }, [
       h("h3", { text: r.name }),
       h("div", { class: "subtitle", text: r.ecosystem + " · " + plural(r.sets, "package set") + " on " + plural(r.hosts, "host") }),
-      h("div", { class: "cve-dhead" }, [counts(r.vulns), r.kev ? HI().pill(fmt(r.kev) + " exploited", "crit") : null]),
+      h("div", { class: "cve-dhead" }, [h("span", { class: "sub", text: "Findings by severity" }), counts(r.vulns), r.kev ? HI().pill(fmt(r.kev) + " exploited", "crit") : null]),
       r.fix_version ? h("ul", { class: "cve-fixes" }, [h("li", { class: "ok" }, [HI().iconNode("check", "sm"), h("span", {}, ["Upgrade to ", h("code", { text: r.fix_version }), " or later to clear " + plural(r.fixes, "CVE") + "."])])])
         : h("p", { class: "sub", text: "None of its CVEs has a fixed version in " + r.ecosystem + " yet." }),
       section("Installed", [h("div", { class: "cve-vers" }, (r.installed || []).map(function (x) { return h("code", { text: x }); }))]),

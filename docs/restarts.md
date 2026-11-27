@@ -60,8 +60,7 @@ Remove `ACTIONS_ENABLED`, remove the socket mount, and recreate the container.
   name, and the name is checked against Docker before each restart.
 - If the containers changed since you previewed, you are asked to confirm again.
 - A failure stops the sequence; the log shows what restarted, failed or was skipped.
-- Restarting the API's own container can cut the response short. The log then
-  says `running`; check Docker before trying again.
+- Restarting the API's own container can cut the response short. The dashboard shows **Outcome unknown**. Check Recent actions and Docker before trying again.
 - The separate `POST /exec` route shares this enablement, operator authorization
   and audit. It allows image-pin changes, Compose pulls/up and dangling-image
   pruning; see [API](api.md#allowlisted-execution-and-composed-digests).

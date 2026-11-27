@@ -201,12 +201,12 @@
     var handshakeTone = tone;
     var statusTone = {up: "ok", healthy: "ok", ok: "ok", down: "crit", cutoff: "crit", unhealthy: "crit", degraded: "warn", reconnecting: "warn", unknown: "", unavailable: ""};
     if (v.status) tone = statusTone[v.status] || "";
-    var dot = h("span", { class: "net-dot " + (stale ? "" : tone), title: v.status ? state(v.status) : !d ? "No data" : !d.interfaceUp ? "Interface down" : hs == null ? "No handshake" : hs <= 180 ? "Up" : "Handshake stale" });
-    var chips = [];
-    if (v.status) chips.push(chip(state(v.status), stale ? "" : tone, v.reason || "VPN status"));
+    var status = v.status ? state(v.status) : !d ? "No data" : !d.interfaceUp ? "Interface down" : hs == null ? "No handshake" : hs <= 180 ? "Up" : "Handshake stale";
+    var dot = h("span", { class: "net-dot " + (stale ? "" : tone), "aria-hidden": "true" });
+    var chips = [chip(status, stale ? "" : tone, v.reason || "VPN status")];
     if (many) chips.push(chip(v.host, "", "Host"));
     if (d && d.interfaceUp) { if (hs != null) chips.push(chip(age(hs), stale ? "" : handshakeTone, "Handshake", "refresh")); }
-    else if (d) chips.push(chip("down", stale ? "" : "crit", "Interface"));
+    else if (d && v.status) chips.push(chip("Interface down", stale ? "" : "crit", "Interface"));
     if (v.live) chips.push(chip("Live", "", "API tunnel checks"));
     if (inventoryStale) chips.push(ageChip(vpnAge));
     var flow = h("span", { class: "net-flow" });
@@ -273,7 +273,7 @@
   }
   function vpnSection(full) {
     var sum = s.data.summary;
-    if (!sum) return card("ops-wide net-vpn", "shield", "VPN", [], [s.err.summary ? muted("Unavailable") : skel(true)]);
+    if (!sum) return card("ops-wide net-vpn", "shield", "VPN", [], [s.err.summary ? muted("Could not load VPN status. Refresh to try again.") : skel(true)]);
     var list = Array.isArray(sum.vpns) && sum.vpns.length ? sum.vpns : [sum.vpn || { stale: true }];
     if (!list[0].data && !list[0].inventoryAt && !list[0].status) return card("ops-wide", "shield", "VPN", [], [muted("No host has reported tunnel facts")]);
     return list.map(function (v) { return vpnCard(v, full); });
@@ -320,7 +320,7 @@
     var rs = source("quality") && panelStale("pingRtt"), ls = source("quality") && panelStale("pingLoss"), ds = source("quality") && panelStale("dnsLatency");
     var body = [];
     function sub(a, b, c) { return h("div", { class: "net-sub" }, [h("span", { text: a }), h("span", { text: b }), h("span", { text: c })]); }
-    function row(name, a, b) { return h("div", { class: "net-row" }, [h("span", { class: "net-name", text: name, title: name }), a, b]); }
+    function row(name, a, b) { return h("div", { class: "net-row" }, [h("bdi", { class: "net-name", dir: "auto", text: name, title: name }), a, b]); }
     function cell(dim, pts, value, opts, extra) {
       return h("span", { class: "net-cell" + (extra || "") + (dim ? " net-dim" : "") }, [spark(pts, opts), h("b", { text: value })]);
     }
@@ -361,7 +361,7 @@
   }
   function routesCard(full) {
     var r = s.data.routes;
-    if (!r) return card("ops-wide", "link", "Routes", [], [s.err.routes ? muted("Unavailable") : skel()]);
+    if (!r) return card("ops-wide", "link", "Routes", [], [s.err.routes ? muted("Could not load routes. Refresh to try again.") : skel()]);
     var routes = Array.isArray(r.routes) ? r.routes : [], dns = Array.isArray(r.dns) ? r.dns : [], stale = !!r.stale || !!s.err.routes;
     var catalog = HI.services && HI.services(), list = catalog ? (catalog.groups || []).reduce(function (a, g) { return a.concat(g.services || []); }, []).concat(catalog.missing || []) : [];
     function targetService(target) {
@@ -410,7 +410,7 @@
 
   function seedingCard() {
     var list = s.data.torrents;
-    if (!list) return card("ops-wide", "upload", "Seeding", [], [s.err.torrents ? muted("Unavailable") : skel()]);
+    if (!list) return card("ops-wide", "upload", "Seeding", [], [s.err.torrents ? muted("Could not load seeding activity. Refresh to try again.") : skel()]);
     return card("ops-wide", "upload", "Seeding", list.status === "ok" ? [chip(String(list.count))] : [], [h("div", { class: "net-seeding hn-seedbox" }, seedingBody(list))]);
   }
   // The VPN card's Seeding button reads the list on open only;
@@ -421,7 +421,7 @@
     function show(kids) { HI.openDrawer(h("div", { class: "net-seeding" }, [h("h3", { text: "Seeding" })].concat(kids)), "Seeding"); }
     show([h("div", { class: "empty", text: "Loading…" })]);
     HI.get(ID, "torrents").then(function (list) { if (epoch === seedEpoch) show(seedingBody(list)); },
-      function () { if (epoch === seedEpoch) show([h("div", { class: "note", text: "Unavailable" })]); });
+      function () { if (epoch === seedEpoch) show([h("div", { class: "note", text: "Could not load seeding details. Close this sheet and open it again." })]); });
   }
   function seedingBody(list) {
     if (list.status !== "ok") return [muted(state(list.status))];
@@ -444,7 +444,7 @@
   }
   function qbitCard() {
     var q = s.data.summary && s.data.summary.qbit;
-    if (!q) return card("", "download", "qBittorrent", [], [s.err.summary ? muted("Unavailable") : skel()]);
+    if (!q) return card("", "download", "qBittorrent", [], [s.err.summary ? muted("Could not load qBittorrent status. Refresh to try again.") : skel()]);
     if (q.status !== "ok") return card("", "download", "qBittorrent", [], [muted(state(q.status))]);
     return card("", "download", "qBittorrent", [chip(q.connectionStatus || "—", q.connectionStatus === "connected" ? "ok" : "warn", "Connection")], [
       h("div", { class: "net-pair" }, [
@@ -467,7 +467,7 @@
       out.push(card("ops-wide" + (panelStale("vpnRx") ? " net-stale" : ""), "shield", "VPN tunnel", [], [chart("Container traffic", [
         { name: "Received", cls: "c1", points: rx && rx.points }, { name: "Sent", cls: "c2", points: tx && tx.points }], bps)]));
     }
-    if (!t) { out.push(card("ops-wide", "network", "Hosts", [], [s.err.traffic ? muted("Unavailable") : skel()])); return out; }
+    if (!t) { out.push(card("ops-wide", "network", "Hosts", [], [s.err.traffic ? muted("Could not load traffic history. Refresh to try again.") : skel()])); return out; }
     (t.notes || []).forEach(function (n) { out.push(HI.notice("info", n)); });
     if (t.status === "not configured") { out.push(HI.notice("info", "Prometheus is not configured. Set its URL in Admin → Plugins.")); return out; }
     var fleet = t.fleet || [[], []];
@@ -488,7 +488,7 @@
     if (cs.length) {
       var top = Math.max.apply(null, cs.map(function (c) { return num(c.bytesPerSecond) ? c.bytesPerSecond : 0; })) || 1;
       out.push(card("", "box", "Busiest containers", [], cs.map(function (c) {
-        return h("div", { class: "hn-crow" }, [h("span", { class: "net-name", text: c.name, title: c.name }), meter((c.bytesPerSecond || 0) / top * 100), h("b", { text: bytesPs(c.bytesPerSecond) })]);
+        return h("div", { class: "hn-crow" }, [h("bdi", { class: "net-name", dir: "auto", text: c.name, title: c.name }), meter((c.bytesPerSecond || 0) / top * 100), h("b", { text: bytesPs(c.bytesPerSecond) })]);
       })));
     }
     return out;
@@ -530,7 +530,7 @@
     btn.textContent = running ? "Running…" : "Run test";
     var kids = [];
     if (!sp) {
-      kids.push(muted(s.err.speed ? "Unavailable" : "Loading…"));
+      kids.push(muted(s.err.speed ? "Could not load speed tests. Refresh to try again." : "Loading…"));
     } else if (sp.configured === false) {
       kids.push(muted(sp.message || "Speed test is not configured"));
     } else {

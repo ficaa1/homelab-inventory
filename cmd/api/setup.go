@@ -204,7 +204,7 @@ func (s *server) handleSetupEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Hostname != "" && store.ValidateHost(in.Hostname) != nil {
-		writeError(w, 400, "invalid hostname")
+		writeError(w, 400, "Enter a hostname such as nas-01, or leave it blank to use the machine’s hostname.")
 		return
 	}
 	if in.Scheduler != "" && in.Scheduler != "systemd" && in.Scheduler != "truenas-cron" {
@@ -212,7 +212,7 @@ func (s *server) handleSetupEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Scheduler == "truenas-cron" && (!filepath.IsAbs(in.StateDir) || filepath.Clean(in.StateDir) != in.StateDir || strings.ContainsAny(in.StateDir, " \t\r\n\x00%\"'\\")) || in.StateDir != "" && in.Scheduler != "truenas-cron" {
-		writeError(w, 400, "TrueNAS cron requires an absolute persistent state_dir")
+		writeError(w, 400, "Enter an absolute persistent dataset directory, such as /mnt/pool/agent.")
 		return
 	}
 	if in.Scheduler == "truenas-cron" {

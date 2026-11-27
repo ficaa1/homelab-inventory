@@ -25,7 +25,7 @@
 
   function fresh() {
     return { pool: null, round: [], roundNo: 0, skipped: {}, mine: {}, known: null, filter: "all", q: "", searchQ: "",
-      results: null, searching: false, status: null, error: "", familiar: null, wall: [], open: "", watchlist: null, imp: null, flash: null, busy: "" };
+      results: null, searchError: false, searchedQuery: "", searching: false, status: null, error: "", familiar: null, wall: [], open: "", watchlist: null, imp: null, flash: null, busy: "" };
   }
   function keep(next) { next.profiles = s.profiles; next.profile = s.profile; next.kind = s.kind; next.view = s.view; return next; }
 
@@ -169,7 +169,7 @@
       .catch(function (e) {
         if (profile !== s.profile) return;
         if (before === undefined) delete s.mine[k]; else s.mine[k] = before;
-        s.flash = ["crit", "Not saved: " + ((e && e.message) || "failed")];
+        s.flash = ["crit", e.status && e.status < 500 ? "Could not save the rating. Check the profile and try again." : "Could not confirm the rating. Refresh and check the title before rating it again."];
         render();
       });
   }
@@ -178,7 +178,7 @@
     s.busy = busy; s.flash = null; render();
     HI.send(ID, path, "POST", { profile: s.profile }).then(function () {
       s.busy = ""; s.flash = ["ok", done]; load();
-    }, function (e) { s.busy = ""; s.flash = ["crit", (e && e.message) || "failed"]; render(); });
+    }, function (e) { s.busy = ""; s.flash = ["crit", e.status && e.status < 500 ? "Could not update recommendations. Check the profile and try again." : "Could not confirm the update. Refresh and check the current state before trying again."]; render(); });
   }
 
   // ---------------------------------------------------------------- render
@@ -212,14 +212,14 @@
   function empty(title, detail) {
     return h("div", { class: "empty" }, [h("div", { class: "big", text: title }), detail || null]);
   }
-  function failed(what) { return empty(what + " did not load.", s.error); }
+  function failed(what) { return empty("Could not load " + what.toLowerCase() + ".", "Refresh to try again."); }
 
   function renderPick() {
     if (s.error) return failed("Recommendations");
     if (!s.pool) return loading();
-    if (!s.round.length) return empty("Nothing left to judge right now.", "Your answers are rebuilding the list; check back in a minute for a fresh round.");
+    if (!s.round.length) return empty("No recommendations left in this round.");
     return fragment([
-      h("p", { class: "subtitle" }, ["Tap what you have already seen, and how it went. ", h("b", { text: "Pass" }), " means not seen and not interested. Leave a title alone to keep it."]),
+      h("p", { class: "subtitle" }, ["Select a rating for titles you’ve watched. ", h("b", { text: "Pass" }), " means not seen and not interested. Leave a title alone to keep it."]),
       h("div", { class: "taste-grid" }, s.round.map(function (t) {
         var v = s.mine[tkey(t)] || "";
         return h("article", { class: "card taste-card" + (v ? " judged" : "") }, [
@@ -243,7 +243,7 @@
   }
 
   function renderWall() {
-    if (s.error) return failed("The list");
+    if (s.error) return failed("known titles");
     if (!s.familiar) return loading();
     if (!s.wall.length) return empty("No more famous matches to check.", s.familiar.length ? "" : "This list needs the taste twins model on the server.");
     return fragment([
@@ -283,14 +283,18 @@
     e.preventDefault();
     var text = s.searchQ.trim();
     if (!text || s.searching) return;
-    s.searching = true; render();
+    s.searching = true; s.searchError = false; s.results = null; s.searchedQuery = text; render();
     var signal = ctl.signal;
-    HI.get(ID, q("search?q=" + encodeURIComponent(text)), signal).then(function (d) { s.results = d.titles || []; }, function () { s.results = []; })
+    HI.get(ID, q("search?q=" + encodeURIComponent(text)), signal).then(function (d) {
+      if (!signal.aborted) s.results = d.titles || [];
+    }, function () {
+      if (!signal.aborted) s.searchError = true;
+    })
       .then(function () { if (signal.aborted) return; s.searching = false; render(); });
   }
 
   function renderKnown() {
-    if (s.error) return failed("The list");
+    if (s.error) return failed("known titles");
     if (!s.known) return loading();
     var needle = s.q.toLowerCase();
     var src = function (t) { return t.verdict ? "you" : t.source; };
@@ -300,16 +304,16 @@
     var counts = { all: s.known.length };
     s.known.forEach(function (t) { counts[src(t)] = (counts[src(t)] || 0) + 1; });
 
-    var add = h("details", { class: "card taste-add", open: !!s.results }, [
-      h("summary", {}, [HI.iconNode("plus", "sm"), " Add a title it doesn't know"]),
+    var add = h("details", { class: "card taste-add", open: !!s.searchedQuery }, [
+      h("summary", {}, [HI.iconNode("plus", "sm"), " Find and rate a title"]),
       h("form", { id: "taste-search-form", class: "taste-search", onsubmit: search }, [
         h("input", { id: "taste-search", type: "search", placeholder: "Search films and series", autocomplete: "off", value: s.searchQ,
           oninput: function (e) { s.searchQ = e.target.value; } }),
         h("button", { class: "btn", type: "submit" }, [s.searching ? "Searching…" : "Search"])]),
-      s.results ? (s.results.length ? h("ul", { class: "taste-list" }, s.results.map(function (t) {
+      s.searchError ? h("p", { class: "sub", role: "status", text: "Could not search for “" + s.searchedQuery + "”. Select Search to try again." }) : s.results ? (s.results.length ? h("ul", { class: "taste-list" }, s.results.map(function (t) {
         return h("li", { class: "taste-row open" }, [posterNode(t, "sm"), h("div", { class: "taste-row-main" }, [
           h("b", { text: t.title }), " ", h("span", { class: "sub", text: meta(t) }), verdictButtons(t, ADD, s.mine[tkey(t)] || "")])]);
-      })) : h("div", { class: "sub", text: "No matches." })) : null]);
+      })) : h("div", { class: "sub", text: "No films or series match “" + s.searchedQuery + "”. Try another title." })) : null]);
 
     var tools = h("div", { class: "taste-tools" }, [
       seg("Source", [["all", "All"], ["letterboxd", "Letterboxd"], ["plex", "Plex"], ["you", "Yours"]].map(function (f) {
@@ -326,7 +330,7 @@
           h("span", { class: "pill " + (v ? "info" : (EFFECT[t.effect] || "")), text: v ? label(v) : t.effect })]),
         verdictButtons(t, ALL, v),
         v ? h("button", { class: "btn", type: "button", "data-taste-key": k, "data-taste-verdict": "", onclick: function () { setVerdict(k, ""); } }, ["Remove my verdict"]) : null])]);
-    })) : h("div", { class: "empty", text: "Nothing matches." });
+    })) : h("div", { class: "empty", text: s.known.length ? "No titles match your filters. Clear filters to see all titles." : "No known titles yet. Import a watch history or find and rate a title." });
 
     return fragment([
       h("p", { class: "subtitle", text: "Everything the model believes you have watched, and how it counts. Tap a title to correct it." }),

@@ -25,6 +25,7 @@ package silence
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -86,7 +87,7 @@ func (b *Book) Add(s Silence, now time.Time) (Silence, error) {
 		return Silence{}, fmt.Errorf("silence: host and rule are both required")
 	}
 	if len(s.Reason) > 300 {
-		return Silence{}, fmt.Errorf("silence: reason is too long")
+		return Silence{}, errors.New("Shorten Reason to 300 bytes or fewer.")
 	}
 	if s.Until != nil && !s.Until.After(now) {
 		return Silence{}, fmt.Errorf("silence: expiry is already in the past")

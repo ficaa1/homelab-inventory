@@ -4,9 +4,10 @@
 .taste-kinds { margin-top: var(--s2); }
 .taste-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: var(--s3); }
 .taste-card { display: grid; grid-template-columns: 76px 1fr; gap: 10px 12px; padding: 12px; align-content: start; transition: opacity .2s; }
-.taste-card.judged { opacity: .6; }
+.taste-card.judged :is(h3, .taste-reason) { color: var(--text-3); }
+.taste-card.judged .tposter img { opacity: .6; }
 .taste-card h3 { margin: 0 0 2px; font-size: var(--fs-md); font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
-.taste-reason { margin-top: 6px; font-size: var(--fs-sm); color: var(--text-2); line-height: 1.35; }
+.taste-reason { margin-top: 6px; font-size: var(--fs-sm); color: var(--text-2); line-height: 1.5; text-wrap: pretty; }
 .tposter { width: 76px; aspect-ratio: 2 / 3; border-radius: var(--r-sm); overflow: hidden; background: var(--surface-2); display: grid; place-items: center; }
 .tposter.sm { width: 40px; flex: none; }
 .tposter img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -18,7 +19,7 @@
 .taste-next .btn { min-height: 44px; padding: 8px 28px; }
 .taste-tools { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; margin: var(--s3) 0; }
 #taste .seg .btn, #taste .taste-row details > .btn { min-height: 44px; }
-.taste-tools input, .taste-search input { flex: 1 1 160px; min-height: 40px; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid var(--line-2); background: var(--surface); color: var(--text); font: inherit; }
+.taste-tools input, .taste-search input { flex: 1 1 160px; min-height: 40px; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid var(--edge-strong); background: var(--surface); color: var(--text); font: inherit; }
 .taste-search { display: flex; gap: var(--s2); margin: var(--s3) 0; }
 .taste-add summary { cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 6px; min-height: 44px; }
 .taste-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
@@ -41,7 +42,7 @@
 .taste-badge { position: absolute; top: 6px; left: 6px; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: var(--fs-xs); font-weight: 600; pointer-events: none; }
 /* The choice sits on the poster just tapped, so it is wherever the thumb is.
    Taps between the buttons fall through to the poster, which closes it. */
-.taste-choose { position: absolute; top: 0; left: 0; width: 100%; aspect-ratio: 2 / 3; display: grid; grid-template-columns: 1fr 1fr; align-content: end; gap: 4px; padding: 5px; border-radius: var(--r-sm); background: linear-gradient(transparent 25%, rgba(0,0,0,.8)); pointer-events: none; }
+.taste-choose { position: absolute; top: 0; left: 0; width: 100%; aspect-ratio: 2 / 3; display: grid; grid-template-columns: 1fr 1fr; align-content: end; gap: 4px; padding: 5px; border-radius: var(--r-sm); background: linear-gradient(transparent 25%, var(--art-scrim)); pointer-events: none; }
 .taste-choose .btn { pointer-events: auto; min-height: 44px; min-width: 0; padding: 4px 2px; font-size: var(--fs-xs); background: var(--surface); }
 .taste-choose .btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .taste-tile-title { font-size: var(--fs-sm); line-height: 1.25; overflow-wrap: anywhere; }

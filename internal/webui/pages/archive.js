@@ -31,8 +31,7 @@
 
   function esc(s) { return HI.esc(s); }
   function $(id) { return document.getElementById(id); }
-  function drawerOpen() { var d = $("drawer"); return d && !d.classList.contains("hidden"); }
-  function sheet(html, label) { HI.openDrawer(html, label || "Archive"); }
+  function sheet(html, label) { return HI.openDrawer(html, label); }
   function msg(id, text, bad) { var el = $(id); if (el) { el.textContent = text; el.style.color = bad ? "var(--crit)" : ""; } }
   function row(k, v) { return "<dt>" + esc(k) + "</dt><dd>" + esc(v == null || v === "" ? "—" : v) + "</dd>"; }
   function real(iso) { return iso && new Date(iso).getFullYear() > 1; }
@@ -51,7 +50,10 @@
   }
   function bar(pct, mode, label) {
     return '<div class="arc-bar ' + (mode || "") + '" role="progressbar" aria-label="' + esc(label) + '" aria-valuemin="0" aria-valuemax="100"' +
-      (pct == null ? "" : ' aria-valuenow="' + pct.toFixed(0) + '"') + '><i style="width:' + (pct == null ? 30 : pct) + '%"></i></div>';
+      (pct == null ? "" : ' aria-valuenow="' + pct.toFixed(0) + '"') + '><i' + progressScale(pct) + '></i></div>';
+  }
+  function progressScale(pct) {
+    return pct == null ? "" : ' style="transform:scaleX(' + (pct / 100) + ')"';
   }
   function fail(err) { return err && err.unauthorized; }
   function active(a) { return a && a.job && ["complete", "abandoned", "failed"].indexOf(a.job.phase) < 0; }
@@ -64,7 +66,15 @@
   function morph(el, html) {
     var t = document.createElement("template"), focus = document.activeElement;
     t.innerHTML = html;
-    if (st.strip && el === st.body && st.strip.parentNode === el) el.parentNode.insertBefore(st.strip, el);
+    if (st.strip && el === st.body && st.strip.parentNode === el) {
+      var head = t.content.querySelector(".arc-head");
+      if (head) {
+        // Match the existing strip in place so a status refresh preserves its transitions.
+        head.after(HI.h("section", { "data-key": "archive-activity" }));
+      } else {
+        el.parentNode.insertBefore(st.strip, el);
+      }
+    }
     morphKids(el, t.content);
     if (focus && focus !== document.activeElement && focus.isConnected && el.contains(focus)) focus.focus({ preventScroll: true });
   }
@@ -88,6 +98,7 @@
     want.forEach(function (n) { if (n === at) at = at.nextSibling; else a.insertBefore(n, at); });
   }
   function morphNode(a, b) {
+    if (a === st.strip) return a;
     if (a.nodeType !== b.nodeType || a.nodeName !== b.nodeName) { a.parentNode.replaceChild(b, a); return b; }
     if (a.nodeType !== 1) { if (a.nodeValue !== b.nodeValue) a.nodeValue = b.nodeValue; return a; }
     var details = a.nodeName === "DETAILS", input = a.nodeName === "INPUT";
@@ -303,7 +314,7 @@
         var actions = ["restore", "purge"].map(function (action) {
           var reason = refusal(v, h, action);
           if (reason && reasons.indexOf(reason) < 0) reasons.push(reason);
-          return reason ? '' : '<button class="btn" type="button" data-archive-action="' + action + '" data-archive-id="' + esc(h.id) + '">' + (action === "restore" ? 'Restore' : 'Purge') + '</button>';
+          return reason ? '' : '<button class="btn" type="button" data-archive-action="' + action + '" data-archive-id="' + esc(h.id) + '">' + (action === "restore" ? 'Restore' : 'Delete originals') + '</button>';
         }).join('');
         return '<tr><td><b>' + esc(title(j.target)) + '</b><span class="arc-code">' + esc((j.release || {}).title) + '</span><span class="sub">' +
           (j.manuallyApproved ? 'Approved · ' : '') + esc(j.sidecarsCarried || 0) + ' subtitle file' + (j.sidecarsCarried === 1 ? '' : 's') + ' carried' + (j.sidecarMessage ? ' · ' + esc(j.sidecarMessage) : '') + '</span></td><td>' +
@@ -316,7 +327,7 @@
 
   function purgeAllButton(v) {
     var n = ((v.archive || {}).history || []).filter(function (h) { return !refusal(v, h, "purge"); }).length;
-    return n ? '<span class="spacer"></span><button class="btn" type="button" data-archive-action="purge-all">Purge all (' + n + ")</button>" : "";
+    return n ? '<span class="spacer"></span><button class="btn" type="button" data-archive-action="purge-all">Delete originals for ' + n + (n === 1 ? " title" : " titles") + "</button>" : "";
   }
 
   function archiveLibrarySwitch(noPause) {
@@ -338,14 +349,14 @@
       (!v.archiveEnabled ? '<div class="banner warn"><div>' + pill('disabled', 'warning') + '</div></div>' : '') +
       (v.archivePaused ? '<div class="banner warn"><div>' + pill('Paused','warning') + '</div></div>' : '') +
       (ownerNotice ? '<div class="note" role="status">' + esc(ownerNotice) + '</div>' : '') +
-      (v.dryRun ? '<div class="banner warn"><div>' + pill('dry run', 'warning') + '</div></div>' : '') +
+      (v.dryRun ? '<div class="banner warn"><div>' + pill('Dry run', 'warning') + '</div></div>' : '') +
       (v.error || a.error ? '<div class="banner warn"><div>' + pill('error', 'critical') + ' ' + esc(v.error || a.error) + '</div></div>' : '') +
       (a.tagRemovalError ? '<div class="note">' + esc(a.tagRemovalError) + '</div>' : '') +
       nowCard(v) + tiles(v) +
       ((a.abandonedDownloads || []).length ? '<div class="arc-queue"><h4>Rejected downloads</h4>' + a.abandonedDownloads.map(function(d) { return '<div class="arc-q"><span class="what"><b>' + esc(d.title) + '</b><br><span class="arc-code">' + esc(d.release) + '</span><br>Removes ' + esc(new Date(d.removeAfter).getFullYear() > 1 ? new Date(d.removeAfter).toLocaleDateString() : 'Awaiting completion') + '</span></div>'; }).join('') + '</div>' : '') +
       (a.cleanupError ? '<div class="arc-msg warn">' + esc(a.cleanupError) + '</div>' : '') +
-      '<div class="arc-section"><h3>Tagged titles</h3></div>' + titles(v) +
-      '<div class="arc-section"><h3>Completed</h3>' + purgeAllButton(v) + '</div>' + history(v) +
+      '<div class="arc-section"><h2>Tagged titles</h2></div>' + titles(v) +
+      '<div class="arc-section"><h2>Completed</h2>' + purgeAllButton(v) + '</div>' + history(v) +
       (a.notificationError ? '<div class="freebar">' + esc(a.notificationError) + '</div>' : ''));
     focusPending();
   }
@@ -393,7 +404,7 @@
     if (inline(action, id)) return;
     if (action === "purge-all") { confirmPurgeAll(); return; }
     var req = ++request, v = status || {}, a = v.archive || {};
-    var head = action === "approve" ? "Approve release" : action === "run" ? "Check now" : action === "clear-job" ? "Clear" : action === "restore" ? "Restore" : "Purge";
+    var head = action === "approve" ? "Approve release" : action === "run" ? "Check now" : action === "clear-job" ? "Clear" : action === "restore" ? "Restore" : "Delete originals";
     var approval, selected, decision;
     if (action === "approve") {
       var parts = id.split(":");
@@ -401,10 +412,12 @@
       selected = decision.candidates[Number(parts[1])];
       approval = { kind: decision.target.kind, id: decision.target.id, season: decision.target.season || 0, releaseId: selected.id, indexerId: selected.indexerId };
     }
-    sheet("<h3>" + head + '</h3><div class="empty">Loading plan…</div>');
+    var idDrawer = sheet("<h3>" + head + '</h3><div class="empty">Loading plan…</div>');
     function show(p) {
-      if (req !== request || !drawerOpen()) return;
-      var dry = v.dryRun && action !== "run" && action !== "clear-job", html = "<h3>" + head + "</h3>";
+      if (req !== request || !HI.drawerIsOpen() || !HI.drawerExists(idDrawer)) return;
+      var dry = v.dryRun && action !== "run" && action !== "clear-job";
+      var subject = action === "purge" ? "Delete the originals for " + (p.title || id) + "?" : head;
+      var html = "<h3>" + esc(subject) + '</h3><div class="archive-plan">';
       if (approval) {
         var before = fileBytes(decision.target), s = selected.score || {};
         html += '<div class="subtitle">' + esc(title(decision.target)) + '</div><div class="arc-drawer-size">' + esc(gb(before)) + " → " + esc(gb(selected.size)) +
@@ -416,83 +429,108 @@
         var job = failedJobs(a).filter(function (j) { return jobID(j) === id; })[0];
         html += '<div class="subtitle">' + esc(job ? title(job.target) : id) + "</div>";
       } else if (action === "run") {
-        html += v.dryRun ? pill("dry run", "warning") : "";
+        html += v.dryRun ? pill("Dry run", "warning") : "";
       } else {
-        html += '<div class="subtitle">' + esc(p.title) + "</div>";
+        if (action === "restore") html += '<div class="subtitle">' + esc(p.title) + "</div>";
         if (action === "restore") {
           html += reason("Existing files are not overwritten.", "Safety") +
             planMoves("Quarantine", (p.restore || {}).quarantine) + planMoves("Restore originals", (p.restore || {}).restore) +
             '<div class="note">Rescan: ' + esc((p.restore || {}).rescan || "not recorded") + "</div>" +
             (p.sidecars || []).map(function (s) { return '<dl class="dl">' + row("Subtitle", s.path) + row("Staged", s.staged) + row("Note", s.note) + "</dl>"; }).join("");
         } else {
-          html += '<div class="banner warn"><div>' + pill("irreversible", "critical") + " " + esc(gb(p.bytes)) + " · Undo removed</div></div>" +
+          html += '<div class="banner warn"><div>' + esc(DELETE_ORIGINALS) + " " + esc(gb(p.bytes)) + " will be deleted.</div></div>" +
             (p.purge || []).map(function (f) { return '<dl class="dl">' + row("File", f.path) + row("Size", gb(f.size)) + "</dl>"; }).join("");
         }
       }
       html += '<div class="form' + (action === "clear-job" ? ' arc-clear-form' : '') + '">' + (action === "purge" ? '<div><label for="archive-confirm">Type ' + esc(p.confirm) + ' exactly</label><input id="archive-confirm" autocomplete="off" spellcheck="false"></div>' : "") +
         '<div class="actions"><button class="btn primary" id="archive-apply" type="button"' + (dry || action === "purge" ? " disabled" : "") + ">" + (approval ? "Approve" : head) + "</button>" +
-        '<button class="btn" id="archive-cancel" type="button">Cancel</button></div><div id="archive-action-msg" role="status" class="note">' + (dry ? "Dry run" : "") + "</div></div>";
-      sheet(html);
+        '<button class="btn" id="archive-cancel" type="button">Cancel</button></div><div id="archive-action-msg" role="status" class="note">' + (dry ? "Dry run" : "") + "</div></div></div>";
+      HI.updateDrawer(idDrawer, html);
+      HI.fadePlan($("drawer-body").querySelector(".archive-plan"));
       $("archive-cancel").onclick = HI.closeDrawer;
       if (action === "purge") $("archive-confirm").oninput = function () { $("archive-apply").disabled = dry || this.value !== p.confirm; };
       $("archive-apply").onclick = function () {
         this.disabled = true;
-        msg("archive-action-msg", "working…");
+        msg("archive-action-msg", "Applying plan…");
         var path = approval ? "approve" : action === "run" ? "run" : action === "clear-job" ? "clear" : action;
         var body = approval ? { approval: approval } : action === "run" ? {} : action === "clear-job" ? { id: id, apply: true } :
           { id: id, apply: true, hash: p.hash, confirm: action === "purge" ? $("archive-confirm").value : "" };
         HI.send(ID, path, "POST", body).then(function (r) {
-          if (req !== request || !drawerOpen()) return;
+          if (req !== request || !HI.drawerIsOpen()) return;
           r = r || {};
-          sheet("<h3>" + head + '</h3><div class="note">' + esc(r.message || r.error || (r.applied ? "Applied." : "The service returned without applying the plan.")) + "</div>");
+          if (r.applied === true && !r.error) {
+            HI.closeDrawer();
+            var outcome = approval ? "Release approved" : action === "run" ? "Archive check queued" :
+              action === "restore" ? "Originals restored for " + p.title : action === "purge" ? "Originals deleted for " + p.title : "Failed job cleared";
+            HI.toast(outcome, { kind: "ok" });
+            pollNow();
+            return;
+          }
+          sheet("<h3>" + head + '</h3><div class="note">' + esc(r.message || r.error || "Archive did not confirm that the plan was applied. Check Archive status before submitting again.") + "</div>");
           pollNow();
         }).catch(function (err) {
-          if (fail(err) || req !== request || !drawerOpen()) return;
-          msg("archive-action-msg", err.message, true);
+          if (fail(err) || req !== request || !HI.drawerIsOpen()) return;
+          msg("archive-action-msg", archiveWriteError(err, head.toLowerCase()), true);
           pollNow();
         });
       };
     }
     if (action === "run" || action === "clear-job" || approval) { show({}); return; }
     plan(action, id).then(show).catch(function (err) {
-      if (fail(err) || req !== request || !drawerOpen()) return;
-      sheet("<h3>" + head + '</h3><div class="empty">' + esc(err.message) + "</div>");
+      if (fail(err) || req !== request || !HI.drawerIsOpen() || !HI.drawerExists(idDrawer)) return;
+      HI.updateDrawer(idDrawer, "<h3>" + head + '</h3><div class="empty">' + esc(PREVIEW_ERROR) + "</div>");
     });
   }
 
+  var DELETE_ORIGINALS = "This permanently deletes the retained originals. You will lose the option to restore them.";
+  var UNKNOWN_ARCHIVE = "Outcome unknown. Check Archive status before submitting again.";
+  var CHANGED_PLAN = "The plan changed. Reopen the preview and review the new plan.";
+  var PREVIEW_ERROR = "Could not load the plan. Close this sheet and open the preview again.";
+
   function purgeReason(r) {
     if (/busy|lease/i.test(r)) return "Title is busy";
-    if (/changed|mismatch/i.test(r)) return "Plan changed";
+    if (/changed|mismatch/i.test(r)) return CHANGED_PLAN;
     if (/missing|gone|not found/i.test(r)) return "Original unavailable";
     if (/audit|save|store/i.test(r)) return "Could not save";
-    return "Purge failed";
+    return "Could not delete originals";
   }
   // Counted from status; the sheet loads the service's own checked plan.
+  function archiveWriteError(err, action) {
+    if (!err.status || err.status >= 500) return UNKNOWN_ARCHIVE;
+    if (err.status === 409 || /plan changed/i.test(err.message)) return CHANGED_PLAN;
+    return "Could not " + action + ". Reopen the preview and check the current state.";
+  }
+
   function confirmPurgeAll() {
     var req = ++request;
-    sheet('<h3>Purge all</h3><div class="empty">Loading plan</div>');
+    var idDrawer = sheet('<h3>Delete originals</h3><div class="empty">Loading plan…</div>');
     HI.send(ID, "purge-all", "POST", {}).then(function (p) {
-      if (req !== request) return;
-      if (!p || !(p.entries || []).length) { sheet('<h3>Purge all</h3><div class="empty">No originals to purge</div>'); return; }
-      sheet('<h3>Purge all</h3><ul class="seed-files">' + p.entries.map(function (e) {
+      if (req !== request || !HI.drawerIsOpen() || !HI.drawerExists(idDrawer)) return;
+      if (!p || !(p.entries || []).length) { HI.updateDrawer(idDrawer, '<h3>Delete originals</h3><div class="empty">No retained originals to delete</div>'); return; }
+      var count = p.entries.length;
+      var subject = count === 1 ? p.entries[0].title : count + " titles";
+      HI.updateDrawer(idDrawer, '<h3>Delete the originals for ' + esc(subject) + '?</h3><div class="archive-plan"><p>' + esc(DELETE_ORIGINALS) + '</p><ul class="seed-files">' + p.entries.map(function (e) {
         return "<li><b>" + esc(e.title) + '</b><span class="sub">' + esc(size(e.bytes)) + "</span></li>";
       }).join("") + '</ul><div class="seed-sum"><span class="sub">Total</span><strong>' + esc(size(p.bytes)) + "</strong></div>" +
         '<div class="form"><div><label for="purge-all-text">Type purge all</label><input id="purge-all-text" autocomplete="off" spellcheck="false"></div></div><div id="purge-all-message" role="status"></div>' +
-        '<div class="seed-confirm-actions"><button class="btn" id="purge-all-cancel">Cancel</button><button class="btn primary" id="purge-all-confirm" disabled>Purge all</button></div>');
+        '<div class="seed-confirm-actions"><button class="btn" id="purge-all-cancel">Cancel</button><button class="btn primary" id="purge-all-confirm" disabled>Delete originals</button></div></div>');
+      HI.fadePlan($("drawer-body").querySelector(".archive-plan"));
       $("purge-all-cancel").onclick = HI.closeDrawer;
       $("purge-all-text").oninput = function () { $("purge-all-confirm").disabled = this.value !== "purge all" || (status || {}).dryRun; };
       $("purge-all-confirm").onclick = function () {
         this.disabled = true;
         HI.send(ID, "purge-all", "POST", { apply: true, hash: p.hash, confirm: $("purge-all-text").value }).then(function (r) {
-          if (req !== request) return;
+          if (req !== request || !HI.drawerIsOpen()) return;
           r = r || {};
-          sheet('<h3>Purge all</h3><div class="note">Purged ' + esc(r.purged) + '</div><ul class="seed-results">' + (r.entries || []).filter(function (e) { return e.error; }).map(function (e) {
+          var failures = (r.entries || []).filter(function (e) { return e.error; });
+          sheet('<h3>Delete originals</h3><div class="note">Deleted originals for ' + esc(r.purged || 0) + ' of ' + count +
+            ' titles.' + (failures.length ? ' Review the failures below.' : '') + '</div><ul class="seed-results">' + failures.map(function (e) {
             return '<li><b>' + esc(e.title) + "</b> · " + esc(purgeReason(e.error)) + "</li>";
           }).join("") + "</ul>");
           pollNow();
-        }).catch(function (err) { if (!fail(err) && req === request) msg("purge-all-message", "Check status", true); });
+        }).catch(function (err) { if (!fail(err) && req === request) msg("purge-all-message", archiveWriteError(err, "delete the originals"), true); });
       };
-    }).catch(function (err) { if (!fail(err) && req === request) sheet('<h3>Purge all</h3><div class="note">Plan unavailable</div>'); });
+    }).catch(function (err) { if (!fail(err) && req === request && HI.drawerIsOpen() && HI.drawerExists(idDrawer)) HI.updateDrawer(idDrawer, '<h3>Delete originals</h3><div class="note">' + esc(PREVIEW_ERROR) + '</div>'); });
   }
 
   function ownerControl(b) {
@@ -527,7 +565,7 @@
     if (p.state === 'importing' && p.total) { word += ' ' + p.imported + '/' + p.total; pct = p.imported / p.total * 100; }
     else if ((p.state === 'downloading' || p.state === 'paused') && p.percent != null) { word += ' ' + p.percent + '%'; pct = p.percent; }
     if (p.state === 'downloading' && p.eta_seconds != null) sub = activityETA(p.eta_seconds);
-    var bar = pct != null ? '<span class="library-bar" aria-hidden="true"><i style="width:' + pct.toFixed(2) + '%"></i></span>' : p.state === 'importing' ? '<span class="library-bar busy" aria-hidden="true"><i></i></span>' : '';
+    var bar = pct != null ? '<span class="library-bar" aria-hidden="true"><i' + progressScale(pct) + '></i></span>' : p.state === 'importing' ? '<span class="library-bar busy" aria-hidden="true"><i></i></span>' : '';
     return '<div class="library-progress">' + pill(word, libActivityLevels[p.state]) + bar + (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') + '</div>';
   }
   function libraryProgressSlot(item, season) {
@@ -567,7 +605,7 @@
 
   function renderLibrary() {
     if (!library) return;
-    var html = '<div class="arc-head library-heading"><h2>Library</h2><span class="spacer"></span>' + archiveLibrarySwitch() + '</div><div class="kpis arc-kpis library-kpis"><div class="tile" id="library-total"></div><div class="tile" id="library-top"></div><div class="tile" id="library-saved"></div></div>' +
+    var html = '<div class="arc-head library-heading"><h1>Library</h1><span class="spacer"></span>' + archiveLibrarySwitch() + '</div><div class="kpis arc-kpis library-kpis"><div class="tile" id="library-total"></div><div class="tile" id="library-top"></div><div class="tile" id="library-saved"></div></div>' +
       '<div class="library-tools"><div class="library-filters" role="group" aria-label="Media type">' + ['all','radarr','sonarr'].map(function(k,i) {
         return '<button type="button" data-library-filter="' + k + '" aria-pressed="' + (libFilter === k) + '">' + ['All','Movies','TV'][i] + '</button>';
       }).join('') + '</div><div class="library-find"><input id="library-search" type="search" placeholder="Search titles…" aria-label="Search library titles" value="' + esc(libQuery) + '"><button class="btn" data-library-refresh>Refresh</button></div></div>' +
@@ -605,7 +643,7 @@
           return '<div class="arc-rel library-season"><b>' + (s.season ? 'Season ' + s.season : 'Specials') + '</b><span>' + esc(size(s.sizeBytes)) + (s.selected ? ' · <b>to archive</b>' : '') + '</span>' + '<div>' + libPill(s.archiveStatus || {status:'none'}) + libraryProgressSlot(item, s.season) + '</div>' +
             (s.season > 0 && !s.selected && !blocked ? '<button class="btn" type="button" data-library-action="' + key + '|s' + s.season + '">Archive</button>' : '<span></span>') + '</div>';
         }).join('') + '</div></td></tr>' : '');
-    }).join('') || '<tr><td colspan="7" class="empty">No matches</td></tr>';
+    }).join('') || '<tr><td colspan="7" class="empty">No titles match your filters. Clear filters to see all titles.</td></tr>';
   }
 
   function search(t) {
@@ -631,19 +669,19 @@
       // Search only seasons that were not already chosen.
       var seasons = it.kind === "radarr" ? [0] : chosen.filter(function (n) { return before.indexOf(n) < 0; });
       $("library-apply").disabled = true;
-      var tagged = false, note = "";
+      var tagged = false, searchFailed = false, note = "", marked = it.title + " marked for archive";
       var body = it.kind === "sonarr" && !untag ? { kind: it.kind, id: it.id, archive: true, fourK: fourK, seasons: chosen } : { kind: it.kind, id: it.id, archive: !untag, fourK: fourK };
-      var live = function () { return req === request && drawerOpen(); };
+      var live = function () { return req === request && HI.drawerIsOpen(); };
       HI.send(ID, "tag", "POST", body).then(function (r) {
         r = r || {};
+        if (r.error) throw new Error(r.error);
         tagged = true;
         note = untag ? "Archive tag removed." : editing ? "Seasons saved." : "Tagged.";
         if (r.searchesQueued) {
-          libNotice = untag ? "Archive tag removed" : editing ? "Seasons saved" : "Archiving " + it.title;
+          libNotice = untag ? "Archive tag removed" : editing ? "Seasons saved" : marked;
           if (live()) HI.closeDrawer();
-          var toast = document.createElement("div");
-          toast.className = "archive-toast"; toast.setAttribute("role", "status"); toast.textContent = libNotice;
-          document.body.appendChild(toast); setTimeout(function () { toast.remove(); }, 4000);
+          HI.toast(libNotice, { kind: "ok", sub: untag ? "" : "Search queued" });
+          note = "";
           pollNow();
           return;
         }
@@ -667,14 +705,19 @@
         }
         return next(0).then(function () {
           if (searched) note += " " + searched + " search request" + (searched === 1 ? "" : "s") + " accepted.";
-          if (failures.length) note += " " + failures.join(" · ");
+          searchFailed = failures.length > 0;
+          if (searchFailed) note += " " + failures.join(" · ");
           if (!seasons.length && !editing) note += " Search scheduled";
         });
       }).then(function () {
-        if (!tagged) return;
-        libNotice = libNotice || note;
-        if (note) libNotice = note.trim();
-        if (live()) sheet("<h3>" + esc(it.title) + '</h3><div class="note" role="status">' + esc(libNotice) + "</div>");
+        if (!tagged || !note) return;
+        libNotice = note.trim();
+        if (searchFailed) {
+          if (live()) sheet("<h3>" + esc(it.title) + '</h3><div class="note" role="status">' + esc(libNotice) + "</div>");
+          return;
+        }
+        if (live()) HI.closeDrawer();
+        HI.toast(untag || editing ? libNotice : marked, { kind: "ok" });
       }).catch(function (err) {
         if (fail(err)) return;
         if (live()) { msg("library-action-msg", (tagged ? "Tags were updated. " : "") + err.message, true); $("library-apply").disabled = false; }
@@ -730,7 +773,7 @@
     var links=seeding.items.filter(function (p) { return linkable(p) && !pos[p.hash]; }).slice(0, SEED_QUEUE_MAX), canLink=links.length > 0 && !q.length && !seedHolds(j);
     var moves=seeding.items.filter(function(p) { return eligible(p) && !pos[p.hash]; }).slice(0, SEED_QUEUE_MAX), canMove=moves.length > 0 && !q.length && !seedHolds(j);
     var moving=j && SEED_ACTIVE.indexOf(j.phase) >= 0 ? j.plan.hash : '';
-    morph(st.body,'<div class="arc-head"><h2>Seeding</h2><span class="spacer"></span>'+archiveLibrarySwitch()+'<button class="btn" data-seed-all'+(canLink?'':' disabled')+'>Link all ('+links.length+')</button><button class="btn" data-seed-move-all'+(canMove?'':' disabled')+'>Move all ('+moves.length+')</button>'+(q.length?'<button class="btn" data-seed-queue-cancel>Cancel queue</button>':'')+'<button class="btn" data-seed-refresh>Refresh</button></div>'+seedErrorText(j)+
+    morph(st.body,'<div class="arc-head"><h1>Seeding</h1><span class="spacer"></span>'+archiveLibrarySwitch()+'<button class="btn" data-seed-all'+(canLink?'':' disabled')+'>Queue '+links.length+' links</button><button class="btn" data-seed-move-all'+(canMove?'':' disabled')+'>Queue '+moves.length+' moves</button>'+(q.length?'<button class="btn" data-seed-queue-cancel>Cancel queue</button>':'')+'<button class="btn" data-seed-refresh>Refresh</button></div>'+seedErrorText(j)+
       (moving ? '<div class="arc-now"><b>' + esc(torrentTitle(j.plan.name)) + '</b><div class="note">' + esc(j.stopRequested ? 'Stop requested' : phaseLabel(j.phase)) + '</div>' + ownerButton('seeding/stop','Stop',{hash:moving},j.stopRequested) + '</div>' : '') +
       (q.length ? '<div class="arc-queue"><h4>' + (q.some(function(e) { return e.mode === 'move'; }) ? 'Queue' : 'Link queue') + '</h4>' + q.map(function(e,i) { return '<div class="arc-q"><span class="n">' + (i+1) + '.</span><span class="what"><b>' + esc(torrentTitle(e.name)) + '</b></span>' + ownerOrder('seeding/queue/reorder',{hash:e.hash},i,q.length) + '</div>'; }).join('') + '</div>' : '') +
       seedResults(q) +
@@ -759,9 +802,11 @@
   }
 
   // Every seeding write confirms in one sheet: run posts, ok follows success.
-  function seedSheet(headHTML, note, keep, label, run, ok, off) {
+  function seedSheet(headHTML, note, keep, label, run, ok, off, id) {
     var req = ++request;
-    sheet(headHTML + '<div id="seed-message" class="note" role="status">' + note + '</div><div class="seed-confirm-actions"><button class="btn" id="seed-cancel">' + keep + '</button><button class="btn primary" id="seed-confirm"' + (off ? " disabled" : "") + ">" + label + "</button></div>");
+    var html = headHTML + '<div id="seed-message" class="note" role="status">' + note + '</div><div class="seed-confirm-actions"><button class="btn" id="seed-cancel">' + keep + '</button><button class="btn primary" id="seed-confirm"' + (off ? " disabled" : "") + ">" + label + "</button></div>";
+    if (id == null) sheet(html);
+    else HI.updateDrawer(id, html, "Archive");
     $("seed-cancel").onclick = HI.closeDrawer;
     $("seed-confirm").onclick = function () {
       this.disabled = true;
@@ -770,51 +815,52 @@
         ok(r || {}); loadSeeding(); pollNow();
       }).catch(function (e) {
         if (fail(e) || req !== request || !$("seed-message")) return;
-        msg("seed-message", e instanceof TypeError ? "Check status" : e.message, true);
-        $("seed-confirm").disabled = false;
+        msg("seed-message", archiveWriteError(e, label.toLowerCase()), true);
+        $("seed-confirm").disabled = !e.status || e.status >= 500 || e.status === 409;
       });
     };
   }
 
   function confirmAll(allowMove) {
-    var label = allowMove ? "Move" : "Link", list = seeding.items.filter(allowMove ? eligible : linkable).slice(0, SEED_QUEUE_MAX);
+    var list = seeding.items.filter(allowMove ? eligible : linkable).slice(0, SEED_QUEUE_MAX);
     if (!list.length) return;
+    var label = "Queue " + list.length + (allowMove ? " moves" : " links");
     var freed = list.reduce(function (n, p) { return n + p.nvmeBytesFreed; }, 0), cost = list.reduce(function (n, p) { return n + (p.nasBytesCost || 0); }, 0);
-    seedSheet("<h3>" + label + ' all</h3><div class="seed-metrics"><div><span class="sub">Frees download disk</span><strong>' + esc(size(freed)) + '</strong></div><div><span class="sub">NAS cost</span><strong>' + esc(size(cost)) + "</strong></div></div>" +
+    seedSheet("<h3>" + label + '</h3><div class="seed-metrics"><div><span class="sub">Frees download disk</span><strong>' + esc(size(freed)) + '</strong></div><div><span class="sub">NAS space needed</span><strong>' + esc(size(cost)) + "</strong></div></div>" +
       '<ul class="seed-files">' + list.map(function (p) { return "<li><b>" + esc(p.name) + "</b>" + pill(p.mode === "move" ? "Move" : "Link", p.mode === "move" ? "info" : "good") + '<span class="sub">' + esc(size(p.size)) + "</span></li>"; }).join("") + "</ul>",
-      "One at a time", "Cancel", label + " " + list.length,
+      "Items are processed one at a time.", "Cancel", label,
       function () {
         var body = { items: list.map(function (p) { return { hash: p.hash, planHash: p.planHash }; }), apply: true };
         if (allowMove) body.allowMove = true;
-        return HI.send(ID, "seeding/queue", "POST", body).catch(function (e) {
-          if (!allowMove || fail(e)) throw e;
-          throw new Error(/plan changed/i.test(e.message) ? "Plan changed" : e instanceof TypeError ? "Check status" : "Move refused");
-        });
+        return HI.send(ID, "seeding/queue", "POST", body);
       },
-      function (r) { sheet("<h3>" + label + ' all</h3><div class="note">Queued ' + esc(r.queued) + "</div>"); });
+      function (r) { sheet("<h3>" + label + '</h3><div class="note">Queued ' + esc(r.queued) + "</div>"); });
   }
 
   function confirmCancelQueue() {
-    seedSheet('<h3>Cancel queue</h3><div class="seed-sum"><span class="sub">Waiting</span><strong>' + seedQueue().length + "</strong></div>",
-      "Running move continues", "Keep", "Cancel queue",
+    var count = seedQueue().length;
+    seedSheet('<h3>Cancel ' + count + (count === 1 ? ' queued item?' : ' queued items?') + '</h3>',
+      "The active move will continue.", "Keep queue", "Cancel queue",
       function () { return HI.send(ID, "seeding/queue/cancel", "POST", { apply: true }); }, HI.closeDrawer);
   }
 
   function previewSeeding(hash) {
     var req = ++request;
-    sheet('<h3>Move seeding data</h3><div class="empty">Loading…</div>');
+    var id = sheet('<h3>Move seeding data</h3><div class="empty">Loading…</div>');
     HI.send(ID, "seeding/preview", "POST", { hash: hash }).then(function (p) {
-      if (req !== request || !drawerOpen()) return;
+      if (req !== request || !HI.drawerExists(id)) return;
       var moves = (p.libraryMoves || []).map(function (m) { return "<li>" + esc(m.from) + " → " + esc(m.to) + "</li>"; }).join("");
       seedSheet('<h3 class="seed-title">' + esc(p.name) + "</h3>" + pill(p.mode === "link" ? "Link" : "Move", p.mode === "link" ? "good" : "info") +
-        '<div class="seed-metrics"><div><span class="sub">Frees download disk</span><strong>' + esc(size(p.nvmeBytesFreed)) + '</strong></div><div><span class="sub">Costs NAS</span><strong>' + esc(size(p.nasBytesCost)) + "</strong></div></div>" +
+        '<div class="seed-metrics"><div><span class="sub">Frees download disk</span><strong>' + esc(size(p.nvmeBytesFreed)) + '</strong></div><div><span class="sub">NAS space needed</span><strong>' + esc(size(p.nasBytesCost)) + "</strong></div></div>" +
         (moves ? '<h4>Move library first</h4><ul class="seed-files">' + moves + "</ul>" : "") +
         (p.originalDownloadPath ? '<div class="note" title="Left empty after completion or rollback">Download path cleared</div>' : "") +
         '<ul class="seed-files">' + (p.files || []).map(function (f) { return "<li><b>" + esc(f.relative) + '</b><span class="sub">' + esc(size(f.size)) + " · " + (f.match ? "Library match" : "Copy") + "</span></li>"; }).join("") + "</ul>",
-        p.dryRun ? "Dry-run" : "", "Cancel", "Move to NAS",
+        p.dryRun ? "Dry run" : "", "Cancel", "Move to NAS",
         function () { return HI.send(ID, "seeding/move", "POST", { hash: p.hash, planHash: p.planHash, apply: true }); },
-        function () { sheet("<h3>" + esc(p.name) + '</h3><div class="note">Queued</div>'); }, p.dryRun);
-    }).catch(function (e) { if (!fail(e) && req === request) sheet('<h3>Move seeding data</h3><div class="note">' + esc(e.message) + "</div>"); });
+        function () { sheet("<h3>" + esc(p.name) + '</h3><div class="note">Queued</div>'); }, p.dryRun, id);
+    }).catch(function (e) {
+      if (!fail(e) && req === request) HI.updateDrawer(id, '<h3>Move seeding data</h3><div class="note">' + esc(PREVIEW_ERROR) + "</div>");
+    });
   }
 
   // ------------------------------------------------------------ selection view
@@ -1040,7 +1086,7 @@
     return '<button type="button" class="arc-op' + (r.level ? ' ' + r.level : '') + (r.done ? ' done' : '') + (fading ? ' fade' : '') + '" data-key="' + esc(r.key) + '" data-arc-go="' + esc(r.key) + '"' + (r.name ? ' title="' + esc(r.name) + '"' : '') + '>' +
       '<span class="arc-op-t">' + esc(r.title) + '</span><span class="arc-op-w">' + esc(meta) + '</span>' +
       (bar ? '<span class="library-bar' + (r.pct == null ? ' busy' : '') + '" role="progressbar" aria-label="' + esc(r.title) + '" aria-valuemin="0" aria-valuemax="100"' +
-        (r.pct == null ? '' : ' aria-valuenow="' + Math.round(r.pct) + '"') + '><i style="width:' + (r.pct == null ? 35 : r.pct.toFixed(1)) + '%"></i></span>' : '') + '</button>';
+        (r.pct == null ? '' : ' aria-valuenow="' + Math.round(r.pct) + '"') + '><i' + progressScale(r.pct) + '></i></span>' : '') + '</button>';
   }
 
   function renderStrip() {
@@ -1254,7 +1300,7 @@
       root.textContent = "";
       var panel = HI.h("section", { id: "panel-archive" });
       st.tools = HI.h("div", { class: "arc-head-tools" });
-      st.strip = HI.h("section", { class: "arc-strip", "aria-label": "Activity", hidden: true });
+      st.strip = HI.h("section", { class: "arc-strip", "data-key": "archive-activity", "aria-label": "Activity", hidden: true });
       st.body = HI.h("div", { id: st.view === "library" ? "archive-library" : st.view === "seeding" ? "archive-seeding" : "archive", class: "arc-view arc-view-" + st.view });
       st.strip.id = "arc-strip";
       st.strip.innerHTML = '<div class="arc-strip-card"></div><div class="arc-live" aria-live="polite"></div>';

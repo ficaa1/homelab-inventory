@@ -82,27 +82,24 @@ func TestSelfContained(t *testing.T) {
 	}
 }
 
-// The ports view used to render a warning pill reading "yes" under a column
-// headed "Exposed" and never say what it was claiming, which made it look like
-// an unexplained scold. The definition is the feature; assert it is still
-// there and still says the thing that matters.
-func TestExposedIsExplained(t *testing.T) {
+// Explain bind scope and what determines reachability in the ports view.
+func TestBindScopeIsExplained(t *testing.T) {
 	t.Parallel()
 	page := body(t)
 	for _, want := range []string{
-		"wildcard address",
-		"0.0.0.0",
-		"loopback",
+		"Wildcard bind",
+		"listens on all interfaces",
+		"reachability depends on the network and firewall",
 	} {
 		if !strings.Contains(page, want) {
-			t.Errorf("the definition of \"exposed\" no longer mentions %q", want)
+			t.Errorf("the explanation of bind scope no longer mentions %q", want)
 		}
 	}
 	// The kernel ephemeral range is the other thing a reader cannot be
 	// expected to infer from a colour. Asserted on the concept rather than one
 	// phrasing, so trimming the prose does not fail this for the wrong reason —
 	// what must not happen is the explanation disappearing.
-	for _, want := range []string{"kernel's dynamic", "claimable"} {
+	for _, want := range []string{"kernel’s dynamic", "claimable"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the kernel ephemeral range explanation no longer mentions %q", want)
 		}
@@ -244,7 +241,7 @@ func TestAdminExplainsWhyNotificationsAreQuiet(t *testing.T) {
 	}
 	// A delivery that apprise accepted is not a delivery that arrived, and
 	// conflating them is how a wrong key looks like a working notifier.
-	if !strings.Contains(page, "apprise accepted") {
+	if !strings.Contains(page, "Apprise accepted the test. Check the destination for the message.") {
 		t.Error("the panel presents an accepted send as a delivered one")
 	}
 }

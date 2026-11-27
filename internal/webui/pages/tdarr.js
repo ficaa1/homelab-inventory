@@ -92,13 +92,13 @@
           h("b", { text: n.name || "Unknown node" }),
           h("span", { class: "sub", text: nodeState(n) }),
           h("span", { class: "spacer" }),
-          h("span", { text: num(armed(n)) + " armed" })
+          h("span", { text: num(armed(n)) + (armed(n) === 1 ? " transcode worker enabled" : " transcode workers enabled") })
         ])
       ]);
       (n.active || []).forEach(function (a) {
         var pct = typeof a.pct === "number" && isFinite(a.pct) ? Math.max(0, Math.min(100, a.pct)) : null;
         row.appendChild(h("div", { class: "tdarr-active" }, [
-          h("span", { title: a.file || "", text: base(a.file) || "Current file" }),
+          filePath(a.file),
           h("b", { text: pct == null ? "—" : Math.round(pct) + "%" })
         ]));
         if (pct != null) row.appendChild(bar(pct));
@@ -106,6 +106,14 @@
       card.appendChild(row);
     });
     return card;
+  }
+  function filePath(path) {
+    var name = h("bdi", { dir: "auto", text: base(path) || "Current file", title: path || "" });
+    if (!path || path === base(path)) return name;
+    return h("details", {}, [
+      h("summary", {}, [name]),
+      h("div", { class: "sub tdarr-path" }, [h("bdi", { dir: "auto", text: path })])
+    ]);
   }
   function metric(n, label) { return h("span", {}, [h("b", { text: num(n) }), " " + label]); }
   function bar(pct) {
@@ -171,7 +179,7 @@
     wrap.appendChild(h("div", { class: "tdarr-selection arc-title" }, [
       h("span", { id: "tdarr-total", role: "status" }),
       h("span", { class: "spacer" }),
-      h("label", { class: "library-keep", title: "Also arm the secondary worker for this batch" }, [pc, " ", h("span", { id: "tdarr-pc-label", text: st.pcLabel || "Secondary worker" })]),
+      h("label", { class: "library-keep", title: "Enable the worker for this batch" }, [pc, " ", h("span", { id: "tdarr-pc-label", text: "Enable " + (st.pcLabel || "secondary worker") + " for this batch" })]),
       h("button", { id: "tdarr-preview", class: "btn primary", type: "button", text: "Preview", onclick: preview })
     ]));
     wrap.appendChild(h("div", { id: "tdarr-rows" }));
@@ -182,7 +190,7 @@
   function renderRows() {
     var el = byId("tdarr-rows"); if (!el) return;
     clear(el);
-    var lab = byId("tdarr-pc-label"); if (lab) lab.textContent = st.pcLabel || "Secondary worker";
+    var lab = byId("tdarr-pc-label"); if (lab) lab.textContent = "Enable " + (st.pcLabel || "secondary worker") + " for this batch";
     if (!st.items) {
       if (st.libError) { el.appendChild(h("div", { class: "empty", text: "Library unavailable" })); message(st.libError); }
       else el.appendChild(skel(3));
@@ -239,23 +247,20 @@
     resolve(s).then(function (v) {
       if (v.error) throw new Error(v.error);
       if (!v.plan.paths.length) throw new Error((v.plan.files[0] || {}).skip_reason || "No eligible files");
-      if (total().count + v.plan.paths.length > LIMIT || Object.keys(st.selected).length >= LIMIT) throw new Error(LIMIT + "-file limit");
+      if (total().count + v.plan.paths.length > LIMIT || Object.keys(st.selected).length >= LIMIT) throw new Error("Select up to " + LIMIT + " files per batch. Deselect files before adding this title.");
       st.selected[k] = { selection: s, plan: v.plan };
     }).catch(function (e) { message(r.entry.title + ": " + e.message); }).then(function () { st.busy = false; if (live) renderRows(); });
   }
 
   // ------------------------------------------------------------ drawers
 
-  function drawer(label, kids) {
-    HI().openDrawer('<div class="tdarr-drawer"></div>', label);
-    var box = document.querySelector("#drawer-body .tdarr-drawer");
-    kids.forEach(function (c) { if (c) box.appendChild(c); });
+  function drawer(label, kids, id) {
+    var box = h("div", { class: "tdarr-drawer" }, kids);
+    if (id == null) HI().openDrawer(box, label);
+    else HI().updateDrawer(id, box, label);
     return box;
   }
-  function drawerOpen(box) {
-    var d = document.getElementById("drawer");
-    return !!box && box.isConnected && !!d && !d.classList.contains("hidden") && !d.motionOut;
-  }
+  function drawerOpen(box) { return !!box && box.isConnected && HI().drawerIsOpen(); }
 
   function seasons(k) {
     if (locked()) return;
@@ -266,6 +271,7 @@
     var save = h("button", { id: "tdarr-season-add", class: "btn primary", type: "button", text: "Save", disabled: true, onclick: function () {
       if (draft) st.selected[k] = draft; else delete st.selected[k];
       HI().closeDrawer(); renderRows();
+      HI().toast(draft ? "Season selection saved" : "Season selection cleared", { kind: "ok" });
     } });
     var boxes = (i.seasons || []).map(function (s) {
       var c = h("input", { type: "checkbox", name: "tdarr-season", value: String(s.season), checked: !!chosen && chosen.selection.seasons.indexOf(s.season) >= 0, onchange: inspect });
@@ -289,7 +295,10 @@
       resolve(s).then(function (v) {
         if (epoch !== st.epoch || run !== seq) return;
         var count = total(k).count + v.plan.paths.length;
-        msg.textContent = count + "/" + LIMIT + " files · " + lb(v.plan.total_bytes) + (v.error ? " · " + v.error : "");
+        var excess = count - LIMIT;
+        msg.textContent = excess > 0 ?
+          "Select up to " + LIMIT + " files per batch. Deselect " + excess + (excess === 1 ? " file" : " files") + " to continue." :
+          count + "/" + LIMIT + " files · " + lb(v.plan.total_bytes) + (v.error ? " · " + v.error : "");
         draft = { selection: s, plan: v.plan };
         save.disabled = !!v.error || !v.plan.paths.length || count > LIMIT || (!chosen && Object.keys(st.selected).length >= LIMIT);
       }).catch(function (e) { if (epoch === st.epoch && run === seq) msg.textContent = e.message; });
@@ -318,29 +327,33 @@
     if (locked() || !total().count) return;
     var epoch = ++st.epoch;
     busy(true);
-    var box = drawer("Tdarr batch review", [h("h3", { text: "Tdarr" }), skel(2)]);
+    var label = "Tdarr batch review";
+    var id = HI().openDrawer(h("div", { class: "tdarr-drawer" }, [h("h3", { text: "Tdarr" }), skel(2)]), label);
     var body = { selection: Object.keys(st.selected).map(function (k) { return st.selected[k].selection; }), withPc: st.pc };
     HI().send(ID, "batch/preview", "POST", body).then(function (v) {
-      if (epoch !== st.epoch || !drawerOpen(box)) return;
+      if (epoch !== st.epoch || !HI().drawerExists(id)) return;
       if (!v || !v.plan) throw new Error((v && v.error) || "Preview unavailable");
-      review(v, epoch);
+      review(v, epoch, id);
     }).catch(function (e) {
-      if (epoch !== st.epoch) return;
+      if (epoch !== st.epoch || !HI().drawerExists(id)) return;
       if (e.canceled) { HI().closeDrawer(); return; }
-      drawer("Tdarr batch review", [h("h3", { text: "Preview unavailable" }), h("div", { class: "note", text: e.message })]);
+      drawer(label, [h("h3", { text: "Could not load the Tdarr preview" }), h("div", { class: "note", text: "Close this sheet and open the preview again." })], id);
     }).then(function () { busy(false); });
   }
 
-  function review(v, epoch) {
-    var n = v.plan.paths.length, ok = !!v.hash && !!v.confirmation_token && !v.error && n > 0 && n <= LIMIT;
-    var msg = h("div", { id: "tdarr-confirm-msg", class: "note", role: "status", text: v.error || (waiting() ? "Tdarr already has " + waiting() + " queued or active; the server refuses a batch until that queue is empty." : "") });
-    var queue = h("button", { id: "tdarr-queue", class: "btn primary", type: "button", text: "Queue", disabled: !ok, onclick: run });
+  function review(v, epoch, id) {
+    var n = v.plan.paths.length, queued = waiting(), ok = !queued && !!v.hash && !!v.confirmation_token && !v.error && n > 0 && n <= LIMIT;
+    var msg = h("div", { id: "tdarr-confirm-msg", class: "note", role: "status", text: queued ? "Tdarr has " + queued + (queued === 1 ? " queued or active file." : " queued or active files.") + " Wait for the queue to empty, then preview the batch again." : v.error || "" });
+    var queue = h("button", { id: "tdarr-queue", class: "btn primary", type: "button", text: n === 1 ? "Queue 1 file" : "Queue " + n + " files", disabled: !ok, onclick: run });
     var box = drawer("Tdarr batch review", [
-      h("div", { class: "arc-eyebrow", text: "TDARR · " + (st.pcLabel || "Secondary").toUpperCase() + (v.plan.withPc ? " ON" : " OFF") }),
+      h("div", { class: "arc-eyebrow", text: "Tdarr · " + (st.pcLabel || "Secondary") + (v.plan.withPc ? " on" : " off") }),
       h("h3", { text: n + (n === 1 ? " file · " : " files · ") + lb(v.plan.total_bytes) }),
-      fileList(v.plan), msg,
-      h("div", { class: "actions" }, [h("button", { id: "tdarr-cancel", class: "btn", type: "button", text: "Cancel", onclick: HI().closeDrawer }), queue])
-    ]);
+      h("div", { class: "tdarr-plan" }, [
+        fileList(v.plan), msg,
+        h("div", { class: "actions" }, [h("button", { id: "tdarr-cancel", class: "btn", type: "button", text: "Cancel", onclick: HI().closeDrawer }), queue])
+      ])
+    ], id);
+    HI().fadePlan(box.querySelector(".tdarr-plan"));
     function expired() { var t = Date.parse(v.expires_at); return !isFinite(t) || Date.now() >= t; }
     function again(text) {
       clearTimeout(st.expiry); msg.textContent = text;
@@ -355,7 +368,12 @@
       clearTimeout(st.expiry); busy(true);
       queue.disabled = true; queue.textContent = "Queueing…";
       HI().send(ID, "batch/execute", "POST", { plan: v.plan, hash: v.hash, confirmation_token: v.confirmation_token, confirm: true }).then(function (r) {
+        if (!r || r.status !== "queued" || !(r.queued_files > 0)) {
+          st.unknown = true; st.notice = "Outcome unknown · inspect the sidecar and Tdarr before another batch";
+          return;
+        }
         st.selected = {}; st.notice = "Queued · " + num(r.queued_files) + " files";
+        return r.queued_files;
       }, function (e) {
         if (e.canceled) { st.notice = ""; return "canceled"; }
         if (e.status === 409) return "again";
@@ -366,7 +384,10 @@
         st.busy = false;
         if (outcome === "canceled") { queue.disabled = false; queue.textContent = "Queue"; return; }
         if (outcome === "again") { if (epoch === st.epoch && drawerOpen(box)) again("Plan changed or expired"); return; }
-        if (epoch === st.epoch) drawer("Tdarr batch", [h("h3", { text: st.notice }),
+        if (outcome > 0) {
+          if (epoch === st.epoch && drawerOpen(box)) HI().closeDrawer();
+          HI().toast(num(outcome) + (outcome === 1 ? " file queued in Tdarr" : " files queued in Tdarr"), { kind: "ok" });
+        } else if (epoch === st.epoch && drawerOpen(box)) drawer("Tdarr batch", [h("h3", { text: st.notice }),
           h("div", { class: "actions" }, [h("button", { id: "tdarr-result-close", class: "btn", type: "button", text: "Close", onclick: HI().closeDrawer })])]);
         if (live) { render(); loadStatus(); }
       });
@@ -405,14 +426,14 @@
     var q = st.candQuery.trim().toLowerCase();
     var rows = st.cands.filter(function (c) { return c.path.toLowerCase().indexOf(q) >= 0; });
     var save = rows.reduce(function (t, c) { return t + (c.est_save_gb || 0); }, 0);
-    el.appendChild(h("h3", {}, ["Worth compressing", h("span", { class: "n", text: rows.length + " files · ≈" + gb(save) + " back" })]));
-    if (!rows.length) el.appendChild(h("div", { class: "pv-empty", text: q ? "No files match." : "Nothing worth compressing." }));
+    el.appendChild(h("h3", {}, ["Compression candidates", h("span", { class: "n", text: rows.length + " files · Estimated savings " + gb(save) })]));
+    if (!rows.length) el.appendChild(h("div", { class: "pv-empty", text: q ? "No files match your filters. Clear filters to see all files." : "No compression candidates" }));
     var max = Math.max.apply(null, [1].concat(rows.map(function (c) { return c.est_save_gb || 0; })));
     rows.forEach(function (c) {
       var k = KIND[c.kind] || [c.kind, "info"], dir = c.path.split("/").slice(-2, -1)[0] || "";
       el.appendChild(h("div", { class: "tdarr-cand" }, [
         h("div", { class: "tdarr-name" }, [
-          h("span", { class: "tdarr-line" }, [h("b", { title: c.path, text: base(c.path) }), HI().pill(k[0], k[1])]),
+          h("span", { class: "tdarr-line" }, [filePath(c.path), HI().pill(k[0], k[1])]),
           h("span", { class: "sub", text: [dir, c.codec, c.resolution, c.reason].filter(Boolean).join(" · ") })
         ]),
         h("div", { class: "tdarr-size" }, [h("strong", { text: "≈" + gb(c.est_save_gb) }), bar((c.est_save_gb || 0) / max * 100)]),
