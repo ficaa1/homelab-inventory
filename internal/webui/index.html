@@ -2259,7 +2259,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
               <th>Owner</th>
               <th class="c-kind"><span class="why" id="why-kind">Kind</span></th>
               <th class="c-bind">Bind</th>
-              <th><span class="why" id="why-exposed">Exposed</span></th>
+              <th><span class="why" id="why-exposed">Bind scope</span></th>
             </tr></thead>
             <tbody id="ports"></tbody>
           </table></div>
@@ -2425,13 +2425,13 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   // ------------------------------------------------------------ definitions
   //
   // The ports view used to show a warning pill reading "yes" under a column
-  // headed "Exposed" and never say what it was claiming. These are the words
+  // headed "Bind scope" without saying what it claims. These are the words
   // for it, used by the legend, the column tooltips and the detail drawer, so
   // there is exactly one definition rather than three.
 
   var DEFS = {
     exposed:
-      "Bound to a wildcard address (0.0.0.0 or ::), not loopback: reachable from the network unless a firewall blocks it.",
+      "A wildcard bind listens on all interfaces for that address family. Actual reachability depends on the network and firewall.",
     ephemeral:
       "In the kernel's dynamic range for outbound connections; not safely claimable.",
     kind: {
@@ -3192,6 +3192,25 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     return target;
   }
 
+  function portBindLabel(p) {
+    if (p.exposed) return "Wildcard bind";
+    var addresses = p.addresses || [];
+    if (!addresses.length) return "Unknown";
+    return addresses.every(function (address) {
+      var ip = address.split("%")[0].replace(/^\[|\]$/g, "");
+      if (ip.indexOf(":") < 0) {
+        var parts = ip.split(".");
+        return parts.length === 4 && parts[0] === "127" && parts.every(function (part) {
+          return /^\d{1,3}$/.test(part) && Number(part) <= 255;
+        });
+      }
+      try {
+        var canonical = new URL("http://[" + ip + "]/").hostname;
+        return canonical === "[::1]" || /^\[::ffff:7f[0-9a-f]{2}:[0-9a-f]{1,4}\]$/.test(canonical);
+      } catch (_) { return false; }
+    }) ? "Loopback only" : "Specific address";
+  }
+
   function renderPortsTable() {
     var pm = data.ports;
     if (!pm) return;
@@ -3231,8 +3250,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         "<td class='c-bind'><code>" + esc(binds || "—") + "</code></td>" +
         "<td>" + (p.exposed
           ? '<span class="pill warning" title="' + esc(DEFS.exposed) + '"><span class="glyph" aria-hidden="true">' +
-            GLYPH.warning + "</span>wildcard</span>"
-          : '<span class="pill" title="Loopback-only: reachable from this machine and nowhere else.">loopback</span>') +
+            GLYPH.warning + "</span>" + portBindLabel(p) + "</span>"
+          : '<span class="pill">' + portBindLabel(p) + "</span>") +
         "</td></tr>";
     }).join("");
     prepareListTable($("ports").closest("table"));
@@ -3422,8 +3441,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       var posture = h.inbound_posture;
       var label = posture === "default-allow" ? "Unfiltered" : posture === "default-deny" ? "Default deny" : "Unreadable";
       var detail = (h.inbound_summary || "") + (posture === "default-allow"
-        ? " Exposed listeners accept inbound traffic unless another network filter blocks it."
-        : posture === "default-deny" ? " Exposed ports need an allow rule to be reachable." : "");
+        ? " Wildcard binds may accept inbound traffic unless another network filter blocks it."
+        : posture === "default-deny" ? " Inbound traffic needs an allow rule." : "");
       fwBanner = '<div class="banner' + (posture === "default-deny" ? "" : " warn") + '">' +
         detailBand(ic("shield") + '<b>' + label + '</b> <span class="lab">' + esc(hostName) + '</span>', detail, 'firewall:' + hostName) +
         (posture === "default-allow" ? '<div class="row"><button class="btn" type="button" data-fwplan="' + esc(hostName) + '">Ruleset</button></div>' : "") + '</div>';
@@ -5097,7 +5116,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           return '<div class="row"><span class="k">' + esc(p.protocol) + "</span> " +
             esc(p.owner || p.process || "unattributed") +
             (p.compose_project ? ' <span class="k">(' + esc(p.compose_project) + ")</span>" : "") +
-            (p.exposed ? ' <span class="k">· exposed</span>' : ' <span class="k">· loopback</span>') +
+            ' <span class="k">· ' + portBindLabel(p) + "</span>" +
             "</div>";
         }).join("") +
         "";
@@ -5112,7 +5131,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     }
     return '<div class="head">' + Math.max(1, lo) + "–" + hi + "</div>" +
       '<div class="row">' + used + " of " + (hi - lo + 1) + " ports used" +
-      (exposed ? ", " + exposed + " exposed" : "") + "</div>" +
+      (exposed ? ", " + exposed + " with wildcard binds" : "") + "</div>" +
       (ephem ? '<div class="row"><span class="k">ephemeral range</span></div>' : "") +
       (names.length ? '<div class="row">' + esc(names.join(", ")) + "</div>" : "") +
       "";
@@ -5657,13 +5676,12 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         row("Compose service", p.compose_service) +
         row("Container id", p.container_id) +
         row("Container port", p.container_port ? String(p.container_port) : "") +
-        row("Bound to", (p.addresses || []).join(", ")) +
+        row("Bind address", (p.addresses || []).join(", ")) +
         row("Zones", (p.zones || []).join(", ")) +
         row("Sockets collapsed", String(p.sockets)) +
-        row("Reachable", p.exposed ? "off-machine (wildcard bind)" : "loopback only") +
+        row("Bind scope", portBindLabel(p)) +
         "</dl>";
-      html += '<div class="note"><b>' + (p.exposed ? "Exposed" : "Not exposed") + ".</b> " +
-        esc(DEFS.exposed) + "</div>";
+      if (p.exposed) html += '<div class="note">' + esc(DEFS.exposed) + "</div>";
       if (p.kind && DEFS.kind[p.kind]) {
         html += '<div class="note"><b>Kind: ' + esc(p.kind) + ".</b> " + esc(DEFS.kind[p.kind]) + "</div>";
       }
@@ -5834,14 +5852,13 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
 
   function openDefDrawer(key) {
-    var titles = { exposed: "Exposed", ephemeral: "Kernel ephemeral range" };
+    var titles = { exposed: "Bind scope", ephemeral: "Kernel ephemeral range" };
     openDrawer("<h3>" + esc(titles[key] || key) + "</h3>" +
       '<div class="note" style="border:0;padding-top:8px">' + esc(DEFS[key]) + "</div>" +
       (key === "exposed"
         ? '<div class="note"><b>Source.</b> Recorded per socket from the bind address, ' +
           "not inferred.</div>"
-        : '<div class="note"><b>Why flagged.</b> <code>portmap -free</code> will not suggest ' +
-          "ports here are excluded from free suggestions.</div>"));
+        : '<div class="note">The kernel reserves this range for dynamic ports. Free-port suggestions skip it.</div>'));
   }
 
   // ------------------------------------------------------------ admin

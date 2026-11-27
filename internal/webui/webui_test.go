@@ -82,20 +82,17 @@ func TestSelfContained(t *testing.T) {
 	}
 }
 
-// The ports view used to render a warning pill reading "yes" under a column
-// headed "Exposed" and never say what it was claiming, which made it look like
-// an unexplained scold. The definition is the feature; assert it is still
-// there and still says the thing that matters.
-func TestExposedIsExplained(t *testing.T) {
+// Explain bind scope and what determines reachability in the ports view.
+func TestBindScopeIsExplained(t *testing.T) {
 	t.Parallel()
 	page := body(t)
 	for _, want := range []string{
-		"wildcard address",
-		"0.0.0.0",
-		"loopback",
+		"Wildcard bind",
+		"listens on all interfaces",
+		"reachability depends on the network and firewall",
 	} {
 		if !strings.Contains(page, want) {
-			t.Errorf("the definition of \"exposed\" no longer mentions %q", want)
+			t.Errorf("the explanation of bind scope no longer mentions %q", want)
 		}
 	}
 	// The kernel ephemeral range is the other thing a reader cannot be
