@@ -129,6 +129,9 @@
 /* Per-severity counts in a fixed grid so columns line up row to row */
 :is(.cve, .cve-drawer) .cve-counts { display: inline-grid; grid-template-columns: repeat(4, 4.4em); gap: 3px; font-size: var(--fs-sm); font-weight: 600; font-variant-numeric: tabular-nums; }
 :is(.cve, .cve-drawer) .cve-counts span { text-align: right; padding: 1px 5px; white-space: nowrap; border-radius: var(--r-sm); }
+.cve .cve-count-label { display: none; }
+.cve-drawer .cve-counts { display: inline-flex; flex-wrap: wrap; }
+.cve-count-label { font-size: inherit; }
 :is(.cve, .cve-drawer) .cve-counts .s-critical { color: var(--sev-critical); background: var(--sev-critical-soft); }
 :is(.cve, .cve-drawer) .cve-counts .s-high { color: var(--sev-high); background: var(--sev-high-soft); }
 :is(.cve, .cve-drawer) .cve-counts .s-medium { color: var(--sev-medium); background: var(--sev-medium-soft); }
@@ -245,13 +248,15 @@
   .cve .cve-vulns .c-exp .cve-exploit { flex-direction: row; align-items: center; gap: 10px; }
   .cve .cve-vulns .c-age { display: none; }
   .cve .cve-summary-text { -webkit-line-clamp: 2; }
+  .cve .cve-counts { display: inline-flex; flex-wrap: wrap; }
+  .cve .cve-count-label { display: inline; }
+  .cve .cve-hosts .c-counts { grid-column: 1 / -1; }
   .cve .cve-pkgs .c-name { grid-column: 1; }
   .cve .cve-pkgs .c-aff { grid-column: 2; grid-row: 1; text-align: right; }
   .cve .cve-pkgs .c-counts, .cve .cve-pkgs .c-up { grid-column: 1 / -1; }
   .cve .cve-pkgs .c-ver, .cve .cve-pkgs .c-exp:has(.sub:only-child) { display: none; }
   .cve .cve-hosts .c-asset { grid-column: 1 / -1; min-width: 0; }
-  .cve .cve-hosts .c-counts { grid-column: 1; }
-  .cve .cve-hosts .c-exp { grid-column: 2; grid-row: 2; }
+  .cve .cve-hosts .c-exp { grid-column: 1 / -1; }
   .cve .cve-hosts .c-fixn, .cve .cve-hosts .c-pk, .cve .cve-hosts .c-age { display: none; }
   .cve .cve-setrow { padding-left: 30px !important; }
   .cve .cve-setrow .c-asset { padding-left: 0; }

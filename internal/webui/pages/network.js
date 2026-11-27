@@ -201,12 +201,12 @@
     var handshakeTone = tone;
     var statusTone = {up: "ok", healthy: "ok", ok: "ok", down: "crit", cutoff: "crit", unhealthy: "crit", degraded: "warn", reconnecting: "warn", unknown: "", unavailable: ""};
     if (v.status) tone = statusTone[v.status] || "";
-    var dot = h("span", { class: "net-dot " + (stale ? "" : tone), title: v.status ? state(v.status) : !d ? "No data" : !d.interfaceUp ? "Interface down" : hs == null ? "No handshake" : hs <= 180 ? "Up" : "Handshake stale" });
-    var chips = [];
-    if (v.status) chips.push(chip(state(v.status), stale ? "" : tone, v.reason || "VPN status"));
+    var status = v.status ? state(v.status) : !d ? "No data" : !d.interfaceUp ? "Interface down" : hs == null ? "No handshake" : hs <= 180 ? "Up" : "Handshake stale";
+    var dot = h("span", { class: "net-dot " + (stale ? "" : tone), "aria-hidden": "true" });
+    var chips = [chip(status, stale ? "" : tone, v.reason || "VPN status")];
     if (many) chips.push(chip(v.host, "", "Host"));
     if (d && d.interfaceUp) { if (hs != null) chips.push(chip(age(hs), stale ? "" : handshakeTone, "Handshake", "refresh")); }
-    else if (d) chips.push(chip("down", stale ? "" : "crit", "Interface"));
+    else if (d && v.status) chips.push(chip("Interface down", stale ? "" : "crit", "Interface"));
     if (v.live) chips.push(chip("Live", "", "API tunnel checks"));
     if (inventoryStale) chips.push(ageChip(vpnAge));
     var flow = h("span", { class: "net-flow" });

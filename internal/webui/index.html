@@ -65,6 +65,8 @@
   /* Sequential ramp for "how much of this port range is taken": the accent's hue. */
   --heat-1: #18324a; --heat-2: #1f4c74; --heat-3: #2f6fa6; --heat-4: #5aa2e6; --heat-5: #a9d3ff;
   --heat-solid: #5aa2e6;
+  --heat-ink-light: #ffffff; --heat-ink-dark: #121314;
+  --heat-ink-low: var(--heat-ink-light); --heat-ink-high: var(--heat-ink-dark);
   --shine: rgba(255,255,255,0.06);
 
   /* Categorical slots, only to tint a launcher tile's lettered placeholder. */
@@ -108,6 +110,7 @@
     --shadow-light: rgba(0,0,0,.10);
     --heat-1: #dbe9fb; --heat-2: #b2d1f6; --heat-3: #7aaeeb; --heat-4: #3f84d6; --heat-5: #1a56a6;
     --heat-solid: #3f84d6;
+    --heat-ink-low: var(--heat-ink-dark);
     --shine: rgba(255,255,255,0.75);
     --cat-1: rgba(22,99,199,0.12); --cat-2: rgba(210,100,40,0.13); --cat-3: rgba(21,127,74,0.13);
     --cat-4: rgba(190,130,0,0.14); --cat-5: rgba(200,80,130,0.12); --cat-6: rgba(60,140,40,0.13);
@@ -132,6 +135,7 @@
   --shadow-light: rgba(0,0,0,.10);
   --heat-1: #dbe9fb; --heat-2: #b2d1f6; --heat-3: #7aaeeb; --heat-4: #3f84d6; --heat-5: #1a56a6;
   --heat-solid: #3f84d6;
+  --heat-ink-low: var(--heat-ink-dark);
   --shine: rgba(255,255,255,0.75);
   --cat-1: rgba(22,99,199,0.12); --cat-2: rgba(210,100,40,0.13); --cat-3: rgba(21,127,74,0.13);
   --cat-4: rgba(190,130,0,0.14); --cat-5: rgba(200,80,130,0.12); --cat-6: rgba(60,140,40,0.13);
@@ -249,7 +253,7 @@ code {
 .tab .count:empty { display: none; }
 .tab .count.hot, .tab .count.warm {
   min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--r-sm);
-  display: inline-grid; place-items: center; font-weight: 600; line-height: 1;
+  display: inline-flex; align-items: center; gap: 3px; font-weight: 600; line-height: 1;
 }
 .tab .count.hot { color: var(--crit); background: var(--crit-soft); }
 .tab .count.warm { color: var(--warn); background: var(--warn-soft); }
@@ -777,13 +781,20 @@ pre.code {
 .cell.d1 { background: var(--heat-1); } .cell.d2 { background: var(--heat-2); } .cell.d3 { background: var(--heat-3); }
 .cell.d4 { background: var(--heat-4); } .cell.d5 { background: var(--heat-5); }
 .cell.used { background: var(--heat-solid); }
-.cell.exposed { background: var(--warn); box-shadow: inset 0 0 0 2px var(--surface); }
+.cell.exposed { background: var(--warn); color: var(--status-ink); }
+.cell:is(.d1, .d2, .d3) { color: var(--heat-ink-low); }
+.cell:is(.d4, .used) { color: var(--heat-ink-dark); }
+.cell.d5 { color: var(--heat-ink-high); }
+:root[data-theme="light"] { --heat-ink-high: var(--heat-ink-light); }
+@media (prefers-color-scheme: light) {
+  :root:where(:not([data-theme="dark"])) { --heat-ink-high: var(--heat-ink-light); }
+}
+.cell:is(.exposed, .has-exposed), .legend .swatch.exposed { box-shadow: inset 0 0 0 1.5px currentColor; }
 .cell.ephem {
   background-color: var(--track);
   background-image: repeating-linear-gradient(45deg, transparent, transparent 2px, var(--text-3) 2px, var(--text-3) 3px);
   opacity: 0.6;
 }
-.cell.has-exposed::after { content: ""; position: absolute; left: 1px; right: 1px; bottom: 1px; height: 2px; border-radius: 1px; background: var(--warn); }
 .cell:focus-visible, .cell:focus { outline: 2px solid var(--text); outline-offset: 1px; z-index: 2; }
 @media (hover: hover) and (pointer: fine) {
   .cell:hover { outline: 2px solid var(--text); outline-offset: 1px; z-index: 2; }
@@ -792,12 +803,16 @@ pre.code {
 .legend .item { display: inline-flex; align-items: center; gap: 6px; }
 .legend .swatch { width: 11px; height: 11px; border-radius: 2px; flex: none; background: var(--track); }
 .legend .swatch.used { background: var(--heat-solid); }
-.legend .swatch.exposed { background: var(--warn); box-shadow: inset 0 0 0 2px var(--surface); }
+.legend .swatch.exposed { background: var(--warn); color: var(--status-ink); }
 .legend .swatch.ephem { background-color: var(--track); background-image: repeating-linear-gradient(45deg, transparent, transparent 2px, var(--text-3) 2px, var(--text-3) 3px); }
 .legend .ramp { display: inline-flex; gap: 1px; }
 .legend .ramp i { width: 9px; height: 11px; display: block; }
 .legend .ramp i:nth-child(1) { background: var(--heat-2); } .legend .ramp i:nth-child(2) { background: var(--heat-3); }
 .legend .ramp i:nth-child(3) { background: var(--heat-4); } .legend .ramp i:nth-child(4) { background: var(--heat-5); }
+.grid-ranges { font-size: var(--fs-xs); color: var(--text-3); margin-top: var(--s2); }
+.grid-ranges summary { cursor: pointer; }
+.grid-ranges ul { columns: 3 220px; padding-inline-start: var(--s4); }
+.cell-value { display: none; }
 .freebar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0; font-size: var(--fs-xs); color: var(--text-3); }
 .freebar .lab { color: var(--text-3); }
 .freebar .lab b { color: var(--text); }
@@ -812,7 +827,9 @@ pre.code {
 }
 @media (max-width: 640px) {
   .gridwrap { padding: 10px; }
-  .cell { height: 8px; border-radius: 1px; }
+  .cell { height: 28px; border-radius: 2px; font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+  .cell-value { display: inline; }
+  .grid-ranges { display: none; }
   .cells { gap: 1px; }
   .grid { gap: 1px 5px; }
   .rowlab { font-size: 8.5px; }
@@ -2683,7 +2700,11 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       chip("", "runs", ic("disk", "sm"), runs.toLocaleString(), "runs", "Inventory runs stored" + (runsSub ? " · " + runsSub : ""));
 
     var ca = $("c-alerts");
+    var severity = c.critical ? "critical" : c.warning ? "warning" : "info";
+    var total = (a.alerts || []).length;
     ca.className = "count" + (c.critical ? " hot" : c.warning ? " warm" : "");
+    ca.innerHTML = total ? '<span aria-hidden="true">' + GLYPH[severity] + "</span>" + total : "";
+    ca.parentNode.setAttribute("aria-label", total ? "Alerts, " + total + " total, highest active severity " + (c.critical || c.warning || c.info ? severity : "none") : "Alerts");
 
     var lead = c.critical > 0
       ? '<div class="value crit">' + c.critical + "</div>"
@@ -2914,8 +2935,6 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       if (!q) return true;
       return (a.host + " " + a.rule + " " + a.message + " " + (a.subject || "")).toLowerCase().indexOf(q) >= 0;
     });
-
-    $("c-alerts").textContent = (rep.alerts || []).length;
 
     // Silenced alerts are shown, but out of the way: they are things you have
     // already decided about, and mixing them back into the live list would undo
@@ -3320,7 +3339,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     // Cells.
     var rowsPerGrid = Math.ceil(lvl.span / bucket / cols);
     var portsPerRow = bucket * cols;
-    var html = '<div class="grid">';
+    var html = '<div class="grid">', occupied = [], tabbable = false;
     for (var r = 0; r < rowsPerGrid; r++) {
       var rowLo = lo + r * portsPerRow;
       html += '<span class="rowlab">' + rowLo + '</span><div class="cells" style="grid-template-columns:repeat(' + cols + ',minmax(0,1fr))">';
@@ -3337,15 +3356,15 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
             if (entries.some(function (e) { return e.exposed; })) exposed++;
           }
         }
-        var cls = "cell", label;
+        var cls = "cell", range;
         if (na === bucket) {
           cls += " na";
-          label = "not a port";
+          range = String(a);
         } else if (bucket === 1) {
           if (used) { cls += exposed ? " exposed" : " used"; }
           else if (ephem) { cls += " ephem"; }
           else { cls += " free"; }
-          label = String(a);
+          range = String(a);
         } else {
           if (used) {
             cls += " d" + density(used, bucket - na);
@@ -3355,12 +3374,21 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           } else {
             cls += " free";
           }
-          label = a + "–" + b;
+          range = Math.max(1, a) + "–" + b;
         }
-        html += '<button type="button" class="' + cls + '" tabindex="-1"' +
+        var size = b - a + 1 - na;
+        var label = size ? range + " · " + used + " of " + size + " used" +
+          (exposed ? " · " + exposed + " wildcard " + (exposed === 1 ? "bind" : "binds") : "") +
+          (ephem ? " · " + ephem + " in the ephemeral range" : "") +
+          (!used && !ephem ? " · Free" : "") : range + " · Reserved";
+        if (used) occupied.push("<li>" + esc(label) + "</li>");
+        var tab = size > 0 && !tabbable;
+        if (tab) tabbable = true;
+        html += '<button type="button" class="' + cls + '" tabindex="' + (tab ? "0" : "-1") + '"' +
           ' data-lo="' + a + '" data-hi="' + b + '" data-used="' + used +
           '" data-exposed="' + exposed + '" data-ephem="' + ephem +
-          '" aria-label="' + esc(label) + '"></button>';
+          '" aria-label="' + esc(label) + '" title="' + esc(label) + '">' +
+          (used ? '<span class="cell-value" aria-hidden="true">' + used + (exposed ? "!" : "") + "</span>" : "") + "</button>";
       }
       html += "</div>";
     }
@@ -3376,21 +3404,15 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         }).join("") + "</div>"
       : '<div class="freebar"><span class="lab">no free ports</span></div>';
 
-    var legend = bucket === 1
-      ? '<div class="legend">' +
-          '<span class="item"><span class="swatch"></span>free</span>' +
-          '<span class="item"><span class="swatch used"></span>in use</span>' +
-          '<span class="item why" data-def="exposed" title="' + esc(DEFS.exposed) + '"><span class="swatch exposed"></span>exposed</span>' +
-          '<span class="item why" data-def="ephemeral" title="' + esc(DEFS.ephemeral) + '"><span class="swatch ephem"></span>ephemeral</span>' +
-        "</div>"
-      : '<div class="legend">' +
-          '<span class="item"><span class="swatch"></span>none used</span>' +
-          '<span class="item"><span class="ramp"><i></i><i></i><i></i><i></i></span>1 → ' + bucket + " used</span>" +
-          '<span class="item"><span class="swatch" style="background:var(--heat-3);position:relative">' +
-            '<span style="position:absolute;left:1px;right:1px;bottom:1px;height:2px;background:var(--warning)"></span>' +
-            '</span><span class="why" data-def="exposed" title="' + esc(DEFS.exposed) + '">exposed</span></span>' +
-          '<span class="item why" data-def="ephemeral" title="' + esc(DEFS.ephemeral) + '"><span class="swatch ephem"></span>ephemeral</span>' +
-        "</div>";
+    var legend = '<div class="legend">' +
+      '<span class="item"><span class="swatch" aria-hidden="true"></span>Free</span>' +
+      '<span class="item"><span class="swatch used" aria-hidden="true"></span>' +
+        (bucket === 1 ? "In use" : "Count of ports in use") + '</span>' +
+      '<span class="item"><span class="swatch exposed" aria-hidden="true"></span>Ring or ! · Wildcard bind</span>' +
+      '<span class="item"><span class="swatch ephem" aria-hidden="true"></span>Hatching · Ephemeral range</span>' +
+      "</div>";
+    var ranges = occupied.length ? '<details class="grid-ranges"><summary>Occupied port ranges</summary><ul>' +
+      occupied.join("") + "</ul></details>" : "";
 
     // The firewall verdict belongs here, above the ports, because "exposed" is
     // only half an answer without it: the flag says what the process asked
@@ -3407,8 +3429,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         (posture === "default-allow" ? '<div class="row"><button class="btn" type="button" data-fwplan="' + esc(hostName) + '">Ruleset</button></div>' : "") + '</div>';
     }
 
-    el.innerHTML = fwBanner + '<div class="gridwrap" data-grid="' + esc(hostName) + '">' +
-      '<div class="crumbs">' + crumbs + "</div>" + html + legend + free + "</div>";
+    el.innerHTML = fwBanner + '<div class="gridwrap" data-grid="' + esc(hostName) + '" data-cols="' + cols + '">' +
+      '<div class="crumbs">' + crumbs + "</div>" + html + legend + ranges + free + "</div>";
   }
 
   var gridViewportWidth = window.innerWidth;
@@ -6931,14 +6953,13 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   function chartModel(b) {
     var raw = items(b, "series").slice(0, 8), toned = {};
     raw.forEach(function (s) { if (tone(s.tone)) toned[tone(s.tone)] = 1; });
-    var spare = toned.info ? ["text", "accent"] : ["accent", "text"], uses = {}, n = 0;
-    var series = raw.map(function (s) {
+    var spare = toned.info ? ["text", "accent"] : ["accent", "text"], n = 0;
+    var series = raw.map(function (s, i) {
       var pts = (Array.isArray(s.points) ? s.points : []).filter(function (p) {
         return Array.isArray(p) && typeof p[0] === "number" && isFinite(p[0]) && (p[1] === null || (typeof p[1] === "number" && isFinite(p[1])));
       }).slice(0, 500).sort(function (a, c) { return a[0] - c[0]; });
       var key = tone(s.tone) || spare[n++ % spare.length];
-      var k = uses[key] = (uses[key] || 0) + 1;
-      return { name: str(s.name) || "Series", tone: tone(s.tone), cls: "c-" + key, dash: ["", "dash", "dot"][(k - 1) % 3], points: pts };
+      return { name: str(s.name) || "Series", tone: tone(s.tone), cls: "c-" + key, dash: ["", "dash", "dot"][i % 3], points: pts };
     });
     var seen = {}, ts = [];
     series.forEach(function (s) { s.points.forEach(function (p) { if (!seen[p[0]]) { seen[p[0]] = 1; ts.push(p[0]); } }); });
@@ -9753,7 +9774,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       var wrap = cell.closest(".gridwrap");
       var hostName = wrap ? wrap.dataset.grid : portHost;
       var lo = +cell.dataset.lo, hi = +cell.dataset.hi;
-      if (lo === hi) { openPortDrawer(hostName, lo); return; }
+      if (lo === hi) { openPortDrawer(hostName, lo, cell); return; }
       var next = Math.min(gridView.level + 1, LEVELS.length - 1);
       gridView = { level: next, lo: Math.floor(lo / LEVELS[next].span) * LEVELS[next].span };
       redrawGrid(cell);
@@ -9820,21 +9841,23 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     if (e.key === "Escape") { closeDrawer(); hideTip(); return; }
     var cell = document.activeElement;
     if (!cell || !cell.classList || !cell.classList.contains("cell")) return;
-    var delta = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -COLS, ArrowDown: COLS }[e.key];
+    var wrap = cell.closest(".gridwrap"), cols = Number(wrap.dataset.cols);
+    var delta = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key];
     if (!delta) return;
     e.preventDefault();
-    var wrap = cell.closest(".gridwrap");
     var all = Array.prototype.slice.call(wrap.querySelectorAll(".cell"));
     var next = all[all.indexOf(cell) + delta];
-    if (next) { next.focus(); }
+    if (next && !next.classList.contains("na")) next.focus();
   });
 
   document.addEventListener("focusin", function (e) {
     var cell = e.target.closest ? e.target.closest(".cell") : null;
     if (!cell) return;
-    cell.setAttribute("tabindex", "0");
-    var r = cell.getBoundingClientRect();
     var wrap = cell.closest(".gridwrap");
+    var prev = wrap.querySelector('.cell[tabindex="0"]');
+    if (prev && prev !== cell) prev.tabIndex = -1;
+    cell.tabIndex = 0;
+    var r = cell.getBoundingClientRect();
     showTip(cellTip(cell, wrap ? wrap.dataset.grid : portHost), r.right, r.top);
   });
 

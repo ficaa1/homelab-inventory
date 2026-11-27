@@ -423,7 +423,9 @@
   }
   function counts(c) {
     return h("span", { class: "cve-counts" }, SEV.slice(0, 4).map(function (s) {
-      return h("span", { class: "s-" + s + (n(c && c[s]) ? "" : " zero"), title: fmt(c && c[s]) + " " + SEV_LABEL[s].toLowerCase(), text: fmt(c && c[s]) });
+      var severity = SEV_LABEL[s].toLowerCase(), value = fmt(c && c[s]);
+      return h("span", { class: "s-" + s + (n(c && c[s]) ? "" : " zero"), title: value + " " + severity }, [
+        value, h("small", { class: "cve-count-label", text: " " + severity })]);
     }));
   }
   function pager(list) {
@@ -688,7 +690,7 @@
     HI().openDrawer(h("div", { class: "cve-drawer" }, [
       h("h3", { text: r.name }),
       h("div", { class: "subtitle", text: r.ecosystem + " · " + plural(r.sets, "package set") + " on " + plural(r.hosts, "host") }),
-      h("div", { class: "cve-dhead" }, [counts(r.vulns), r.kev ? HI().pill(fmt(r.kev) + " exploited", "crit") : null]),
+      h("div", { class: "cve-dhead" }, [h("span", { class: "sub", text: "Findings by severity" }), counts(r.vulns), r.kev ? HI().pill(fmt(r.kev) + " exploited", "crit") : null]),
       r.fix_version ? h("ul", { class: "cve-fixes" }, [h("li", { class: "ok" }, [HI().iconNode("check", "sm"), h("span", {}, ["Upgrade to ", h("code", { text: r.fix_version }), " or later to clear " + plural(r.fixes, "CVE") + "."])])])
         : h("p", { class: "sub", text: "None of its CVEs has a fixed version in " + r.ecosystem + " yet." }),
       section("Installed", [h("div", { class: "cve-vers" }, (r.installed || []).map(function (x) { return h("code", { text: x }); }))]),
