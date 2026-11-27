@@ -5192,7 +5192,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   var drawer = $("drawer"), scrim = $("scrim"), drawerBody = $("drawer-body"), drawerHead = $("drawer-head");
   var drawerOpen = false, drawerReturnFocus = null, drawerPopping = false, drawerNextRoute = "";
-  var drawerDrag = null, drawerDragged = false, drawerID = 0;
+  var drawerDrag = null, drawerDragged = false, drawerID = 0, drawerSkippingHistory = false;
   var sheet = { y: 0, v: 0, height: 0, frame: null, damping: 1 };
   var drawerPhone = matchMedia("(max-width: 640px)");
 
@@ -5221,6 +5221,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   // Closing and routing can happen in the same click. Apply the route only
   // once the same-URL history entry for the sheet has been popped.
   window.addEventListener("popstate", function () {
+    var skipping = drawerSkippingHistory;
+    drawerSkippingHistory = false;
     if (drawerPopping) {
       drawerPopping = false;
       var next = drawerNextRoute;
@@ -5230,7 +5232,11 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     } else if (phone() && !drawer.classList.contains("hidden") && !(history.state && history.state.hiDrawer)) {
       closeDrawer(true);
     } else if (!drawerOpen && history.state && history.state.hiDrawer) {
-      clearDrawerMarker();
+      if (skipping) clearDrawerMarker();
+      else {
+        drawerSkippingHistory = true;
+        history.back();
+      }
     }
   });
   if (history.state && history.state.hiDrawer) clearDrawerMarker();
