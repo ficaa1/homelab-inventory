@@ -2000,8 +2000,12 @@ button.ops-tile { cursor:pointer; }
   opacity: 0; transform: translateY(-36px); pointer-events: none; z-index: 1;
 }
 .up-pull .ic { width: 18px; height: 18px; }
-.up-pull.armed { color: var(--accent); }
-.up-pull.ease, .up-got.ease { transition: transform var(--dur-2) var(--ease-out), opacity var(--dur-2) var(--ease-out); }
+.up-pull.armed, .up-pull.spin { color: var(--accent); background: var(--accent-soft); }
+.up-pull.armed:not(.spin) .ic { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) {
+  .up-pull, .up-pull.armed:not(.spin) .ic, .up-got { transform: none !important; }
+  .up-ref.spin .ic, .up-pull.spin .ic { animation: none; }
+}
 .up-got:empty { display: none; }
 .up-got button.up-row {
   width: 100%; min-height: 52px; padding: 4px 6px; border: 0; border-radius: var(--r); background: none;
@@ -5740,18 +5744,18 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     return Math.abs(dy) >= 8 && Math.abs(dy) > 1.2 * Math.abs(dx);
   }
 
-  function sampleDrawerDrag(d, y, t) {
-    var samples = d.samples, cutoff = t - 60;
+  function dragVelocity(samples, y, t, previous) {
+    var cutoff = t - 60;
     samples.push({ y: y, t: t });
     while (samples.length > 2 && samples[1].t <= cutoff) samples.shift();
     var first = samples[0], dt = t - first.t;
-    if (dt <= 0) return;
+    if (dt <= 0) return previous;
     var next = samples[1], start = first.y;
     if (first.t < cutoff) {
       start += (next.y - first.y) * (cutoff - first.t) / (next.t - first.t);
       dt = 60;
     }
-    sheet.v = (y - start) * 1000 / dt;
+    return (y - start) * 1000 / dt;
   }
 
   window.addEventListener("pointermove", function (e) {
@@ -5766,7 +5770,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       drawer.setPointerCapture(e.pointerId);
       drawer.style.opacity = "";
     }
-    sampleDrawerDrag(d, e.clientY, e.timeStamp);
+    sheet.v = dragVelocity(d.samples, e.clientY, e.timeStamp, sheet.v);
     // A spring can travel past the rubber band's range. Let the finger
     // recover that excess before applying the drag resistance.
     var y = d.offset + Math.max(0, dy + d.excess) + Math.min(0, dy);
@@ -5792,7 +5796,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       return;
     }
     if (cancelled) sheet.v = 0;
-    else sampleDrawerDrag(d, e.clientY, e.timeStamp);
+    else sheet.v = dragVelocity(d.samples, e.clientY, e.timeStamp, sheet.v);
     if (!cancelled && sheet.y + 0.499 * sheet.v > sheet.height / 2) {
       if (drawerOpen) closeDrawer(false, true);
       else moveSheet(1, true);
@@ -8481,6 +8485,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   function setUpTab(t, fx) {
     if (t === "got" && !upHasFolder()) t = "send";
     var prev = up.tab;
+    if (prev === "got" && t !== prev) pullReset();
     up.tab = t;
     ["send", "got"].forEach(function (k) {
       var on = k === t, b = $("up-tab-" + k);
@@ -8526,48 +8531,82 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     return up.gotLoading;
   }
 
-  // Pull to refresh: only a downward drag that starts with the list at its
-  // top. The list follows the finger with resistance; past the threshold a
-  // release reloads it, otherwise it springs back.
-  var PULL_MAX = 84, PULL_AT = 56;
-  var pull = { y: -1, x: 0, d: 0, on: false };
-  function pullPaint(d, ease) {
-    var ind = $("up-pull"), ul = $("up-got");
-    ind.classList.toggle("ease", ease); ul.classList.toggle("ease", ease);
-    ind.style.opacity = d ? Math.min(1, d / PULL_AT) : "";
-    ind.style.transform = d ? "translateY(" + (d - 36) + "px) rotate(" + Math.round(d * 4) + "deg)" : "";
-    ul.style.transform = d ? "translateY(" + d + "px)" : "";
-    ind.classList.toggle("armed", d >= PULL_AT);
+  var PULL_ARM = 80, PULL_REST = 56;
+  var pull = { y: 0, v: 0, frame: null }, pullDrag = null, pullLoading = null;
+  var pullIndicator = $("up-pull"), gotList = $("up-got"), gotPane = $("up-pane-got");
+
+  function pullPaint() {
+    var y = Math.max(0, pull.y);
+    pullIndicator.style.opacity = y ? Math.min(1, y / 32) : "";
+    pullIndicator.style.transform = y ? "translateY(" + (y - 36) + "px)" : "";
+    gotList.style.transform = y ? "translateY(" + y + "px)" : "";
   }
-  function pullReset() { pull.y = -1; pull.on = false; pull.d = 0; pullPaint(0, true); }
-  var gotPane = $("up-pane-got");
+  function pullSettle() {
+    function goal() { return pullLoading ? PULL_REST : 0; }
+    function done(target) { pull.y = target; pull.v = 0; pullPaint(); }
+    if (moving()) moveSpring(pull, goal, 0.82, pullPaint, done);
+    else { stopSpring(pull); done(goal()); }
+  }
+  function pullReset() {
+    pullDrag = pullLoading = null;
+    stopSpring(pull);
+    pull.y = pull.v = 0;
+    pullIndicator.classList.remove("armed", "spin");
+    pullPaint();
+  }
+
+  function endPull(e, cancelled) {
+    var drag = pullDrag;
+    if (!drag) return;
+    pullDrag = null;
+    pullIndicator.classList.remove("armed");
+    pull.v = cancelled ? 0 : dragVelocity(drag.samples, pull.y, e.timeStamp, pull.v);
+    if (!cancelled && drag.armed && !pullLoading && !up.gotLoading) {
+      var pending = pullLoading = loadGot();
+      pullIndicator.classList.add("spin");
+      pending.then(function () {
+        if (pending !== pullLoading) return;
+        pullLoading = null;
+        pullIndicator.classList.remove("spin");
+        if (!pullDrag) pullSettle();
+      });
+    }
+    pullSettle();
+  }
+
+  // Claim only a downward pan that began at the top, leaving the list free to
+  // scroll normally. Catching a settling list keeps its current offset.
   gotPane.addEventListener("touchstart", function (e) {
-    if (e.touches.length !== 1 || up.gotLoading || $("up-got").scrollTop > 0 || $("up-sheet").scrollTop > 0) { pull.y = -1; return; }
-    pull.y = e.touches[0].clientY; pull.x = e.touches[0].clientX; pull.on = false; pull.d = 0;
+    if (e.touches.length !== 1) { endPull(e, true); return; }
+    if (gotList.scrollTop > 0 || $("up-sheet").scrollTop > 0) return;
+    stopSpring(pull);
+    pull.v = 0;
+    var touch = e.touches[0];
+    pullDrag = { x: touch.clientX, y: touch.clientY, offset: Math.max(0, pull.y),
+      samples: [{ y: Math.max(0, pull.y), t: e.timeStamp }], claimed: false, armed: false };
   }, { passive: true });
   gotPane.addEventListener("touchmove", function (e) {
-    if (pull.y < 0) return;
-    if (e.touches.length !== 1) { pullReset(); return; }
-    var dy = e.touches[0].clientY - pull.y, dx = Math.abs(e.touches[0].clientX - pull.x);
-    if (dx > Math.abs(dy)) { pullReset(); return; }
-    if (!pull.on) {
-      if (dy < 0 || dx > Math.abs(dy) || $("up-got").scrollTop > 0) { pull.y = -1; return; }
-      if (dy < 8) return;
-      pull.on = true;
+    var drag = pullDrag;
+    if (!drag) return;
+    if (e.touches.length !== 1) { endPull(e, true); return; }
+    var touch = e.touches[0], dy = touch.clientY - drag.y, dx = touch.clientX - drag.x;
+    if (!drag.claimed) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
+      if ((!drag.offset && (dy < 0 || gotList.scrollTop > 0)) || !verticalDrawerDrag(dx, dy) || !e.cancelable) {
+        endPull(e, true); return;
+      }
+      drag.claimed = true;
     }
     if (e.cancelable) e.preventDefault();
-    pull.d = Math.max(0, Math.min(PULL_MAX, (dy - 8) * 0.5));
-    pullPaint(pull.d, false);
+    var extra = Math.max(0, dy - 32) * 0.55;
+    pull.y = Math.max(0, drag.offset + Math.min(dy, 32) + extra * 120 / (120 + extra));
+    pull.v = dragVelocity(drag.samples, pull.y, e.timeStamp, pull.v);
+    drag.armed = dy >= PULL_ARM;
+    pullIndicator.classList.toggle("armed", drag.armed);
+    pullPaint();
   }, { passive: false });
-  gotPane.addEventListener("touchend", function () {
-    if (!pull.on) { pull.y = -1; return; }
-    pull.y = -1; pull.on = false;
-    if (pull.d < PULL_AT) { pullReset(); return; }
-    pullPaint(PULL_AT, true);
-    $("up-pull").classList.add("spin");
-    loadGot().then(function () { $("up-pull").classList.remove("spin"); pullReset(); });
-  });
-  gotPane.addEventListener("touchcancel", function () { if (pull.on) pullReset(); else pull.y = -1; });
+  gotPane.addEventListener("touchend", function (e) { endPull(e, false); });
+  gotPane.addEventListener("touchcancel", function (e) { endPull(e, true); });
 
   // Unchanged lists are not re-rendered, so a reload never restarts motion.
   // Rows rise once per opening (staggered, at most 200ms in all), and the
