@@ -44,7 +44,9 @@
 .arc-title { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); margin-bottom: 8px; min-width: 0; }
 .arc-title > summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 12px 14px; cursor: pointer; list-style: none; align-items: center; }
 .arc-title > summary::-webkit-details-marker { display: none; }
-.arc-title > summary:hover { background: var(--hover); border-radius: var(--r-lg); }
+@media (hover: hover) and (pointer: fine) {
+  .arc-title > summary:hover { background: var(--hover); border-radius: var(--r-lg); }
+}
 .arc-title .name { font-weight: 600; font-size: var(--fs-md); overflow-wrap: anywhere; }
 .arc-title .name::before { content: "▸"; display: inline-block; width: 14px; color: var(--text-3); font-size: 11px; transition: transform 0.12s ease; }
 .arc-title[open] .name::before { transform: rotate(90deg); }
@@ -155,7 +157,9 @@
 .library-kpis .tile .value small { margin-left: 4px; }
 .library-card { overflow: hidden; }
 .library-card .library-table { border: 0; border-radius: 0; }
-.library-table .library-row:hover { background: var(--hover); }
+@media (hover: hover) and (pointer: fine) {
+  .library-table .library-row:hover { background: var(--hover); }
+}
 .library-seasons .arc-rel { display: grid; grid-template-columns: minmax(0, 1fr) auto auto 76px; border-top: 0; padding: 6px 0; }
 .library-heading { margin-bottom: var(--s4); }
 .library-find { display: flex; gap: 8px; align-items: center; }
@@ -205,7 +209,7 @@
 .arc-strip-fail { font-size: var(--fs-xs); color: var(--crit); font-weight: 600; }
 .arc-strip-chev { width: 16px; text-align: center; color: var(--text-3); }
 .arc-strip .arc-bar { height: 6px; margin: 0 0 8px; }
-.arc-strip-body { max-height: 45vh; overflow-y: auto; overscroll-behavior: contain; }
+.arc-strip-body { max-height: 45vh; max-height: 45dvh; overflow-y: auto; overscroll-behavior: contain; }
 .arc-op { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; width: 100%; min-height: 44px; padding: 6px 0; background: none; border: 0; border-top: 1px solid var(--line); color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: opacity 0.4s ease; }
 .arc-op-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); font-weight: 600; }
 .arc-op-w { font-size: var(--fs-xs); color: var(--text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }

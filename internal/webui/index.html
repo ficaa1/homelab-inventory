@@ -5,7 +5,8 @@
 <meta name="preview-style-nonce" content="__PREVIEW_STYLE_NONCE__">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#121314">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#18191b">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="homelab-inventory">
@@ -134,6 +135,12 @@ body {
   -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
 }
 button, input, select { font: inherit; color: inherit; }
+button, a, summary, [role="button"] { touch-action: manipulation; }
+button, .tab, .chip, .schip, summary { -webkit-user-select: none; user-select: none; }
+html.locked { overflow: hidden; }
+@media (pointer: coarse) {
+  input, select, textarea { font-size: 16px !important; }
+}
 a { color: var(--accent); text-underline-offset: 2px; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 code {
@@ -190,7 +197,9 @@ code {
   color: var(--text-2); cursor: pointer; position: relative;
   transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
-.ibtn:hover { background: var(--hover); color: var(--text); }
+@media (hover: hover) and (pointer: fine) {
+  .ibtn:hover { background: var(--hover); color: var(--text); }
+}
 .ibtn.search-btn {
   flex: 1 1 100%; width: auto; display: inline-flex; gap: 10px; padding: 0 8px;
   justify-content: flex-start; color: var(--text-2); font-size: var(--fs-md);
@@ -210,7 +219,9 @@ code {
   transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .tab .ic { color: var(--text-3); }
-.tab:hover { color: var(--text); background: var(--hover); }
+@media (hover: hover) and (pointer: fine) {
+  .tab:hover { color: var(--text); background: var(--hover); }
+}
 .tab[aria-selected="true"] { color: var(--text); background: var(--surface-3); font-weight: 500; }
 .tab[aria-selected="true"] .ic { color: var(--accent); }
 .tab .count {
@@ -230,7 +241,7 @@ code {
   position: sticky; top: 0; z-index: 35; margin-left: var(--sidebar);
   display: flex; align-items: center; gap: 4px; min-height: 52px; padding: 8px 32px;
   background: var(--bg); border-bottom: 1px solid var(--line);
-  overflow-x: auto; scrollbar-width: none;
+  overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
 }
 .strip::-webkit-scrollbar { display: none; }
 #strip { display: contents; }
@@ -243,8 +254,12 @@ code {
   transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
 }
 .schip:first-child { padding-left: 0; }
-.schip:hover { background: var(--hover); color: var(--text); }
-.schip:first-child:hover { padding-left: 10px; margin-left: -10px; }
+@media (hover: hover) and (pointer: fine) {
+  .schip:hover { background: var(--hover); color: var(--text); }
+}
+@media (hover: hover) and (pointer: fine) {
+  .schip:first-child:hover { padding-left: 10px; margin-left: -10px; }
+}
 .schip b { color: var(--text); font-weight: 600; }
 .schip .g { font-size: 10px; }
 .schip .ic { color: var(--text-3); }
@@ -322,7 +337,9 @@ h2 { font-size: var(--fs-xl); font-weight: 500; line-height: 1.25; margin: 0 0 4
   font-size: var(--fs-sm); color: var(--text-3); background: none;
   border: 0; padding: 4px 0; cursor: pointer; margin-bottom: var(--s3);
 }
-.back:hover { color: var(--text); }
+@media (hover: hover) and (pointer: fine) {
+  .back:hover { color: var(--text); }
+}
 
 /* ------------------------------------------------------------------ controls */
 .btn {
@@ -333,16 +350,22 @@ h2 { font-size: var(--fs-xl); font-weight: 500; line-height: 1.25; margin: 0 0 4
   text-decoration: none; min-height: 36px;
   transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.btn:hover { background: var(--surface-3); }
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover { background: var(--surface-3); }
+}
 .btn:active:not(:disabled) { transform: scale(0.98); }
 .btn:disabled { opacity: 0.5; cursor: default; }
 .btn[aria-pressed="true"] { background: var(--surface-3); border-color: var(--line-2); color: var(--text); }
 .btn.primary { background: var(--ink-fill); border-color: var(--ink-fill); color: var(--ink-on); }
-.btn.primary:hover { background: var(--ink-fill); opacity: 0.88; }
+@media (hover: hover) and (pointer: fine) {
+  .btn.primary:hover { background: var(--ink-fill); opacity: 0.88; }
+}
 .btn.danger { color: var(--crit); }
 .seg { display: inline-flex; padding: 2px; gap: 2px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); }
 .seg .btn { border: 0; background: none; color: var(--text-3); min-height: 32px; padding: 4px 12px; border-radius: var(--r-sm); }
-.seg .btn:hover { color: var(--text); }
+@media (hover: hover) and (pointer: fine) {
+  .seg .btn:hover { color: var(--text); }
+}
 .seg .btn[aria-pressed="true"] { background: var(--surface-3); color: var(--text); }
 .filters { display: flex; gap: var(--s2); margin-bottom: var(--s4); flex-wrap: wrap; align-items: center; }
 .field {
@@ -437,9 +460,13 @@ kbd {
   overflow: hidden;
 }
 .alert.lv-critical { border-color: var(--crit); }
-.alert:hover { background: var(--surface-2); }
+@media (hover: hover) and (pointer: fine) {
+  .alert:hover { background: var(--surface-2); }
+}
 .alert.quiet { opacity: 0.55; }
-.alert.quiet:hover { opacity: 0.9; }
+@media (hover: hover) and (pointer: fine) {
+  .alert.quiet:hover { opacity: 0.9; }
+}
 .alert .sev {
   width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center;
   font-size: 11px; grid-row: span 3;
@@ -470,7 +497,9 @@ kbd {
   margin-left: auto; color: var(--text-3); font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
   background: var(--surface-3); border-radius: var(--r-pill); padding: 1px 8px;
 }
-.group > summary:hover { background: var(--hover); }
+@media (hover: hover) and (pointer: fine) {
+  .group > summary:hover { background: var(--hover); }
+}
 
 /* ------------------------------------------------------------------ hosts */
 .hgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: var(--s3); }
@@ -479,7 +508,9 @@ kbd {
   border-radius: var(--r-lg); padding: 14px 16px; cursor: pointer; text-align: left; color: inherit;
   width: 100%; min-width: 0;
 }
-.hcard:hover { border-color: var(--line-2); background: var(--surface-2); }
+@media (hover: hover) and (pointer: fine) {
+  .hcard:hover { border-color: var(--line-2); background: var(--surface-2); }
+}
 .hcard .top { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .hcard .hn { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
 .hcard .hico {
@@ -497,7 +528,7 @@ kbd {
 .hcard.stale { border-color: var(--warn-soft); }
 
 /* ------------------------------------------------------------------ tables */
-.scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: var(--r-lg); }
+.scroll { overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; border-radius: var(--r-lg); }
 table {
   width: 100%; border-collapse: separate; border-spacing: 0;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
@@ -508,14 +539,18 @@ th {
 }
 td { border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; font-size: var(--fs-sm); }
 tbody tr:first-child td { border-top: 0; }
-tbody tr:hover { background: var(--hover); }
+@media (hover: hover) and (pointer: fine) {
+  tbody tr:hover { background: var(--hover); }
+}
 tbody tr.clickable { cursor: pointer; }
 td .sub { font-size: var(--fs-xs); }
 td.num, th.num { text-align: right; }
 .pkg td { white-space: normal; vertical-align: top; }
 .pkg code { word-break: break-all; }
 .why { cursor: help; border-bottom: 1px dotted var(--text-3); text-transform: none; letter-spacing: 0; color: var(--text-3); }
-.why:hover { color: var(--text); }
+@media (hover: hover) and (pointer: fine) {
+  .why:hover { color: var(--text); }
+}
 @media (max-width: 640px) {
   table.trend thead { display: none; }
   table.trend, table.trend tbody { display: block; }
@@ -546,7 +581,9 @@ td.num, th.num { text-align: right; }
   border-radius: var(--r-lg); padding: 12px 13px; color: inherit; text-decoration: none;
   transition: border-color 0.12s ease, background 0.12s ease, transform 0.12s ease;
 }
-.svc:hover { background: var(--surface-2); border-color: var(--line-2); }
+@media (hover: hover) and (pointer: fine) {
+  .svc:hover { background: var(--surface-2); border-color: var(--line-2); }
+}
 a.svc:active { transform: scale(0.985); }
 .svc .top { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .ico { position: relative; width: 34px; height: 34px; flex: none; border-radius: 9px; overflow: hidden; }
@@ -571,7 +608,9 @@ a.svc:active { transform: scale(0.985); }
   color: var(--text-2); background: var(--surface-3); border: 1px solid var(--line-2);
   border-radius: var(--r-sm); padding: 2px 8px; cursor: pointer;
 }
-.svc .edit:hover { color: var(--text); }
+@media (hover: hover) and (pointer: fine) {
+  .svc .edit:hover { color: var(--text); }
+}
 .svc .flag {
   position: absolute; top: 8px; right: 9px; font-size: 12px; color: var(--text-3);
   background: var(--surface-3); border-radius: var(--r-pill); padding: 0 6px;
@@ -605,12 +644,13 @@ a.svc:active { transform: scale(0.985); }
 .pal-scrim { position: fixed; inset: 0; z-index: 80; background: var(--scrim); }
 .pal {
   position: fixed; z-index: 81; top: max(10vh, calc(var(--safe-t) + 12px)); left: 50%; transform: translateX(-50%);
-  width: min(640px, calc(100vw - 24px)); max-height: 72vh; display: flex; flex-direction: column;
+  width: min(640px, calc(100vw - 24px)); max-height: 72vh; max-height: 72dvh; display: flex; flex-direction: column;
   background: var(--surface); border: 1px solid var(--line-2);
   border-radius: var(--r-lg); box-shadow: 0 24px 80px rgba(0,0,0,0.45); overflow: hidden;
 }
 .pal .qrow { display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--line); color: var(--text-3); }
 .pal input { flex: 1; min-width: 0; font-size: 16px; color: var(--text); background: transparent; border: 0; padding: 15px 0; outline: none; }
+#pal-results { overscroll-behavior: contain; }
 .pal .results { overflow-y: auto; padding: 6px; }
 .pal .row {
   display: flex; align-items: center; gap: 10px; width: 100%;
@@ -655,7 +695,9 @@ pre.code {
 .gridwrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px; margin-bottom: 12px; min-width: 0; }
 .crumbs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: var(--fs-xs); color: var(--text-3); margin-bottom: 12px; font-variant-numeric: tabular-nums; }
 .crumbs button { font-size: var(--fs-xs); color: var(--text-2); background: var(--surface-3); border: 0; padding: 3px 8px; border-radius: var(--r-pill); cursor: pointer; font-variant-numeric: tabular-nums; }
-.crumbs button:hover { color: var(--text); }
+@media (hover: hover) and (pointer: fine) {
+  .crumbs button:hover { color: var(--text); }
+}
 .crumbs .sep { color: var(--text-3); }
 .crumbs .now { color: var(--text); font-weight: 600; padding: 3px 4px; }
 .crumbs .rule { margin-left: auto; }
@@ -675,7 +717,10 @@ pre.code {
   opacity: 0.6;
 }
 .cell.has-exposed::after { content: ""; position: absolute; left: 1px; right: 1px; bottom: 1px; height: 2px; border-radius: 1px; background: var(--warn); }
-.cell:hover, .cell:focus-visible, .cell:focus { outline: 2px solid var(--text); outline-offset: 1px; z-index: 2; }
+.cell:focus-visible, .cell:focus { outline: 2px solid var(--text); outline-offset: 1px; z-index: 2; }
+@media (hover: hover) and (pointer: fine) {
+  .cell:hover { outline: 2px solid var(--text); outline-offset: 1px; z-index: 2; }
+}
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: var(--fs-xs); color: var(--text-2); }
 .legend .item { display: inline-flex; align-items: center; gap: 6px; }
 .legend .swatch { width: 11px; height: 11px; border-radius: 2px; flex: none; background: var(--track); }
@@ -695,7 +740,9 @@ pre.code {
   border: 1px solid var(--line-2); border-radius: var(--r-pill); padding: 3px 10px;
   cursor: pointer; font-variant-numeric: tabular-nums;
 }
-.chip:hover { background: var(--surface-3); color: var(--text); }
+@media (hover: hover) and (pointer: fine) {
+  .chip:hover { background: var(--surface-3); color: var(--text); }
+}
 @media (max-width: 640px) {
   .gridwrap { padding: 10px; }
   .cell { height: 8px; border-radius: 1px; }
@@ -741,7 +788,9 @@ pre.code {
   width: 36px; height: 36px; display: grid; place-items: center;
   color: var(--text-3); background: var(--surface-2); border: 0; border-radius: var(--r); cursor: pointer;
 }
-.drawer .close:hover { color: var(--text); }
+@media (hover: hover) and (pointer: fine) {
+  .drawer .close:hover { color: var(--text); }
+}
 .dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; margin: 14px 0 0; font-size: var(--fs-sm); }
 .dl dt { color: var(--text-3); }
 .dl dd { margin: 0; color: var(--text); word-break: break-word; }
@@ -768,7 +817,9 @@ pre.code {
   transform: rotate(45deg); transition: transform 0.15s ease;
 }
 .section[open] > summary::after { transform: rotate(-135deg); }
-.section > summary:hover { background: var(--hover); border-radius: var(--r-lg); }
+@media (hover: hover) and (pointer: fine) {
+  .section > summary:hover { background: var(--hover); border-radius: var(--r-lg); }
+}
 .section > .sb { padding: 2px 16px 16px; min-width: 0; }
 .section .sb table, .section .sb .gridwrap { background: var(--surface-2); }
 .section .sb .tile, .section .sb .alert, .section .sb .empty { background: var(--surface-2); }
@@ -865,7 +916,9 @@ pre.code {
 .ops-number.warn { color:var(--warn); }
 .ops-number.crit { color:var(--crit); }
 .ops-link { display:block; text-decoration:none; transition:background-color var(--dur-1) var(--ease-out); }
-.ops-link:hover { background:var(--surface-2); }
+@media (hover: hover) and (pointer: fine) {
+  .ops-link:hover { background:var(--surface-2); }
+}
 .ops-sub { display:block; font-size:var(--fs-xs); color:var(--text-2); overflow-wrap:anywhere; }
 .ops-tile > summary { cursor:pointer; list-style:none; }
 button.ops-tile { cursor:pointer; }
@@ -1097,9 +1150,13 @@ button.ops-tile { cursor:pointer; }
   border-radius: var(--w-r); border: 0; background: var(--w-ground-2); color: var(--text); box-shadow: none;
   transition: transform var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out), filter var(--dur-1) var(--ease-out);
 }
-.setup .btn:hover:not(:disabled) { background: color-mix(in srgb, var(--w-ground-2) 88%, var(--text)); filter: none; }
+@media (hover: hover) and (pointer: fine) {
+  .setup .btn:hover:not(:disabled) { background: color-mix(in srgb, var(--w-ground-2) 88%, var(--text)); filter: none; }
+}
 .setup .btn.primary { background: var(--accent); color: var(--accent-ink); }
-.setup .btn.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.1); }
+@media (hover: hover) and (pointer: fine) {
+  .setup .btn.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.1); }
+}
 .setup .btn:active:not(:disabled) { transform: scale(0.97); }
 .setup .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .setup .btn:disabled { opacity: 0.45; }
@@ -1134,7 +1191,9 @@ button.ops-tile { cursor:pointer; }
 .uses .ic { color: var(--text-3); margin-top: 3px; }
 .manual { margin-top: 32px; }
 .manual > summary { cursor: pointer; min-height: 44px; display: inline-flex; align-items: center; gap: 8px; font-size: 15px; color: var(--text-2); list-style: none; border-radius: var(--w-r); }
-.manual > summary:hover { color: var(--text); }
+@media (hover: hover) and (pointer: fine) {
+  .manual > summary:hover { color: var(--text); }
+}
 .manual > summary::-webkit-details-marker { display: none; }
 .manual > summary::before { content: "▸"; color: var(--text-3); }
 .manual[open] > summary::before { content: "▾"; }
@@ -1191,7 +1250,9 @@ button.ops-tile { cursor:pointer; }
 .drawer .enroll .cmd { padding: 16px; gap: 12px; }
 .drawer .enroll .cmd code { font-size: 16px; }
 .drawer .enroll .btn { border: 0; border-radius: 4px; background: var(--surface-3); min-height: 40px; padding: 8px 16px; font-size: 14px; transition: transform var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out); }
-.drawer .enroll .btn:hover:not(:disabled) { background: color-mix(in srgb, var(--surface-3) 88%, var(--text)); }
+@media (hover: hover) and (pointer: fine) {
+  .drawer .enroll .btn:hover:not(:disabled) { background: color-mix(in srgb, var(--surface-3) 88%, var(--text)); }
+}
 .drawer .enroll .btn:active:not(:disabled) { transform: scale(0.97); }
 .drawer .enroll .cmd .btn { background: var(--surface); }
 .drawer .enroll-options .btn { min-height:44px; }
@@ -1248,7 +1309,10 @@ button.ops-tile { cursor:pointer; }
   border: 0; background: none; border-radius: var(--r); color: var(--text);
   font-size: var(--fs-md); font-weight: 500; text-align: left; cursor: pointer;
 }
-.more-sheet button:hover, .more-sheet button:focus-visible { background: var(--hover); }
+.more-sheet button:focus-visible { background: var(--hover); }
+@media (hover: hover) and (pointer: fine) {
+  .more-sheet button:hover { background: var(--hover); }
+}
 .more-sheet button .ic { color: var(--text-3); }
 .more-sheet button[aria-current="page"] { color: var(--text); background: var(--surface-3); }
 .more-sheet button[aria-current="page"] .ic { color: var(--accent); }
@@ -1297,7 +1361,9 @@ button.ops-tile { cursor:pointer; }
   border-top: 1px solid var(--line); color: inherit; text-decoration: none; min-width: 0;
 }
 .pv-item:first-of-type { border-top: 0; }
-a.pv-item:hover { background: var(--hover); }
+@media (hover: hover) and (pointer: fine) {
+  a.pv-item:hover { background: var(--hover); }
+}
 .pv-thumb { position: relative; width: 34px; height: 51px; flex: none; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
 .pv-thumb img, .pv-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .pv-main { flex: 1; min-width: 0; }
@@ -1326,7 +1392,9 @@ a.pv-item:hover { background: var(--hover); }
 .pv-art .pill:not([class*="good"]):not([class*="info"]):not([class*="warning"]):not([class*="critical"]) { color: var(--text); }
 .pv-art .pv-track { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; border-radius: 0; background: rgba(0,0,0,0.45); }
 .pv-art .pv-track i { border-radius: 0; }
-a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0; }
+@media (hover: hover) and (pointer: fine) {
+  a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0; }
+}
 .pv-poster .t { font-size: var(--fs-sm); font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .pv-poster .s { font-size: var(--fs-xs); color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pv-card .scroll { border-radius: 0; }
@@ -1422,7 +1490,9 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 .secret-saved .st { flex: 1; min-width: 0; color: var(--text-2); }
 .secret-saved.clearing .st { color: var(--warn); }
 .secret-saved .btn { min-height: 30px; padding: 3px 9px; background: none; border-color: transparent; color: var(--text-2); }
-.secret-saved .btn:hover { background: var(--hover); color: var(--text); }
+@media (hover: hover) and (pointer: fine) {
+  .secret-saved .btn:hover { background: var(--hover); color: var(--text); }
+}
 .secret-row { display: flex; gap: 6px; }
 .secret-row input { flex: 1; min-width: 0; }
 .plug-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -1485,7 +1555,9 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 .gate-sso { display: grid; gap: 10px; margin-bottom: 4px; }
 .gate-sso .btn { min-height: 42px; font-size: var(--fs-md); }
 .gate-alt { background: none; border: 0; color: var(--text-3); font-size: var(--fs-sm); cursor: pointer; padding: 6px; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-2); }
-.gate-alt:hover { color: var(--text); }
+@media (hover: hover) and (pointer: fine) {
+  .gate-alt:hover { color: var(--text); }
+}
 .gate-sso + #gate-token-box { margin-top: 12px; padding-top: 16px; border-top: 1px solid var(--line); }
 
 /* Admin → Sign-in, and who is signed in. */
@@ -1514,7 +1586,9 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 .redirect { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 2px 4px 2px 10px; background: var(--bg); border: 1px dashed var(--line-2); border-radius: var(--r-sm); }
 .redirect code { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text); user-select: all; overflow-wrap: anywhere; }
 .redirect .btn { min-height: 30px; padding: 3px 9px; background: none; border-color: transparent; color: var(--text-2); }
-.redirect .btn:hover { background: var(--hover); color: var(--text); }
+@media (hover: hover) and (pointer: fine) {
+  .redirect .btn:hover { background: var(--hover); color: var(--text); }
+}
 .redirect .btn.ok { color: var(--ok); }
 .redirect.none code { color: var(--text-3); font-family: inherit; }
 .signin-warn { display: flex; gap: 7px; align-items: baseline; font-size: var(--fs-xs); color: var(--text-2); margin: 0; }
@@ -1527,7 +1601,9 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 .pk-row .who b { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
 .pk-row .who .sub { display: block; font-size: var(--fs-xs); color: var(--text-3); overflow-wrap: anywhere; }
 .pk-row .btn { flex: none; width: auto; min-height: 30px; padding: 3px 9px; background: none; border-color: transparent; color: var(--text-2); }
-.pk-row .btn:hover { background: var(--hover); color: var(--text); }
+@media (hover: hover) and (pointer: fine) {
+  .pk-row .btn:hover { background: var(--hover); color: var(--text); }
+}
 .pk-add { margin-top: 0; }
 .pk-add .secret-row .btn { flex: none; }
 .pk-none { font-size: var(--fs-sm); color: var(--text-3); margin: 0 0 12px; }
@@ -1578,7 +1654,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 .up-scrim { z-index: 72; }
 .up-sheet {
   position: fixed; z-index: 73; right: 18px; bottom: calc(18px + var(--safe-b));
-  width: min(400px, calc(100% - 24px)); max-height: 70vh; overflow: auto;
+  width: min(400px, calc(100% - 24px)); max-height: 70vh; max-height: 70dvh; overflow: auto; overscroll-behavior: contain;
   background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-lg);
   box-shadow: 0 18px 50px rgba(0,0,0,0.45); padding: 14px;
   transform-origin: calc(100% - 26px) calc(100% - 26px);
@@ -1600,7 +1676,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 .up-pick .ic { width: 26px; height: 26px; }
 .up-files { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .up-files:empty { display: none; }
-.up-got { gap: 2px; max-height: min(52vh, 440px); overflow: auto; margin: 0 -6px; overscroll-behavior: contain; }
+.up-got { gap: 2px; max-height: min(52vh, 440px); max-height: min(52dvh, 440px); overflow: auto; margin: 0 -6px; overscroll-behavior: contain; }
 .up-sheet .up-ref { margin-left: auto; }
 .up-ref.spin .ic, .up-pull.spin .ic { animation: spin 0.8s linear infinite; }
 #up-pane-got { position: relative; overflow-y: clip; }
@@ -1617,7 +1693,10 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   width: 100%; min-height: 52px; padding: 4px 6px; border: 0; border-radius: var(--r); background: none;
   color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
-.up-got button.up-row:hover, .up-got button.up-row:focus-visible { background: var(--surface-2); }
+.up-got button.up-row:focus-visible { background: var(--surface-2); }
+@media (hover: hover) and (pointer: fine) {
+  .up-got button.up-row:hover { background: var(--surface-2); }
+}
 .up-got button.up-row { position: relative; }
 .up-got li.in { animation: rise var(--dur-2) var(--ease-out) var(--d, 0ms) backwards; }
 .up-got .up-row.fresh::after {
@@ -1650,7 +1729,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 .up-actions .btn { min-height: 48px; font-size: var(--fs-md); border-radius: var(--r); gap: 8px; }
 @media (max-width: 640px) {
   .up-sheet {
-    left: 12px; right: 12px; width: auto; max-height: 75vh;
+    left: 12px; right: 12px; width: auto; max-height: 75vh; max-height: 75dvh;
     bottom: calc(var(--nav-h) + var(--safe-b) + 14px);
   }
   .up-tabs .btn { min-height: 44px; }
@@ -1692,6 +1771,11 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   .session-line > span { flex-basis: calc(100% - 26px); }
   .session-line .btn { margin-left: 26px; }
 }
+.tab, .ibtn, .chip, .schip, .hcard, .alert, tbody tr.clickable, summary {
+  transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.tab:active, .ibtn:active, .chip:active, .schip:active, .hcard:active, .alert:active,
+tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 </style>
 </head>
 <body>
@@ -1761,7 +1845,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     </div>
     <div id="gate-token-box">
       <form id="gate-form">
-        <input id="gate-token" type="password" placeholder="API_TOKEN" autocomplete="current-password" aria-label="API token" required>
+        <input id="gate-token" autocapitalize="none" autocorrect="off" spellcheck="false" type="password" placeholder="API_TOKEN" autocomplete="current-password" aria-label="API token" required>
         <button class="btn primary" type="submit">Unlock</button>
       </form>
       <div id="gate-err" class="err hidden">Invalid token.</div>
@@ -1815,7 +1899,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
         <div id="home-ops" class="ops" aria-label="Operations overview"></div>
         <h2 class="launcher-heading">Services</h2>
         <div class="filters">
-          <label class="field"><svg class="ic sm" aria-hidden="true"><use href="#i-search"/></svg><input id="f-home" type="search" placeholder="Services" aria-label="Services"></label>
+          <label class="field"><svg class="ic sm" aria-hidden="true"><use href="#i-search"/></svg><input id="f-home" enterkeyhint="search" type="search" placeholder="Services" aria-label="Services"></label>
           <button class="btn" id="svc-edit" aria-pressed="false" title="Edit services"><svg class="ic sm" aria-hidden="true"><use href="#i-edit"/></svg><span>Edit</span></button>
         </div>
         <div id="services"></div>
@@ -1833,7 +1917,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
         <div id="alerts-current">
         <div class="kpis" id="kpis"></div>
         <div class="filters">
-          <label class="field"><svg class="ic sm" aria-hidden="true"><use href="#i-search"/></svg><input id="f-alerts" type="search" placeholder="Filter" aria-label="Filter alerts"></label>
+          <label class="field"><svg class="ic sm" aria-hidden="true"><use href="#i-search"/></svg><input id="f-alerts" enterkeyhint="search" type="search" placeholder="Filter" aria-label="Filter alerts"></label>
           <select id="f-level" aria-label="Level">
             <option value="">all levels</option>
             <option value="critical">critical</option>
@@ -1870,7 +1954,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 
         <div id="ports-table" class="hidden">
           <div class="filters">
-            <label class="field"><svg class="ic sm" aria-hidden="true"><use href="#i-search"/></svg><input id="f-ports" type="search" placeholder="Filter ports" aria-label="Filter ports"></label>
+            <label class="field"><svg class="ic sm" aria-hidden="true"><use href="#i-search"/></svg><input id="f-ports" enterkeyhint="search" type="search" placeholder="Filter ports" aria-label="Filter ports"></label>
           </div>
           <div class="scroll"><table class="ptable">
             <thead><tr>
@@ -1930,7 +2014,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 <div id="pal-scrim" class="pal-scrim hidden"></div>
 <div id="pal" class="pal hidden" role="dialog" aria-modal="true" aria-label="Search">
   <div class="qrow"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
-  <input id="pal-q" type="text" placeholder="Hosts, services, ports, alerts"
+  <input id="pal-q" enterkeyhint="search" type="text" placeholder="Hosts, services, ports, alerts"
          autocomplete="off" spellcheck="false" aria-label="Search"></div>
   <div id="pal-results" class="results" role="listbox"></div>
   <div class="hint">
@@ -3233,7 +3317,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
         return '<option value="' + esc(x.scope) + '">' + esc(pkgScopeLabel(x)) + " (" + esc(x.count || 0) + ")" + (x.status && x.status !== "ok" ? " · " + esc(x.status) : "") + "</option>";
       }).join("");
       el.innerHTML = head + rt + '<h4 class="sub">Recent changes</h4>' + pkgChanges(r[1], sets) +
-        '<div class="filters"><label class="field">' + ic("search", "sm") + '<input id="pkg-q" type="search" placeholder="Package name" aria-label="Package name"></label>' +
+        '<div class="filters"><label class="field">' + ic("search", "sm") + '<input id="pkg-q" enterkeyhint="search" type="search" placeholder="Package name" aria-label="Package name"></label>' +
         '<select id="pkg-scope" class="sel" aria-label="Package set">' + opts + "</select></div>" +
         '<div id="pkg-list"></div>';
       $("pkg-q").value = pkgView.q;
@@ -4159,7 +4243,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
               (c === s.category ? " selected" : "") + ">" + esc(c) + "</option>";
           }).join("") + "</select></div>" +
         '<div><label for="e-url" title="Must be reachable from this device">URL</label>' +
-          '<input id="e-url" placeholder="' + esc(s.url || "paste a full URL") + '" value="' +
+          '<input id="e-url" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="' + esc(s.url || "paste a full URL") + '" value="' +
           esc(s.curated && s.url ? s.url : "") + '"></div>' +
         '<div><label for="e-note">Note</label>' +
           '<input id="e-note" value="' + esc(s.note || "") + '"></div>' +
@@ -4354,18 +4438,23 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: "nearest" });
   }
 
+  function syncScrollLock() {
+    document.documentElement.classList.toggle("locked", !$("pal").classList.contains("hidden") || !$("drawer").classList.contains("hidden"));
+  }
+
   function openPalette() {
     palOpen = true; palIndex = 0;
     reveal($("pal"), sheetFrames("translateX(-50%)"), motion.d2, motion.out);
     reveal($("pal-scrim"), FADE_IN, motion.d2);
     $("pal-q").value = "";
     renderPalette();
+    syncScrollLock();
     $("pal-q").focus();
   }
 
   function closePalette() {
     palOpen = false;
-    conceal($("pal"), sheetFrames("translateX(-50%)").reverse(), motion.d1);
+    conceal($("pal"), sheetFrames("translateX(-50%)").reverse(), motion.d1, syncScrollLock);
     conceal($("pal-scrim"), FADE_OUT, motion.d1);
   }
 
@@ -4569,6 +4658,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     reveal($("drawer"), opening && (phone() ? [{ opacity: 0, transform: "translateY(40px)" }, { opacity: 1, transform: "none" }]
       : [{ opacity: 0, transform: "translateX(28px)" }, { opacity: 1, transform: "none" }]), motion.d3);
     reveal($("scrim"), opening && FADE_IN, motion.d2);
+    syncScrollLock();
     $("drawer-close").focus();
   }
 
@@ -4580,7 +4670,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       if (arrived) load();
     }
     conceal($("drawer"), phone() ? [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(40px)" }]
-      : [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(28px)" }], motion.d2);
+      : [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(28px)" }], motion.d2, syncScrollLock);
     conceal($("scrim"), FADE_OUT, motion.d2);
     if (drawerReturnFocus && drawerReturnFocus.isConnected) drawerReturnFocus.focus();
   }
@@ -4878,7 +4968,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       dailyDays:"Daily days", compressAfterDays:"Compress days"};
     var inputs = Object.keys(labels).map(function (k) {
       return '<div><label for="rs-' + k + '">' + labels[k] + '</label>' +
-        '<input type="number" min="0" step="1" id="rs-' + k + '" value="' + p[k] + '"></div>';
+        '<input type="number" inputmode="numeric" min="0" step="1" id="rs-' + k + '" value="' + p[k] + '"></div>';
     }).join("");
     var rows = s.hosts.map(function (h) {
       return '<tr><td>' + esc(h.host) + '</td><td>' + h.runs.toLocaleString() +
@@ -4925,7 +5015,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       '<div class="form"><div class="row"><label for="a-vpn-autofix"><input type="checkbox" id="a-vpn-autofix" style="width:auto"' +
       (s.vpn_autofix === true ? ' checked' : '') + '> enable automatic reconnect</label></div>' +
       '<div><label for="a-vpn-after">Unhealthy for (minutes)</label>' +
-      '<input id="a-vpn-after" type="number" min="1" max="1440" step="1" value="' + esc(s.vpn_autofix_after_minutes == null ? 10 : s.vpn_autofix_after_minutes) + '">' +
+      '<input id="a-vpn-after" type="number" inputmode="numeric" min="1" max="1440" step="1" value="' + esc(s.vpn_autofix_after_minutes == null ? 10 : s.vpn_autofix_after_minutes) + '">' +
       '<div class="src">Off by default. Delay: 1–1440 minutes. Recovery observes its cooldown and records every attempt in Recent actions.</div></div>' +
       adminVPNGateways(s) +
       '<div class="actions"><button type="button" class="btn" id="a-vpn-save">Save</button><span id="a-vpn-msg" class="src" role="status"></span></div></div></section>';
@@ -5043,7 +5133,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       "<h4>" + ic("send") + "Endpoints</h4>" +
       '<div class="form">' +
         '<div><label for="a-url">Apprise URL</label>' +
-        '<input id="a-url" type="url" spellcheck="false" placeholder="' +
+        '<input id="a-url" autocapitalize="none" autocorrect="off" type="url" spellcheck="false" placeholder="' +
         (s.apprise_set ? esc(s.apprise_hint || "(set)")
                        : "http://apprise-host:8000/notify/your-key") + '"></div>' +
         src("apprise_url") +
@@ -5054,7 +5144,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
           '<span id="a-test-msg" class="src"></span>' +
         "</div>" +
         '<div style="margin-top:10px"><label for="a-digest-url">Digest URL</label>' +
-        '<input id="a-digest-url" type="url" spellcheck="false" placeholder="' +
+        '<input id="a-digest-url" autocapitalize="none" autocorrect="off" type="url" spellcheck="false" placeholder="' +
         (s.digest_apprise_set ? esc(s.digest_apprise_hint || "(set)")
                               : "Default: alerts URL") + '"></div>' +
         src("digest_apprise_url") +
@@ -5071,7 +5161,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
           '<div style="flex:1 1 200px"><label for="a-level">Severity</label>' +
           '<select id="a-level">' + lvl + "</select></div>" +
           '<div style="flex:1 1 130px"><label for="a-every">Check interval</label>' +
-          '<input id="a-every" value="' + esc(s.notify_interval) + '" spellcheck="false"></div>' +
+          '<input id="a-every" autocapitalize="none" autocorrect="off" value="' + esc(s.notify_interval) + '" spellcheck="false"></div>' +
         "</div>" +
         src("notify_level") +
         '<div class="row" style="margin-top:8px">' +
@@ -5079,7 +5169,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
           (s.notify_enabled ? " checked" : "") + "> deliver notifications</label>" +
         "</div>" +
         '<div><label for="a-digest">Digest interval</label>' +
-        '<input id="a-digest" value="' + esc(s.digest_interval) + '" spellcheck="false">' +
+        '<input id="a-digest" autocapitalize="none" autocorrect="off" value="' + esc(s.digest_interval) + '" spellcheck="false">' +
         '<div class="src"><code>0</code> = off</div></div>' +
         '<div class="actions">' +
           '<button class="btn" id="a-save">Save</button>' +
@@ -6504,7 +6594,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     } else if (f.type === "secret") {
       control = secretControl(p, ui, f, fid, common, changed);
     } else {
-      var attrs = { type: f.type === "url" ? "url" : f.type === "number" ? "text" : "text", spellcheck: "false", autocomplete: "off",
+      var attrs = { type: f.type === "url" ? "url" : f.type === "number" ? "text" : "text", spellcheck: "false", autocapitalize: "none", autocorrect: "off", autocomplete: "off",
         placeholder: str(f.placeholder) || (f.default != null && typeof f.default !== "object" ? "Default: " + str(f.default) : null) };
       if (f.type === "url") attrs.inputmode = "url";
       if (f.type === "number") attrs.inputmode = "decimal";
@@ -6523,7 +6613,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
     var mode = ui.secret[f.key] || "keep", set = secretSet(f, p);
     function rerender() { var box = $(fid + "-box"); if (box) box.replaceWith(secretControl(p, ui, f, fid, common, changed)); syncPlugActions(p.id, ui); }
     function input(extra) {
-      var inp = h("input", Object.assign({ type: "password", autocomplete: "new-password", spellcheck: "false",
+      var inp = h("input", Object.assign({ type: "password", autocomplete: "new-password", spellcheck: "false", autocapitalize: "none", autocorrect: "off",
         placeholder: str(f.placeholder) || (set ? "New value" : null) }, common, { oninput: function () { changed(inp.value); } }));
       inp.value = ui.vals[f.key] || "";
       return extra ? h("div", { class: "secret-row" }, [inp, extra]) : inp;
@@ -7043,7 +7133,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
         return node;
       }
       var fid = "pf--auth-" + f.key, err = str(ui.errors[f.key]);
-      var ta = h("textarea", { id: fid, rows: "4", spellcheck: "false", autocomplete: "off", placeholder: "owner@example.org\n@example.org",
+      var ta = h("textarea", { id: fid, rows: "4", spellcheck: "false", autocapitalize: "none", autocorrect: "off", autocomplete: "off", placeholder: "owner@example.org\n@example.org",
         "aria-describedby": fid + "-help" + (err ? " " + fid + "-err" : ""), "aria-invalid": err ? "true" : null, "aria-required": "true",
         oninput: function () {
           ui.vals[f.key] = ta.value;
@@ -7714,7 +7804,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   }
   function pvDark() {
     var t = document.documentElement.getAttribute("data-theme");
-    return t ? t === "dark" : !matchMedia("(prefers-color-scheme: light)").matches;
+    return t ? t === "dark" : !systemLight.matches;
   }
   function pvHead(styled) {
     var d = pvDark(), head = '<!doctype html><meta charset="utf-8">' +
@@ -8223,7 +8313,7 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
       '<h2>Notifications</h2>' +
       '<p>Optional. Alerts can reach Telegram, email, Discord and many others through <a href="https://github.com/caronc/apprise-api" target="_blank" rel="noopener noreferrer">Apprise</a>. Paste the URL of an Apprise API endpoint, key included.</p>' +
       '<div class="setup-field"><label for="setup-url">Apprise URL</label><div class="row">' +
-      '<input id="setup-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="http://apprise.example.org:8000/notify/KEY">' +
+      '<input id="setup-url" autocapitalize="none" autocorrect="off" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="http://apprise.example.org:8000/notify/KEY">' +
       '<button class="btn" type="button" id="setup-test">' + ic("send", "sm") + 'Send test</button></div></div>' +
       '<div id="setup-result" class="result" role="status"></div>' +
       '<div class="setup-foot"><span class="hint">You can change this later in Admin.</span>' +
@@ -8294,10 +8384,10 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
   function enrollPanelHTML() {
     return '<div class="enroll">' +
       '<div class="enroll-fresh" data-enroll-fresh role="status"></div>' +
-      '<div class="enroll-options"><label>Hostname (optional)<input data-enroll-host autocomplete="off" spellcheck="false" maxlength="128" placeholder="Use this machine’s hostname"></label>' +
+      '<div class="enroll-options"><label>Hostname (optional)<input data-enroll-host autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" maxlength="128" placeholder="Use this machine’s hostname"></label>' +
       '<label>Schedule<select data-enroll-scheduler><option value="systemd">Linux · systemd</option><option value="truenas-cron">TrueNAS · cron</option></select></label>' +
-      '<div class="enroll-cron" data-enroll-cron hidden><label>Persistent dataset directory<input data-enroll-state placeholder="/mnt/pool/agent" autocomplete="off" spellcheck="false"></label>' +
-      '<label>Replace cron job ID or description (optional)<input data-enroll-replace autocomplete="off"></label><span class="sub">The selected job is disabled only after the new agent reports successfully.</span></div>' +
+      '<div class="enroll-cron" data-enroll-cron hidden><label>Persistent dataset directory<input data-enroll-state autocapitalize="none" autocorrect="off" placeholder="/mnt/pool/agent" autocomplete="off" spellcheck="false"></label>' +
+      '<label>Replace cron job ID or description (optional)<input data-enroll-replace autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off"></label><span class="sub">The selected job is disabled only after the new agent reports successfully.</span></div>' +
       '<label>Run command as<select data-enroll-user><option value="linux">User with sudo</option><option value="root">Root</option></select></label>' +
       '<button class="btn" type="button" data-enroll-new>Generate command</button></div>' +
       '<div data-enroll-status role="status"></div>' +
@@ -8529,18 +8619,25 @@ a.pv-poster:hover .pv-art { outline: 2px solid var(--line-2); outline-offset: 0;
 
   // The toggle is remembered on this device; without one the OS decides,
   // and dark is the default when it has no opinion.
+  var systemLight = matchMedia("(prefers-color-scheme: light)");
   function setTheme(t) {
     var root = document.documentElement;
     if (t) root.setAttribute("data-theme", t); else root.removeAttribute("data-theme");
-    var dark = t ? t === "dark" : !matchMedia("(prefers-color-scheme: light)").matches;
-    var m = document.querySelector('meta[name="theme-color"]');
-    if (m) m.setAttribute("content", dark ? "#121314" : "#f4f4f5");
+    var surface = getComputedStyle(root).getPropertyValue("--surface").trim();
+    Array.prototype.forEach.call(document.querySelectorAll('meta[name="theme-color"]'), function (meta) {
+      meta.content = surface;
+    });
   }
+  function syncSystemTheme() {
+    if (!document.documentElement.hasAttribute("data-theme")) setTheme("");
+  }
+  if (systemLight.addEventListener) systemLight.addEventListener("change", syncSystemTheme);
+  else if (systemLight.addListener) systemLight.addListener(syncSystemTheme);
   try { setTheme(localStorage.getItem("homelab-inventory.theme") || ""); } catch (e) { setTheme(""); }
   $("theme").addEventListener("click", function () {
     var root = document.documentElement;
     var dark = root.getAttribute("data-theme") === "dark" ||
-      (!root.hasAttribute("data-theme") && !matchMedia("(prefers-color-scheme: light)").matches);
+      (!root.hasAttribute("data-theme") && !systemLight.matches);
     var next = dark ? "light" : "dark";
     setTheme(next);
     try { localStorage.setItem("homelab-inventory.theme", next); } catch (e) { /* private mode */ }

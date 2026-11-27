@@ -9,7 +9,7 @@
   root.innerHTML = '<h4>Backup and migration</h4>' +
     '<p>Download an encrypted copy of inventory history, package sets, settings and application state. Keep the passphrase separately: it cannot be recovered.</p>' +
     '<p>Backups include credentials. External databases, media, upload files, signing keys and deployment mounts need separate backups. Creating or restoring a backup briefly pauses intake and background work.</p>' +
-    '<div class="backup-controls"><label class="backup-field">Backup passphrase <input id="backup-pass" type="password" autocomplete="new-password" minlength="12" placeholder="At least 12 characters"></label> ' +
+    '<div class="backup-controls"><label class="backup-field">Backup passphrase <input id="backup-pass" type="password" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="new-password" minlength="12" placeholder="At least 12 characters"></label> ' +
     '<button class="btn" type="button" id="backup-download">Download backup</button></div>' +
     '<div class="backup-controls backup-restore"><label class="backup-field">Restore file <input id="backup-file" type="file" accept=".hlb,application/octet-stream"></label> ' +
     '<button class="btn" type="button" id="backup-preview">Preview restore</button></div>' +
