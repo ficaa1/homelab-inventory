@@ -2542,6 +2542,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     route = readHash();
     if (route.login) history.replaceState(null, "", "#/home");
     var changed = routeHash !== null && routeHash !== location.hash;
+    if (changed) routeHeadingFrom = null;
     routeHash = location.hash;
     var saved = phone() ? trackRouteScroll(changed) : 0;
     closeMore();
@@ -2581,7 +2582,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
 
   var routeHash = null, routeEntry = 0, routeSequence = Date.now(), routeScroll = {};
-  var routeKeyboard = true, routeRestore = null;
+  var routeKeyboard = true, routeRestore = null, routeHeadingFrom = null;
 
   function trackRouteScroll(changed) {
     if (changed) stopRouteRestore();
@@ -2609,6 +2610,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         return el.getClientRects().length;
       });
       var focus = heading || main;
+      if (!heading && route.view === "host") routeHeadingFrom = focus;
       focus.setAttribute("tabindex", "-1");
       focus.focus({ preventScroll: true });
     }
@@ -3786,6 +3788,15 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           }).join(""), false)
         : "");
 
+    if (routeHeadingFrom) {
+      var from = routeHeadingFrom;
+      routeHeadingFrom = null;
+      if (phone() && document.activeElement === from) {
+        var heading = $("host-body").querySelector(".hhead h2");
+        heading.setAttribute("tabindex", "-1");
+        heading.focus({ preventScroll: true });
+      }
+    }
     prepareListTables($("host-body"));
     alertList(mine, "level", "host-alerts", "host");
     gridView = { level: 0, lo: 0 };
