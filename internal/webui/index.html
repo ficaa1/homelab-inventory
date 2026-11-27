@@ -696,6 +696,11 @@ a.svc:active { transform: scale(0.985); }
 }
 .pal .qrow { display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--line); color: var(--text-3); }
 .pal input { flex: 1; min-width: 0; font-size: 16px; color: var(--text); background: transparent; border: 0; padding: 15px 0; outline: none; }
+#pal-close { display: none; }
+@media (max-width: 640px) {
+  #pal-close { display: inline-grid; place-items: center; flex: none; min-width: 44px; min-height: 44px; }
+  .pal .qrow { padding-right: 6px; }
+}
 #pal-results { overscroll-behavior: contain; }
 .pal .results { overflow-y: auto; padding: 6px; }
 .pal .row {
@@ -1398,9 +1403,9 @@ button.ops-tile { cursor:pointer; }
   as part of the dashboard rather than something embedded in it.
 */
 .tab-more { display: none; }
-.more-scrim { position: fixed; inset: 0; z-index: 44; }
+.more-scrim { position: fixed; inset: 0 0 calc(var(--nav-h) + var(--safe-b)); z-index: 61; }
 .more-sheet {
-  position: fixed; z-index: 46; right: 8px; bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
+  position: fixed; z-index: 62; right: 8px; bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
   width: min(280px, calc(100vw - 16px)); padding: 6px; display: grid; gap: 2px;
   background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-lg);
   box-shadow: var(--shadow);
@@ -2273,7 +2278,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 <div id="pal" class="pal hidden" role="dialog" aria-modal="true" aria-label="Search">
   <div class="qrow"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
   <input id="pal-q" enterkeyhint="search" type="text" placeholder="Hosts, services, ports, alerts"
-         autocomplete="off" spellcheck="false" aria-label="Search"></div>
+         autocomplete="off" spellcheck="false" aria-label="Search">
+  <button id="pal-close" class="ibtn" type="button" aria-label="Close search"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div id="pal-results" class="results" role="listbox"></div>
   <div class="hint">
     <span><kbd>↑</kbd><kbd>↓</kbd> move</span>
@@ -2509,6 +2515,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
 
   function go(hash) {
+    rememberRouteScroll();
     if (phone() && !drawer.classList.contains("hidden") && location.hash !== hash) {
       drawerNextRoute = hash;
       closeDrawer();
@@ -2523,6 +2530,9 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var previous = route;
     route = readHash();
     if (route.login) history.replaceState(null, "", "#/home");
+    var changed = routeHash !== null && routeHash !== location.hash;
+    routeHash = location.hash;
+    var saved = phone() ? trackRouteScroll(changed) : 0;
     closeMore();
     $("view-fleet").classList.toggle("hidden", route.view !== "fleet");
     $("view-host").classList.toggle("hidden", route.view !== "host");
@@ -2541,19 +2551,86 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         loadSettings();
         loadSignin();
         loadPasskeys();
-        loadPlugins(route.sub === "plugins" && (previous.view !== "fleet" || previous.tab !== "admin" || previous.sub !== "plugins"));
+        loadPlugins(!saved && route.sub === "plugins" && (previous.view !== "fleet" || previous.tab !== "admin" || previous.sub !== "plugins"));
       }
-      if (previous.view !== "fleet" || previous.tab !== route.tab) routeIn($("panel-" + route.tab));
+      var panel = $("panel-" + route.tab);
+      if (previous.view !== "fleet" || previous.tab !== route.tab) routeIn(panel);
+      if (changed && phone()) placeRouteViewport(panel, saved);
       return;
     }
     if (route.view === "plugin") {
       openPluginView();
       if (previous.view !== "plugin" || previous.plugin !== route.plugin) routeIn($("view-plugin"));
+      if (changed && phone()) placeRouteViewport($("view-plugin"), saved);
       return;
     }
     openHost(route.host);
     if (previous.view !== "host" || previous.host !== route.host) routeIn($("view-host"));
+    if (changed && phone()) placeRouteViewport($("view-host"), saved);
   }
+
+  var routeHash = null, routeEntry = 0, routeSequence = Date.now(), routeScroll = {};
+  var routeKeyboard = true, routeRestore = null;
+
+  function trackRouteScroll(changed) {
+    if (changed) stopRouteRestore();
+    var state = history.state || {}, entry = state.hiRoute;
+    if (changed || !routeEntry) {
+      routeEntry = entry || ++routeSequence;
+      if (!entry) history.replaceState(Object.assign({}, state, { hiRoute: routeEntry }), "", location.href);
+    }
+    return routeScroll[routeEntry] || 0;
+  }
+
+  function rememberRouteScroll() {
+    if (phone() && routeEntry && !routeRestore && routeHash === location.hash) routeScroll[routeEntry] = window.scrollY;
+  }
+
+  function stopRouteRestore() {
+    if (routeRestore) routeRestore.disconnect();
+    routeRestore = null;
+  }
+
+  function placeRouteViewport(panel, saved) {
+    var main = document.querySelector("main.wrap");
+    if (routeKeyboard) {
+      var heading = panel && Array.prototype.find.call(panel.querySelectorAll("h1, h2"), function (el) {
+        return el.getClientRects().length;
+      });
+      var focus = heading || main;
+      focus.setAttribute("tabindex", "-1");
+      focus.focus({ preventScroll: true });
+    }
+    window.scrollTo(0, saved);
+    // Data-backed panels can be too short until their request has rendered.
+    if (window.scrollY < saved && window.ResizeObserver) {
+      routeRestore = new ResizeObserver(function () {
+        window.scrollTo(0, saved);
+        if (window.scrollY >= saved) stopRouteRestore();
+      });
+      routeRestore.observe(main);
+    }
+  }
+
+  function syncRouteRestoration() {
+    if ("scrollRestoration" in history) history.scrollRestoration = phone() ? "manual" : "auto";
+    if (phone() && routeHash !== null) trackRouteScroll(false);
+    if (!phone()) { routeEntry = 0; stopRouteRestore(); }
+  }
+  syncRouteRestoration();
+  window.addEventListener("resize", syncRouteRestoration);
+  window.addEventListener("scroll", rememberRouteScroll, { passive: true });
+  document.addEventListener("wheel", stopRouteRestore, { passive: true });
+  document.addEventListener("pointerdown", function () {
+    routeKeyboard = false;
+    stopRouteRestore();
+    rememberRouteScroll();
+  }, true);
+  document.addEventListener("keydown", function () {
+    routeKeyboard = true;
+    stopRouteRestore();
+    rememberRouteScroll();
+  }, true);
 
   function routeIn(el) {
     animateIn(el, [{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], motion.d2);
@@ -4787,7 +4864,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     return items;
   }
 
-  var palOpen = false, palIndex = 0, palMatches = [];
+  var palOpen = false, palIndex = 0, palMatches = [], palReturnFocus = null;
 
   // Ranked, not merely filtered: an exact name beats a prefix beats a
   // substring, so typing "host-a" reaches the host before the forty things that
@@ -4838,26 +4915,33 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     root.classList.toggle("locked", locked);
   }
 
-  function openPalette() {
+  function openPalette(keyboard, opener) {
+    if (palOpen) return;
+    palReturnFocus = opener || document.activeElement;
     palOpen = true; palIndex = 0;
-    reveal($("pal"), sheetFrames("translateX(-50%)"), motion.d2, motion.out);
-    reveal($("pal-scrim"), FADE_IN, motion.d2);
+    reveal($("pal"), keyboard ? null : FADE_IN, 120);
+    reveal($("pal-scrim"), keyboard ? null : FADE_IN, 120);
     $("pal-q").value = "";
     renderPalette();
     syncScrollLock();
     $("pal-q").focus();
   }
 
-  function closePalette() {
+  function closePalette(keyboard) {
+    if (!palOpen) return;
     palOpen = false;
-    conceal($("pal"), sheetFrames("translateX(-50%)").reverse(), motion.d1, syncScrollLock);
-    conceal($("pal-scrim"), FADE_OUT, motion.d1);
+    [$("pal"), $("pal-scrim")].forEach(function (el) {
+      var frames = keyboard ? null : [{ opacity: getComputedStyle(el).opacity }, { opacity: 0 }];
+      conceal(el, frames, 120, syncScrollLock);
+    });
+    if (palReturnFocus && palReturnFocus.isConnected) palReturnFocus.focus({ preventScroll: true });
+    palReturnFocus = null;
   }
 
-  function activatePalette(i) {
+  function activatePalette(i, keyboard) {
     var it = palMatches[i];
     if (!it) return;
-    closePalette();
+    closePalette(keyboard);
     if (it.hash) { go(it.hash); return; }
     if (it.alert) { openAlertDrawer(it.alert); return; }
     if (it.port) { openPortDrawer(it.port.host, it.port.port); return; }
@@ -6219,7 +6303,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var t = e.target.closest ? e.target.closest("[data-plugin]") : null;
     if (t) { go(entryHash({ id: t.dataset.plugin, group: t.dataset.group || "" })); return; }
     if (e.target.closest && e.target.closest("#tab-more")) {
-      if ($("more-sheet").classList.contains("hidden")) openMore(); else closeMore(true);
+      if (moreOpen()) closeMore(true); else openMore();
     }
   });
   document.querySelector(".tabs").addEventListener("keydown", function (e) {
@@ -6235,6 +6319,18 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     list[next].focus();
   });
 
+  function moreOpen() { return $("tab-more").getAttribute("aria-expanded") === "true"; }
+
+  function syncFabInert() {
+    var fab = $("up-fab");
+    fab.inert = moreOpen() || fab.classList.contains("away");
+  }
+
+  function overlayPose(el) {
+    var style = getComputedStyle(el);
+    return { opacity: style.opacity, transform: style.transform };
+  }
+
   function openMore() {
     var sheet = $("more-sheet"), items = [];
     navEntries().filter(function (e) { return !navDirect(e); }).forEach(function (e) {
@@ -6243,17 +6339,22 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         [iconNode(e.icon), e.title]));
     });
     sheet.replaceChildren.apply(sheet, items);
-    reveal(sheet, sheetFrames(), motion.d2, motion.out);
+    var frames = sheetFrames();
+    if (!sheet.classList.contains("hidden")) frames[0] = overlayPose(sheet);
+    reveal(sheet, frames, motion.d2, motion.out);
     $("more-scrim").classList.remove("hidden");
     $("tab-more").setAttribute("aria-expanded", "true");
+    syncFabInert();
     var first = sheet.querySelector('[aria-current="page"]') || sheet.querySelector("button");
     if (first) first.focus();
   }
   function closeMore(refocus) {
-    if ($("more-sheet").classList.contains("hidden")) return;
-    conceal($("more-sheet"), sheetFrames().reverse(), motion.d1);
+    if (!moreOpen()) return;
+    var sheet = $("more-sheet");
+    conceal(sheet, phone() ? [overlayPose(sheet), sheetFrames()[0]] : null, motion.d1);
     $("more-scrim").classList.add("hidden");
     $("tab-more").setAttribute("aria-expanded", "false");
+    syncFabInert();
     if (refocus) $("tab-more").focus();
   }
   $("more-scrim").addEventListener("click", function () { closeMore(false); });
@@ -8245,15 +8346,15 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       reveal(sheet, [{ opacity: 0, transform: "scale(0.14)" }, { opacity: 1, offset: 0.35 }, { opacity: 1, transform: "none" }], motion.d3, motion.spring);
       reveal($("up-scrim"), FADE_IN, motion.d2);
       placeThumb(false);
-      fab.inert = true;
       fab.classList.add("away");
+      syncFabInert();
       animateIn(fab, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(0.6)" }], motion.d1, motion.inn);
       return;
     }
     conceal(sheet, SHEET_OUT, motion.d2);
     conceal($("up-scrim"), FADE_OUT, motion.d2);
-    fab.inert = false;
     fab.classList.remove("away");
+    syncFabInert();
     fab.motionIn = animateIn(fab, [{ opacity: 0, transform: "scale(0.5)" }, { opacity: 1, transform: "none" }], motion.d3, motion.spring, motion.d2 - 60);
     if (up.fabFx) {
       var fx = up.fabFx;
@@ -9371,8 +9472,9 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   });
 
   $("pal-q").addEventListener("input", function () { palIndex = 0; renderPalette(); });
-  $("pal-scrim").addEventListener("click", closePalette);
-  $("search").addEventListener("click", openPalette);
+  $("pal-scrim").addEventListener("click", function () { closePalette(false); });
+  $("pal-close").addEventListener("click", function (e) { closePalette(e.detail === 0); });
+  $("search").addEventListener("click", function (e) { openPalette(e.detail === 0, this); });
 
   $("f-home").addEventListener("input", renderHome);
   $("svc-edit").addEventListener("click", function () {
@@ -9563,20 +9665,20 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target.tagName || ""));
     if ((e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
-      palOpen ? closePalette() : openPalette();
+      palOpen ? closePalette(true) : openPalette(true);
       return;
     }
-    if (e.key === "/" && !typing && !palOpen) { e.preventDefault(); openPalette(); return; }
+    if (e.key === "/" && !typing && !palOpen) { e.preventDefault(); openPalette(true); return; }
 
     if (palOpen) {
-      if (e.key === "Escape") { e.preventDefault(); closePalette(); return; }
+      if (e.key === "Escape") { e.preventDefault(); closePalette(true); return; }
       if (e.key === "ArrowDown") { e.preventDefault(); palIndex = Math.min(palIndex + 1, palMatches.length - 1); renderPalette(); return; }
       if (e.key === "ArrowUp") { e.preventDefault(); palIndex = Math.max(palIndex - 1, 0); renderPalette(); return; }
-      if (e.key === "Enter") { e.preventDefault(); activatePalette(palIndex); return; }
+      if (e.key === "Enter" && e.target === $("pal-q")) { e.preventDefault(); activatePalette(palIndex, true); return; }
       return;
     }
 
-    if (e.key === "Tab" && !$("drawer").classList.contains("hidden") && !$("drawer").motionOut && $("restart-sheet")) {
+    if (e.key === "Tab" && drawerOpen && $("restart-sheet")) {
       var focusable = Array.prototype.slice.call($("drawer").querySelectorAll("button:not([disabled]), input:not([disabled]), summary, a[href]"));
       var first = focusable[0], last = focusable[focusable.length-1];
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
