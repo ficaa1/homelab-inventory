@@ -244,7 +244,12 @@
     if (!ui) return;
     var slot = clear(ui.wrap.querySelector(".cve-summary")), notes = clear(ui.wrap.querySelector(".cve-notes"));
     var o = st.overview, s = st.status;
-    if (s && s.last_scan && s.last_scan.error) notes.appendChild(HI().notice("crit", "The last scan failed: " + s.last_scan.error + ". The figures below are from the scan before it."));
+    if (s && s.last_scan && s.last_scan.error) {
+      var previous = o && o.generated_at;
+      notes.appendChild(HI().notice("crit", previous ?
+        "Latest scan failed. Showing results from " + new Date(previous).toLocaleString() + ". Select Scan now to retry." :
+        "Scan failed. Select Scan now to retry."));
+    }
     if (s && s.sources) {
       [["osv", "OSV"], ["kev", "CISA KEV"], ["epss", "EPSS"]].forEach(function (x) {
         var src = s.sources[x[0]];
@@ -256,7 +261,7 @@
       if (s && s.state === "scanning") slot.appendChild(HI().stateBox("First scan running", "Matching every host's and image's packages against OSV. The first scan downloads several thousand advisories and can take a few minutes."));
       else if (s || st.statusErr) {
         var b = h("button", { class: "btn primary", type: "button", onclick: function () { scanNow(b); } }, ["Scan now"]);
-        slot.appendChild(HI().stateBox(st.statusErr ? "Vulnerability data unavailable" : "No scan yet", st.statusErr || "Scans run on a schedule. Start the first one now; package names and versions are sent to OSV.dev.", st.statusErr ? null : b, !!st.statusErr));
+        slot.appendChild(HI().stateBox(st.statusErr ? "Vulnerability data unavailable" : "No scan yet", st.statusErr ? "Could not load vulnerability status. Refresh to try again." : "Scans run on a schedule. Start the first one now; package names and versions are sent to OSV.dev.", st.statusErr ? null : b, !!st.statusErr));
       } else slot.appendChild(skel(2));
       return;
     }
@@ -452,12 +457,12 @@
     var slot = ui.wrap.querySelector(".cve-body"), o = st.overview;
     if (!o || !o.generated_at) { clear(slot); return; }
     if (!st.list || st.listKey.split("?")[0] !== view) {
-      if (st.listErr) slot.replaceChildren(HI().stateBox("Could not load", st.listErr, retryButton(), true));
+      if (st.listErr) slot.replaceChildren(HI().stateBox("Could not load vulnerability results", "Refresh to try again.", retryButton(), true));
       else slot.replaceChildren(skel(8));
       return;
     }
     slot.setAttribute("aria-busy", String(st.loading));
-    if (st.listErr) { slot.replaceChildren(HI().notice("crit", "Could not refresh: " + st.listErr), current()); return; }
+    if (st.listErr) { slot.replaceChildren(HI().notice("crit", "Could not refresh vulnerability results. Refresh to try again."), current()); return; }
     slot.replaceChildren(current());
   }
   function retryButton() { return h("button", { class: "btn", type: "button", onclick: function () { loadList(true); } }, ["Try again"]); }
@@ -466,7 +471,7 @@
 
   function vulnsView() {
     var list = st.list, items = list.items || [];
-    if (!items.length) return HI().stateBox(filtered() ? "No vulnerabilities match" : f.sup === "1" ? "Nothing suppressed" : "No open vulnerabilities", filtered() ? "Clear a filter to see more." : "Every scanned package is at a version with no known advisory.", filtered() ? h("button", { class: "btn", type: "button", onclick: function () { nav("vulns", readFilters(null)); } }, ["Clear filters"]) : null);
+    if (!items.length) return HI().stateBox(f.sup === "1" && !f.q && !f.sev.length ? "No suppressed vulnerabilities" : filtered() ? "No vulnerabilities match" : "No open vulnerabilities in the last successful scan", filtered() ? "Clear filters to see all vulnerabilities." : "See Coverage for what was checked.", filtered() ? h("button", { class: "btn", type: "button", onclick: function () { nav("vulns", readFilters(null)); } }, ["Clear filters"]) : null);
     var body = h("tbody", {}, items.map(function (r) {
       var pk = r.packages || [];
       return rowLink(h("tr", { class: r.suppressed ? "cve-suppressed" : null }, [
@@ -490,7 +495,7 @@
   function packagesView() {
     var list = st.list, items = list.items || [];
     var head = h("p", { class: "sub cve-lede", text: "Each row is one source package in one distro release. Upgrading it to the version shown clears every CVE that has a fix; the list is ordered by the risk those upgrades remove." });
-    if (!items.length) return h("div", {}, [head, HI().stateBox(filtered() ? "No packages match" : "No vulnerable packages", filtered() ? "Clear a filter to see more." : "")]);
+    if (!items.length) return h("div", {}, [head, HI().stateBox(filtered() ? "No packages match your filters" : "No packages with open findings in the last successful scan", filtered() ? "Clear filters to see all packages." : "")]);
     var body = h("tbody", {}, items.map(function (r) {
       var inst = r.installed || [];
       return rowLink(h("tr", {}, [
@@ -553,11 +558,11 @@
   function openVuln(id) {
     if (drawerCtrl) drawerCtrl.abort();
     var c = drawerCtrl = new AbortController();
-    HI().openDrawer(h("div", { class: "cve-drawer" }, [h("h3", { class: "cve-id", text: id }), skel(6)]), id);
+    var drawer = HI().openDrawer(h("div", { class: "cve-drawer" }, [h("h3", { class: "cve-id", text: id }), skel(6)]), id);
     HI().get(ID, "vulns/" + encodeURIComponent(id), c.signal).then(function (v) {
-      if (drawerCtrl === c) HI().openDrawer(vulnDetail(v), id);
-    }, function (e) {
-      if (drawerCtrl === c && !c.signal.aborted) HI().openDrawer(h("div", { class: "cve-drawer" }, [h("h3", { class: "cve-id", text: id }), HI().stateBox("Could not load", e.message || "", null, true)]), id);
+      if (drawerCtrl === c) HI().updateDrawer(drawer, vulnDetail(v), id);
+    }, function () {
+      if (drawerCtrl === c && !c.signal.aborted) HI().updateDrawer(drawer, h("div", { class: "cve-drawer" }, [h("h3", { class: "cve-id", text: id }), HI().stateBox("Could not load vulnerability details", "Close this sheet and open it again.", null, true)]), id);
     });
   }
 

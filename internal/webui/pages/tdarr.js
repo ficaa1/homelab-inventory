@@ -92,7 +92,7 @@
           h("b", { text: n.name || "Unknown node" }),
           h("span", { class: "sub", text: nodeState(n) }),
           h("span", { class: "spacer" }),
-          h("span", { text: num(armed(n)) + " armed" })
+          h("span", { text: num(armed(n)) + (armed(n) === 1 ? " transcode worker enabled" : " transcode workers enabled") })
         ])
       ]);
       (n.active || []).forEach(function (a) {
@@ -179,7 +179,7 @@
     wrap.appendChild(h("div", { class: "tdarr-selection arc-title" }, [
       h("span", { id: "tdarr-total", role: "status" }),
       h("span", { class: "spacer" }),
-      h("label", { class: "library-keep", title: "Also arm the secondary worker for this batch" }, [pc, " ", h("span", { id: "tdarr-pc-label", text: st.pcLabel || "Secondary worker" })]),
+      h("label", { class: "library-keep", title: "Enable the worker for this batch" }, [pc, " ", h("span", { id: "tdarr-pc-label", text: "Enable " + (st.pcLabel || "secondary worker") + " for this batch" })]),
       h("button", { id: "tdarr-preview", class: "btn primary", type: "button", text: "Preview", onclick: preview })
     ]));
     wrap.appendChild(h("div", { id: "tdarr-rows" }));
@@ -190,7 +190,7 @@
   function renderRows() {
     var el = byId("tdarr-rows"); if (!el) return;
     clear(el);
-    var lab = byId("tdarr-pc-label"); if (lab) lab.textContent = st.pcLabel || "Secondary worker";
+    var lab = byId("tdarr-pc-label"); if (lab) lab.textContent = "Enable " + (st.pcLabel || "secondary worker") + " for this batch";
     if (!st.items) {
       if (st.libError) { el.appendChild(h("div", { class: "empty", text: "Library unavailable" })); message(st.libError); }
       else el.appendChild(skel(3));
@@ -247,7 +247,7 @@
     resolve(s).then(function (v) {
       if (v.error) throw new Error(v.error);
       if (!v.plan.paths.length) throw new Error((v.plan.files[0] || {}).skip_reason || "No eligible files");
-      if (total().count + v.plan.paths.length > LIMIT || Object.keys(st.selected).length >= LIMIT) throw new Error(LIMIT + "-file limit");
+      if (total().count + v.plan.paths.length > LIMIT || Object.keys(st.selected).length >= LIMIT) throw new Error("Select up to " + LIMIT + " files per batch. Deselect files before adding this title.");
       st.selected[k] = { selection: s, plan: v.plan };
     }).catch(function (e) { message(r.entry.title + ": " + e.message); }).then(function () { st.busy = false; if (live) renderRows(); });
   }
@@ -295,7 +295,10 @@
       resolve(s).then(function (v) {
         if (epoch !== st.epoch || run !== seq) return;
         var count = total(k).count + v.plan.paths.length;
-        msg.textContent = count + "/" + LIMIT + " files · " + lb(v.plan.total_bytes) + (v.error ? " · " + v.error : "");
+        var excess = count - LIMIT;
+        msg.textContent = excess > 0 ?
+          "Select up to " + LIMIT + " files per batch. Deselect " + excess + (excess === 1 ? " file" : " files") + " to continue." :
+          count + "/" + LIMIT + " files · " + lb(v.plan.total_bytes) + (v.error ? " · " + v.error : "");
         draft = { selection: s, plan: v.plan };
         save.disabled = !!v.error || !v.plan.paths.length || count > LIMIT || (!chosen && Object.keys(st.selected).length >= LIMIT);
       }).catch(function (e) { if (epoch === st.epoch && run === seq) msg.textContent = e.message; });
@@ -334,16 +337,16 @@
     }).catch(function (e) {
       if (epoch !== st.epoch || !HI().drawerExists(id)) return;
       if (e.canceled) { HI().closeDrawer(); return; }
-      drawer(label, [h("h3", { text: "Preview unavailable" }), h("div", { class: "note", text: e.message })], id);
+      drawer(label, [h("h3", { text: "Could not load the Tdarr preview" }), h("div", { class: "note", text: "Close this sheet and open the preview again." })], id);
     }).then(function () { busy(false); });
   }
 
   function review(v, epoch, id) {
-    var n = v.plan.paths.length, ok = !!v.hash && !!v.confirmation_token && !v.error && n > 0 && n <= LIMIT;
-    var msg = h("div", { id: "tdarr-confirm-msg", class: "note", role: "status", text: v.error || (waiting() ? "Tdarr already has " + waiting() + " queued or active; the server refuses a batch until that queue is empty." : "") });
-    var queue = h("button", { id: "tdarr-queue", class: "btn primary", type: "button", text: "Queue", disabled: !ok, onclick: run });
+    var n = v.plan.paths.length, queued = waiting(), ok = !queued && !!v.hash && !!v.confirmation_token && !v.error && n > 0 && n <= LIMIT;
+    var msg = h("div", { id: "tdarr-confirm-msg", class: "note", role: "status", text: queued ? "Tdarr has " + queued + (queued === 1 ? " queued or active file." : " queued or active files.") + " Wait for the queue to empty, then preview the batch again." : v.error || "" });
+    var queue = h("button", { id: "tdarr-queue", class: "btn primary", type: "button", text: n === 1 ? "Queue 1 file" : "Queue " + n + " files", disabled: !ok, onclick: run });
     var box = drawer("Tdarr batch review", [
-      h("div", { class: "arc-eyebrow", text: "TDARR · " + (st.pcLabel || "Secondary").toUpperCase() + (v.plan.withPc ? " ON" : " OFF") }),
+      h("div", { class: "arc-eyebrow", text: "Tdarr · " + (st.pcLabel || "Secondary") + (v.plan.withPc ? " on" : " off") }),
       h("h3", { text: n + (n === 1 ? " file · " : " files · ") + lb(v.plan.total_bytes) }),
       fileList(v.plan), msg,
       h("div", { class: "actions" }, [h("button", { id: "tdarr-cancel", class: "btn", type: "button", text: "Cancel", onclick: HI().closeDrawer }), queue])
@@ -420,8 +423,8 @@
     var q = st.candQuery.trim().toLowerCase();
     var rows = st.cands.filter(function (c) { return c.path.toLowerCase().indexOf(q) >= 0; });
     var save = rows.reduce(function (t, c) { return t + (c.est_save_gb || 0); }, 0);
-    el.appendChild(h("h3", {}, ["Worth compressing", h("span", { class: "n", text: rows.length + " files · ≈" + gb(save) + " back" })]));
-    if (!rows.length) el.appendChild(h("div", { class: "pv-empty", text: q ? "No files match." : "Nothing worth compressing." }));
+    el.appendChild(h("h3", {}, ["Compression candidates", h("span", { class: "n", text: rows.length + " files · Estimated savings " + gb(save) })]));
+    if (!rows.length) el.appendChild(h("div", { class: "pv-empty", text: q ? "No files match your filters. Clear filters to see all files." : "No compression candidates" }));
     var max = Math.max.apply(null, [1].concat(rows.map(function (c) { return c.est_save_gb || 0; })));
     rows.forEach(function (c) {
       var k = KIND[c.kind] || [c.kind, "info"], dir = c.path.split("/").slice(-2, -1)[0] || "";

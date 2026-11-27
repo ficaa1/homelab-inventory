@@ -43,6 +43,7 @@
 package catalog
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -433,8 +434,13 @@ func validateStored(s Stored) error {
 	if s.Icon != "" && s.Icon != "-" && icons.Normalise(s.Icon) != s.Icon {
 		return fmt.Errorf("catalog: an icon must be a plain slug like %q, not a URL", "sonarr")
 	}
-	if len(s.Name) > 64 || len(s.Note) > 200 || len(s.URL) > 512 {
-		return fmt.Errorf("catalog: name, note or URL is too long")
+	switch {
+	case len(s.Name) > 64:
+		return errors.New("Shorten Name to 64 bytes or fewer.")
+	case len(s.Note) > 200:
+		return errors.New("Shorten Note to 200 bytes or fewer.")
+	case len(s.URL) > 512:
+		return errors.New("Shorten URL to 512 bytes or fewer.")
 	}
 	if s.Category != "" && !validCategory(s.Category) {
 		return fmt.Errorf("catalog: %q is not a category", s.Category)
@@ -446,14 +452,8 @@ func validateStored(s Stored) error {
 	// origin, so a javascript: URL here would be stored XSS. Allowlist the two
 	// schemes a link may use, rather than blocking the ones that look dangerous.
 	u, err := url.Parse(s.URL)
-	if err != nil {
-		return fmt.Errorf("catalog: URL is not parseable")
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("catalog: a URL must use http or https, not %q", u.Scheme)
-	}
-	if u.Host == "" {
-		return fmt.Errorf("catalog: URL has no host")
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return errors.New("Enter a full HTTP or HTTPS URL, such as https://service.example.org.")
 	}
 	return nil
 }

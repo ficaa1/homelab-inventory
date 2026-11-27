@@ -597,6 +597,7 @@ td.num, th.num { text-align: right; }
     min-height: 52px; column-gap: 10px; padding: 10px 38px 10px 14px;
     transition: background-color var(--dur-1) var(--ease-out);
   }
+  [data-list][data-empty] > tbody > tr { display: block; padding: 12px 14px; }
   [data-list] > tbody > tr:first-child { border-radius: 12px 12px 0 0; }
   [data-list] > tbody > tr:last-child { border-radius: 0 0 12px 12px; }
   [data-list] > tbody > tr:only-child { border-radius: 12px; }
@@ -1620,6 +1621,7 @@ button.ops-tile { cursor:pointer; }
     padding: 0 14px; margin: 0 0 6px; color: var(--text-3);
     font-size: var(--fs-sm); line-height: 1.4; font-weight: 500; text-transform: none; letter-spacing: normal;
   }
+  #panel-admin .setting > h2 { font-size: var(--fs-lg); line-height: 1.25; font-weight: 600; }
   #panel-admin :is(.setting:has(.settings-group), #signin, #backup-admin) > :is(h2, h4) .ic { display: none; }
   #panel-admin :is(.setting:has(.settings-group), #signin, #backup-admin) > p { margin: 6px 14px; }
   #panel-admin .settings-group { display: flex; flex-direction: column; min-width: 0; }
@@ -2147,14 +2149,14 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     <div id="gate-sso" class="gate-sso hidden">
       <a id="gate-sso-link" class="btn primary" href="/auth/login">Sign in</a>
       <button id="gate-passkey" class="btn hidden" type="button"><svg class="ic sm" aria-hidden="true"><use href="#i-key"/></svg>Sign in with a passkey</button>
-      <button id="gate-alt" class="gate-alt" type="button" aria-expanded="false" aria-controls="gate-token-box">Use a token instead</button>
+      <button id="gate-alt" class="gate-alt" type="button" aria-expanded="false" aria-controls="gate-token-box">Use an API token instead</button>
     </div>
     <div id="gate-token-box">
       <form id="gate-form">
         <input id="gate-token" autocapitalize="none" autocorrect="off" spellcheck="false" type="password" placeholder="API_TOKEN" autocomplete="current-password" aria-label="API token" required>
-        <button class="btn primary" type="submit">Unlock</button>
+        <button class="btn primary" type="submit">Sign in</button>
       </form>
-      <div id="gate-err" class="err hidden">Invalid token.</div>
+      <div id="gate-err" class="err hidden">API token rejected. Check the token and try again.</div>
     </div>
   </div>
 
@@ -2195,7 +2197,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     <!-- Fleet status strip: visible on every view, stuck to the top of the working column. -->
     <div class="strip" aria-label="Fleet status">
       <span id="strip"></span>
-      <span class="meta"><span class="dot" id="live-dot"></span><span class="t" id="meta">loading…</span></span>
+      <span class="meta"><span class="dot" id="live-dot"></span><span class="t" id="meta">Loading dashboard…</span></span>
     </div>
 
     <main class="wrap">
@@ -2218,17 +2220,16 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           <button class="btn" type="button" data-alert-segment="units" aria-pressed="false">Units <span id="units-count">—</span></button>
           <button class="btn" type="button" data-alert-segment="silenced" aria-pressed="false">Silenced <span id="silences-count">—</span></button>
         </div>
-        <div id="silence-lift-error" role="alert" class="triage-message hidden"></div>
         <div id="unit-review" class="hidden"></div>
         <div id="silence-review" class="hidden"></div>
         <div id="alerts-current">
         <div class="kpis" id="kpis"></div>
         <div class="filters">
-          <label class="field"><svg class="ic sm" aria-hidden="true"><use href="#i-search"/></svg><input id="f-alerts" enterkeyhint="search" type="search" placeholder="Filter" aria-label="Filter alerts"></label>
-          <select id="f-level" aria-label="Level">
-            <option value="">all levels</option>
-            <option value="critical">critical</option>
-            <option value="warning">warning+</option>
+          <label class="field"><svg class="ic sm" aria-hidden="true"><use href="#i-search"/></svg><input id="f-alerts" enterkeyhint="search" type="search" placeholder="Filter alerts" aria-label="Filter alerts"></label>
+          <select id="f-level" aria-label="Minimum severity">
+            <option value="">All severities</option>
+            <option value="critical">Critical only</option>
+            <option value="warning">Warning and critical</option>
           </select>
           <select id="f-group" aria-label="Group by" title="Group by">
             <option value="level">by severity</option>
@@ -2253,8 +2254,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           <select id="f-porthost" class="sel" aria-label="Host"></select>
           <span class="spacer"></span>
           <span class="seg" role="group" aria-label="View">
-            <button class="btn" id="m-grid" aria-pressed="true">grid</button>
-            <button class="btn" id="m-table" aria-pressed="false">table</button>
+            <button class="btn" id="m-grid" aria-pressed="true">Grid</button>
+            <button class="btn" id="m-table" aria-pressed="false">Table</button>
           </span>
         </div>
 
@@ -2323,8 +2324,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 <div id="pal-scrim" class="pal-scrim hidden"></div>
 <div id="pal" class="pal hidden" role="dialog" aria-modal="true" aria-label="Search">
   <div class="qrow"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
-  <input id="pal-q" enterkeyhint="search" type="text" placeholder="Hosts, services, ports, alerts"
-         autocomplete="off" spellcheck="false" aria-label="Search">
+  <input id="pal-q" enterkeyhint="search" type="text" placeholder="Plex or 32400"
+         autocomplete="off" spellcheck="false" aria-label="Search pages, hosts, services, ports, and alerts">
   <button id="pal-close" class="ibtn" type="button" aria-label="Close search"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div id="pal-results" class="results" role="listbox"></div>
   <div class="hint">
@@ -2580,7 +2581,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     if (changed) routeHeadingFrom = null;
     routeHash = location.hash;
     var saved = phone() ? trackRouteScroll(changed) : 0;
-    closeMore();
+    if (changed) closeMore();
     $("view-fleet").classList.toggle("hidden", route.view !== "fleet");
     $("view-host").classList.toggle("hidden", route.view !== "host");
     $("view-plugin").classList.toggle("hidden", route.view !== "plugin");
@@ -2704,9 +2705,9 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       chip(c.critical ? "crit" : "ok", "critical", '<span class="g" aria-hidden="true">' + (c.critical ? GLYPH.critical : GLYPH.good) + "</span>",
         c.critical || 0, "critical", c.critical ? "Critical alerts" : "Nothing critical") +
       chip("warn" + (c.warning ? " on" : ""), "warning", '<span class="g" aria-hidden="true">' + GLYPH.warning + "</span>",
-        c.warning || 0, "warn", "Warnings") +
+        c.warning || 0, "warnings", "Warnings") +
       chip("info", "info", '<span class="g" aria-hidden="true">' + GLYPH.info + "</span>", c.info || 0, "info", "Info") +
-      (a.silenced ? chip("mute", "silenced", "", a.silenced, "silenced", "Acknowledged: shown, never notified") : "") +
+      (a.silenced ? chip("mute", "silenced", "", a.silenced, "silenced", "Silenced alerts stay visible. Notifications are muted while the silence is active.") : "") +
       chip(stale.length ? "warn on" : "", "hosts", ic("server", "sm"), (h.length - stale.length) + "/" + h.length, "hosts",
         stale.length ? "Not reporting: " + stale.join(", ") : "All hosts reporting") +
       chip("", "runs", ic("disk", "sm"), runs.toLocaleString(), "runs", "Inventory runs stored" + (runsSub ? " · " + runsSub : ""));
@@ -2721,7 +2722,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var lead = c.critical > 0
       ? '<div class="value crit">' + c.critical + "</div>"
       : '<div class="value ok">' + ic("check", "lg") + "</div>";
-    var leadSub = c.critical > 0 ? "needs attention" : "all clear";
+    var leadSub = c.critical > 0 ? "needs attention" : "No critical alerts";
     // "0 critical" and "0 critical, 4 silenced" say very different things.
     if (a.silenced) leadSub += " · " + a.silenced + " silenced";
 
@@ -2885,9 +2886,9 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       }).join('');
     if (t.silence_status !== 'ok') { $('silence-review').innerHTML = '<div class="empty">Silences unavailable</div>'; return; }
     var reviews = t.silences || [];
-    $('silence-review').innerHTML = '<div class="triage-chips">' + triagePill(counts.still_true + ' still true','warning') + triagePill(counts.cleared + ' cleared','good') + (counts.unknown ? triagePill(counts.unknown + ' unknown') : '') + '</div>' + reviews.map(function(s) {
-      var condition = s.condition === 'still_true' ? 'Still true' : s.condition === 'cleared' ? 'Cleared' : 'Unknown';
-      var summary = '<span class="triage-name">' + esc(s.subject || s.rule) + '<span class="sub">' + esc(s.host) + ' · ' + esc(triageAge(s.created_at)) + ' · ' + esc(s.rule) + '</span><span class="sub triage-reason">' + esc(s.reason || 'No reason') + '</span></span>' + triagePill(condition,s.condition === 'cleared' ? 'good' : s.condition === 'still_true' ? 'warning' : '');
+    $('silence-review').innerHTML = '<div class="triage-chips">' + triagePill(counts.still_true + ' active','warning') + triagePill(counts.cleared + ' cleared','good') + (counts.unknown ? triagePill(counts.unknown + ' unknown') : '') + '</div>' + reviews.map(function(s) {
+      var condition = s.condition === 'still_true' ? 'Condition still active' : s.condition === 'cleared' ? 'Cleared' : 'Unknown';
+      var summary = '<span class="triage-name">' + esc(s.subject || s.rule) + '<span class="sub">' + esc(s.host) + ' · ' + esc(triageAge(s.created_at)) + ' · ' + esc(s.rule) + '</span><span class="sub triage-reason" title="' + esc(s.reason || 'No reason') + '">' + esc(s.reason || 'No reason') + '</span></span>' + triagePill(condition,s.condition === 'cleared' ? 'good' : s.condition === 'still_true' ? 'warning' : '');
       var detail = '<dl class="dl">' + row('Reason',s.reason || 'No reason') + row('Silenced',triageTime(s.created_at)) + row('Expires',s.until ? triageTime(s.until) : 'Permanent') + row('Inventory',triageTime(s.collected_at)) + '</dl>';
       if (s.alert) detail += '<div class="triage-message">' + esc(s.alert.message) + '</div>';
       detail += '<button class="btn" type="button" data-lift-silence="' + esc(s.id) + '">' + ic('bell') + 'Lift silence</button>';
@@ -2956,7 +2957,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
     if (!live.length && !quiet.length) {
       $("alerts").innerHTML = '<div class="empty"><div class="big">' +
-        ((rep.alerts || []).length ? "No matches." : "Nothing to report.") + "</div>";
+        ((rep.alerts || []).length ? "No alerts match your filters. Clear filters to see all alerts." : "No alerts yet.") + "</div>";
       shownAlerts = [];
       return;
     }
@@ -2971,7 +2972,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         '<summary><span class="badge info"><span class="glyph" aria-hidden="true">' +
         GLYPH.info + "</span>silenced</span>" +
         '<span class="n">' + quiet.length +
-        (quiet.length === 1 ? " acknowledged" : " acknowledged") + "</span></summary>" +
+        " silenced" + "</span></summary>" +
         quiet.map(function (a, i) { return alertCard(a, base + i); }).join("") +
         "</details>");
     }
@@ -3267,8 +3268,11 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
             GLYPH.warning + "</span>" + portBindLabel(p) + "</span>"
           : '<span class="pill">' + portBindLabel(p) + "</span>") +
         "</td></tr>";
-    }).join("");
-    prepareListTable($("ports").closest("table"));
+    }).join("") || '<tr><td colspan="7">' +
+      (rows.length ? "No ports match your filters. Clear filters to see all ports." : "No listening ports have been reported.") + "</td></tr>";
+    var table = $("ports").closest("table");
+    table.toggleAttribute("data-empty", !list.length);
+    if (list.length) prepareListTable(table);
   }
 
   // ------------------------------------------------------------ ports: grid
@@ -3981,14 +3985,14 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   // ------------------------------------------------------------ restart actions
   var restartsDisabled = false;
-  var RESTART_HINT = "Restarts are disabled — enable ACTIONS_ENABLED and configure the restart target and operator token.";
+  var RESTART_HINT = "Restarts are disabled. Enable actions on the configured Docker host.";
   var restartSession = 0, restartBusy = false, actionLog = null, actionLogError = "";
   var restartHealthTimer = null, restartHealthController = null;
   function stopRestartHealth() { clearTimeout(restartHealthTimer); if (restartHealthController) restartHealthController.abort(); restartHealthController = null; }
-  function disableRestarts(target, session) {
+  function disableRestarts(target, session, reason) {
     restartsDisabled = true;
     if (route.view === "host" && hostCache[route.host]) renderHost(route.host);
-    if (restartVisible(session)) restartSheet(target, '<div role="status" class="sub">' + esc(RESTART_HINT) + '</div>');
+    if (restartVisible(session)) restartSheet(target, '<div role="status" class="sub">' + esc(reason || RESTART_HINT) + '</div>');
   }
   function restartsEnabled(host) { return !restartsDisabled && capabilities.actions_enabled === true && host === capabilities.actions_host; }
   function restartButton(kind, target) {
@@ -4008,8 +4012,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       }).join("") || '<div class="empty">No stacks.</div>';
     }).catch(function (err) {
       if (err.unauthorized) showGate(true);
-      if (err.status === 403 || err.status === 404 || err.status === 503) { disableRestarts(name); return; }
-      if ($("restart-stacks")) $("restart-stacks").innerHTML = '<div class="empty">' + esc(err.message) + '</div>';
+      if (err.status === 403 || err.status === 404) { disableRestarts(name); return; }
+      if ($("restart-stacks")) $("restart-stacks").textContent = "Could not load restart targets. Refresh to try again.";
     });
   }
   // Preserve error bodies: 409 carries a new preview, 500 carries results.
@@ -4027,7 +4031,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       .finally(function () { clearTimeout(timer); });
   }
   function restartStatus(result) {
-    return '<span class="pill ' + (result === "ok" || result === "restarted" ? 'good' : result === "failed" ? 'critical' : 'warning') + '">' + esc(result === "running" ? "unknown, check" : result) + '</span>';
+    return '<span class="pill ' + (result === "ok" || result === "restarted" ? 'good' : result === "failed" ? 'critical' : 'warning') + '">' + esc(result === "running" ? "Outcome unknown" : result) + '</span>';
   }
   function restartResults(results) {
     return '<div class="restart-chips">' + (results || []).map(function (r) {
@@ -4046,7 +4050,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var impact = (p.impact || []).map(function (x) {
       return '<details class="restart-detail"><summary><span class="pill warning">' + esc(x.name) + ' · ' + (x.kind === "network" ? 'network down' : 'unavailable') + '</span></summary><div class="sub">' + esc(x.target) + ' · ' + esc(x.effect) + '</div></details>';
     }).join("");
-    restartSheet(p.target, (changed ? '<div class="pill warning" role="status">Container set changed</div>' : '') + chips + (impact ? '<div class="sub">Impact</div><div class="restart-chips">' + impact + '</div>' : '') +
+    var title = (reconnect ? "Reconnect VPN for " : "Restart ") + p.target + "?";
+    restartSheet(title, (changed ? '<div class="note warning" role="status">The affected containers changed. Review the new list before confirming.</div>' : '') + chips + (impact ? '<div class="sub">Impact</div><div class="restart-chips">' + impact + '</div>' : '') +
       '<button type="button" class="btn primary" id="restart-confirm"' + (!p.container_set_hash || !p.containers.length ? ' disabled' : '') + '>' + (reconnect ? 'Reconnect VPN' : 'Restart') + '</button>');
     $("restart-confirm").onclick = function () { executeRestart(p, session); };
   }
@@ -4060,18 +4065,23 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     actionPost("/actions/preview", {kind: kind, target: target, host: requestedHost}).then(function (r) {
       if (!restartVisible(session)) return;
       if (r.status === 401) { showGate(true); closeDrawer(); return; }
-      if (r.status === 403 || r.status === 404 || r.status === 503) { disableRestarts(target, session); return; }
+      if (r.status === 403 || r.status === 404) { disableRestarts(target, session); return; }
+      if (r.status === 503) {
+        restartSheet(target, '<div class="sub" role="status">Restart preview unavailable. Wait for ' +
+          esc(requestedHost) + ' to report, then preview again.</div>');
+        return;
+      }
       if (r.status !== 200) throw new Error(r.body.error || "Preview unavailable");
       r.body.host = requestedHost;
       showRestartPreview(r.body, session, false);
     }).catch(function (err) {
-      if (restartVisible(session)) restartSheet(target, '<div role="status" class="sub">' + esc(err.message) + '</div>');
+      if (restartVisible(session)) restartSheet(target, '<div role="status" class="sub">Could not load the restart preview. Close this sheet and open it again.</div>');
     });
   }
   function executeRestart(p, session) {
     if (restartBusy || !restartVisible(session)) return;
     restartBusy = true;
-    restartSheet(p.target, '<div role="status">' + restartStatus("running").replace("unknown, check", p.kind === "vpn_reconnect" ? "Reconnecting…" : "Restarting…") + '</div>');
+    restartSheet(p.target, '<div role="status">' + restartStatus("running").replace("Outcome unknown", p.kind === "vpn_reconnect" ? "Reconnecting…" : "Restarting…") + '</div>');
     actionPost("/actions/execute", {kind: p.kind, target: p.target, container_set_hash: p.container_set_hash, confirm: true, host: p.host}).then(function (r) {
       if (r.status === 401) { showGate(true); closeDrawer(); return; }
       if (r.status === 409 && r.body.preview) { r.body.preview.host = p.host; showRestartPreview(r.body.preview, session, true); return; }
@@ -4093,16 +4103,23 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         return;
       }
       if (r.status >= 400) {
-        if (r.status === 403) sessionStorage.removeItem(OPERATOR_KEY);
-        disableRestarts(p.target, session);
+        if (r.status === 403) {
+          sessionStorage.removeItem(OPERATOR_KEY);
+          if (restartVisible(session)) restartSheet(p.target, '<div role="status" class="sub">Restart refused. Check the operator token and whether actions are enabled.</div>');
+        } else if (r.status === 404 || r.status === 503) {
+          disableRestarts(p.target, session, "Restart unavailable. Check that actions are enabled on the target host.");
+        } else if (r.status >= 500) {
+          throw new Error("Unknown restart outcome");
+        } else if (restartVisible(session)) {
+          restartSheet(p.target, '<div role="status" class="sub">Restart refused. Open the preview and check the affected containers.</div>');
+        }
         return;
       }
-      if (r.status >= 500 || r.status < 400) throw new Error("Unknown response");
-      if (restartVisible(session)) restartSheet(p.target, '<div role="status" class="sub">' + esc(r.body.error || "Restart unavailable") + '</div>');
+      throw new Error("Unknown restart outcome");
     }).catch(function (err) {
       if (err.canceled) { if (restartVisible(session)) showRestartPreview(p, session, false); return; }
       if (restartVisible(session)) {
-        restartSheet(p.target, '<div role="status">' + restartStatus("running") + '</div><div id="restart-health" class="sub">Checking API…</div><a class="btn" href="#/admin" id="restart-check">Recent actions</a>');
+        restartSheet(p.target, '<div role="status">' + restartStatus("running") + '<p>Check Recent actions and Docker before trying again.</p></div><div id="restart-health" class="sub">Checking API…</div><a class="btn" href="#/admin" id="restart-check">Recent actions</a>');
         $("restart-check").onclick = function (e) { e.preventDefault(); closeDrawer(); go("#/admin"); };
       }
       pollRestartHealth(session, 0);
@@ -4114,12 +4131,12 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var controller = restartHealthController = new AbortController(), timer = setTimeout(function () { controller.abort(); }, 3000);
     fetch("/healthz", {cache: "no-store", signal: controller.signal, headers: {"X-Requested-By": "homelab-inventory"}}).then(function (r) {
       if (!r.ok) throw new Error("offline");
-      if (restartVisible(session) && $("restart-health")) $("restart-health").textContent = "API online · check Docker";
+      if (restartVisible(session) && $("restart-health")) $("restart-health").textContent = "API online";
       if (restartVisible(session)) loadActionLog();
     }).catch(function () {
       if (!restartVisible(session) || document.hidden) return;
       if (attempt < 9) restartHealthTimer = setTimeout(function () { pollRestartHealth(session, attempt + 1); }, 2000);
-      else if ($("restart-health")) $("restart-health").textContent = "API unavailable · check Docker";
+      else if ($("restart-health")) $("restart-health").textContent = "API unavailable";
     }).finally(function () { clearTimeout(timer); if (restartHealthController === controller) restartHealthController = null; });
   }
   document.addEventListener("visibilitychange", function () {
@@ -4138,8 +4155,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
   function loadActionLog() {
     return api("/actions/log?limit=20").then(function (entries) { actionLog = entries; actionLogError = ""; renderActionLog(); }).catch(function (err) {
-      if (err.status === 403 || err.status === 404 || err.status === 503) restartsDisabled = true;
-      actionLogError = restartsDisabled ? RESTART_HINT : err.message; renderActionLog(); if (err.unauthorized) showGate(true);
+      if (err.status === 403 || err.status === 404) restartsDisabled = true;
+      actionLogError = "Could not load recent actions. Refresh the dashboard to try again."; renderActionLog(); if (err.unauthorized) showGate(true);
     });
   }
   document.addEventListener("click", function (e) {
@@ -4289,7 +4306,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       })
       .catch(function (err) {
         openDrawer("<h3>" + esc(project) + "</h3>" +
-          '<div class="empty">' + esc(err.message) + "</div>");
+          '<div class="empty">Could not load this Compose file. Close this sheet and open it again.</div>');
       });
   }
 
@@ -4309,7 +4326,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       })
       .catch(function (err) {
         openDrawer("<h3>" + esc(project) + "</h3>" +
-          '<div class="empty">' + esc(err.message) + "</div>");
+          '<div class="empty">Could not load the Compose diff. Close this sheet and open it again.</div>');
       });
   }
 
@@ -4507,7 +4524,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
   function opsCard(label, icon, body, link, wide) {
     return '<section class="ops-card' + (wide ? ' ops-wide' : '') + '"><h2>' + ic(icon, 'sm') + esc(label) +
-      (link ? '<a href="#/' + link + '">View all ↗</a>' : '') + '</h2>' + body + '</section>';
+      (link ? '<a href="#/' + link + '">View ' + esc({ alerts: "alerts", hosts: "hosts", admin: "Admin" }[link] || label.toLowerCase()) + '</a>' : '') + '</h2>' + body + '</section>';
   }
   function opsRecent(item) {
     var age = Date.now() - new Date(item.first_seen || item.since).getTime();
@@ -4692,7 +4709,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
             '<span class="n">' + esc(s.name || s.key) + "</span>" +
             '<span class="d" title="Last seen">' + esc(ago(s.last_seen)) + "</span>" +
             '<span class="where">' + esc(s.host) + ":" + esc(s.port) + "</span>" +
-            '<button class="edit" type="button" data-forget="' + esc(s.key) + '">forget</button>' +
+            '<button class="edit" type="button" data-forget="' + esc(s.key) + '">Forget service</button>' +
             "</div>";
         }).join("") + "</div></div>";
     }
@@ -4718,7 +4735,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         '<div class="tiles">' + sup.map(function (s) { return tile(s); }).join("") + "</div></div>";
     }
 
-    $("services").innerHTML = html;
+    $("services").innerHTML = html || '<div class="empty">' + (q ? "No services match your filters. Clear filters to see all services." : "No services have been discovered yet.") + "</div>";
     hydrateIcons();
   }
 
@@ -4842,7 +4859,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var s = serviceByKey(key);
     if (!s) return;
 
-    openDrawer("<h3>" + esc(s.name) + "</h3>" +
+    openDrawer("<h3>Edit " + esc(s.name) + "</h3>" +
       '<div class="subtitle">' + esc(s.host) + ":" + esc(s.port) +
         (s.owner ? " · " + esc(s.owner) : "") +
         (s.status ? " · " + esc(s.status) : "") + "</div>" +
@@ -4855,7 +4872,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
               (c === s.category ? " selected" : "") + ">" + esc(c) + "</option>";
           }).join("") + "</select></div>" +
         '<div><label for="e-url" title="Must be reachable from this device">URL</label>' +
-          '<input id="e-url" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="' + esc(s.url || "paste a full URL") + '" value="' +
+          '<input id="e-url" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="' + esc(s.url || "https://service.example.org") + '" value="' +
           esc(s.curated && s.url ? s.url : "") + '"></div>' +
         '<div><label for="e-note">Note</label>' +
           '<input id="e-note" value="' + esc(s.note || "") + '"></div>' +
@@ -4867,7 +4884,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           "Hidden</label></div>" +
         '<div class="actions">' +
           '<button class="btn" id="e-save" type="button">Save</button>' +
-          '<button class="btn" id="e-forget" type="button">Forget</button>' +
+          '<button class="btn" id="e-forget" type="button">Forget service</button>' +
         "</div>" +
       "</div>" +
       (s.first_seen ? '<div class="note">First seen ' +
@@ -4923,24 +4940,76 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     renderHome();
   }
 
-  function writeError(err) {
+  function writeFailure(err, action, fix) {
+    if (!err.status || err.status >= 500) {
+      return "Could not confirm the request to " + action + ". Refresh and check the current state before trying again.";
+    }
+    return "Could not " + action + ". " + fix;
+  }
+
+  function writeError(err, message) {
     if (err.unauthorized) { showGate(true); return; }
     var el = (drawerOpen && drawerBody.querySelector(".form .actions")) ||
       document.querySelector(".form .actions") || document.querySelector(".banner");
     if (el) el.insertAdjacentHTML("afterend",
-      '<div style="color:var(--critical);font-size:var(--fs-sm);margin-top:8px">' + esc(err.message) + "</div>");
+      '<div style="color:var(--critical);font-size:var(--fs-sm);margin-top:8px">' + esc(message || writeFailure(err, "save the change", "Check the form and try again.")) + "</div>");
   }
 
   function curate(key, body) {
     write("/services/" + encodeURIComponent(key), "PUT", body).then(function (catalog) {
       applyCatalog(catalog);
       toast("Service saved", { kind: "ok" });
-    }).catch(writeError);
+    }).catch(function (err) {
+      var fieldError = err.status === 400 && /^(Shorten |Enter a full HTTP or HTTPS URL)/.test(err.message);
+      writeError(err, fieldError ? err.message : writeFailure(err, "save the service", "Check the service settings and try again."));
+    });
+  }
+
+  function confirmDrawer(title, consequence, label, pending, run) {
+    var previous, focus = document.activeElement;
+    var previousLabel = drawer.getAttribute("aria-label");
+    if (drawerOpen) {
+      previous = document.createDocumentFragment();
+      while (drawerBody.firstChild) previous.appendChild(drawerBody.firstChild);
+    }
+    var html = '<h3>' + esc(title) + '</h3><p>' + esc(consequence) + '</p><div class="actions">' +
+      '<button class="btn" id="confirm-cancel" type="button">Cancel</button>' +
+      '<button class="btn primary" id="confirm-run" type="button">' + esc(label) + '</button></div>' +
+      '<div id="confirm-status" class="sub" role="status"></div>';
+    var id = openDrawer(html);
+    $("confirm-cancel").onclick = function () {
+      if (!previous) { closeDrawer(); return; }
+      openDrawer(previous, previousLabel);
+      if (focus && focus.isConnected) focus.focus({ preventScroll: true });
+    };
+    $("confirm-run").onclick = function () {
+      var button = this, status = $("confirm-status");
+      button.disabled = true;
+      status.textContent = pending;
+      run().then(function () {
+        if (drawerExists(id)) closeDrawer();
+      }, function (err) {
+        if (err.unauthorized) { showGate(true); return; }
+        if (!drawerExists(id)) return;
+        status.textContent = writeFailure(err, label.toLowerCase(), "Check the dashboard and try again.");
+        status.classList.add("t-crit");
+        // An interrupted request may have applied. Reopen the confirmation after checking the state.
+        button.disabled = !err.status || err.status >= 500;
+      });
+    };
   }
 
   function forget(key) {
-    write("/services/" + encodeURIComponent(key), "DELETE")
-      .then(applyCatalog).catch(writeError);
+    var service = serviceByKey(key);
+    if (!service) return;
+    confirmDrawer("Forget " + service.name + "?",
+      "This deletes its saved settings. If the service is still listening, it will appear as a new service.",
+      "Forget service", "Forgetting service…", function () {
+        return write("/services/" + encodeURIComponent(key), "DELETE").then(function (catalog) {
+          data.services = catalog;
+          renderHome();
+        });
+      });
   }
 
   function acceptAll() {
@@ -4970,10 +5039,10 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var items = [];
 
     ["home", "alerts", "hosts", "ports", "admin"].forEach(function (t) {
-      items.push({ tag: "go", what: t.charAt(0).toUpperCase() + t.slice(1), hash: "#/" + t });
+      items.push({ tag: "Page", what: t.charAt(0).toUpperCase() + t.slice(1), hash: "#/" + t });
     });
     pluginTabs().forEach(function (p) {
-      items.push({ tag: "go", what: p.tab.title, sub: p.name !== p.tab.title ? p.name : "", hash: "#/p/" + encodeURIComponent(p.id) });
+      items.push({ tag: "Page", what: p.tab.title, sub: p.name !== p.tab.title ? p.name : "", hash: "#/p/" + encodeURIComponent(p.id) });
     });
 
     (data.hosts || []).forEach(function (h) {
@@ -5002,7 +5071,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         if (p.ephemeral) return;
         items.push({
           tag: "port", what: h.name + ":" + p.port,
-          sub: (p.owner || p.process || "?") + (p.compose_project ? " · " + p.compose_project : ""),
+          sub: (p.owner || p.process || "Unknown owner") + (p.compose_project ? " · " + p.compose_project : ""),
           port: { host: h.name, port: p.port }
         });
       });
@@ -5019,7 +5088,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   function palScore(item, q) {
     var hay = (item.what + " " + (item.sub || "")).toLowerCase();
     var what = item.what.toLowerCase();
-    if (!q) return item.tag === "go" ? 5 : 1;
+    if (!q) return item.tag === "Page" ? 5 : 1;
     if (hay.indexOf(q) < 0) return 0;
     if (what === q) return 100;
     if (what.indexOf(q) === 0) return 50;
@@ -5028,7 +5097,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
 
   function renderPalette() {
-    var q = $("pal-q").value.trim().toLowerCase();
+    var query = $("pal-q").value.trim(), q = query.toLowerCase();
     palMatches = paletteItems()
       .map(function (it) { return { it: it, score: palScore(it, q) }; })
       .filter(function (x) { return x.score > 0; })
@@ -5042,12 +5111,12 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       ? palMatches.map(function (it, i) {
           return '<button class="row" role="option" type="button" data-pal="' + i + '"' +
             (i === palIndex ? ' aria-selected="true"' : "") + ">" +
-            '<span class="tag ' + esc(it.tag) + '">' + esc(it.tag) + "</span>" +
+            '<span class="tag ' + esc(it.tag === "Page" ? "go" : it.tag) + '">' + esc(it.tag) + "</span>" +
             '<span class="what">' + esc(it.what) +
             (it.sub ? ' <span class="sub">' + esc(it.sub) + "</span>" : "") +
             "</span></button>";
         }).join("")
-      : '<div class="empty" style="border:0;background:none">No matches.</div>';
+      : '<div class="empty" style="border:0;background:none">No results for “' + esc(query) + '”. Try a shorter search.</div>';
 
     var sel = $("pal-results").querySelector('[aria-selected="true"]');
     if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: "nearest" });
@@ -5107,11 +5176,12 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     });
     modalInert = [];
     if (top) Array.prototype.forEach.call(document.body.children, function (el) {
-      if (top.indexOf(el.id) !== -1 || el.id === "up-fab" || el.inert) return;
+      if (top.indexOf(el.id) !== -1 || el.id === "up-fab" || el.id === "toast" || el.inert) return;
       el.inert = true;
       modalInert.push(el);
     });
     syncFabInert();
+    $("toast").inert = !!top || !!$("toast").motionOut;
   }
 
   document.addEventListener("keydown", function (e) {
@@ -5385,6 +5455,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     toastActive = true;
     reveal(toastEl, reducedMotion.matches ? FADE_IN :
       [{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }], 180, "ease-out", true);
+    toastEl.inert = !!topModal();
     toastHovered = matchMedia("(hover: hover) and (pointer: fine)").matches && toastEl.matches(":hover");
     toastFocused = toastEl.contains(document.activeElement);
     $("toast-status").textContent = title + (opts.sub ? ". " + opts.sub : "");
@@ -5793,7 +5864,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   var SILENCE_FOR = [
     { label: "1 day", value: "24h" },
     { label: "1 week", value: "168h" },
-    { label: "1 month", value: "720h" },
+    { label: "30 days", value: "720h" },
     { label: "indefinitely", value: "" }
   ];
 
@@ -5819,11 +5890,11 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       }).then(function () {
         closeDrawer();
         toast("Silence saved", { kind: "ok" });
-        return Promise.all([api("/alerts"), api("/silences")]).then(function (r) {
-          data.alerts = r[0]; data.silences = r[1]; renderKPIs(); renderAlerts();
-          if (route.view === "host" && hostCache[route.host]) renderHost(route.host);
-        });
-      }).catch(writeError);
+        return refreshSilences();
+      }).catch(function (err) {
+        writeError(err, err.status === 400 && /^Shorten Reason/.test(err.message) ? err.message :
+          writeFailure(err, "save the silence", "Check the reason and duration and try again."));
+      });
     });
   }
 
@@ -5833,28 +5904,28 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     if ($('s-unsilence')) $('s-unsilence').disabled = Object.keys(silenceLifting).length > 0;
   }
   function unsilence(id) {
-    if (silenceLifting[id]) return;
-    var s = (data.silences || []).filter(function(s) { return s.id === id; })[0];
-    if (!id || !confirm('Lift silence' + (s ? ' for ' + s.host + ' · ' + (s.subject || s.rule) : '') + '?')) return;
-    silenceLifting[id] = true;
-    silenceLiftButtons();
-    $('silence-lift-error').classList.add('hidden');
-    write("/silences/" + encodeURIComponent(id), "DELETE")
-      .then(function () {
-        closeDrawer();
-        toast("Silence lifted", { kind: "ok" });
-        return Promise.all([api("/alerts"), api("/silences")]).then(function (r) {
-          data.alerts = r[0]; data.silences = r[1]; renderKPIs(); renderAlerts();
-          if (route.view === "host" && hostCache[route.host]) renderHost(route.host);
-        });
-      }).catch(function(err) {
-        if (err.unauthorized) { showGate(true); return; }
-        var el = $('silence-lift-error');
-        el.textContent = err.message;
-        el.classList.remove('hidden');
-        el.scrollIntoView({block:'nearest'});
-        if (!$('drawer').classList.contains('hidden')) writeError(err);
-      }).finally(function() { delete silenceLifting[id]; silenceLiftButtons(); });
+    if (!id || silenceLifting[id]) return;
+    var s = (data.silences || []).filter(function (s) { return s.id === id; })[0];
+    var title = s ? "Lift silence for " + (s.subject || s.rule) + " on " + s.host + "?" : "Lift silence?";
+    confirmDrawer(title, "Notifications can resume while the condition is active.",
+      "Lift silence", "Lifting silence…", function () {
+        silenceLifting[id] = true;
+        silenceLiftButtons();
+        return write("/silences/" + encodeURIComponent(id), "DELETE").then(function () {
+          toast("Silence lifted", { kind: "ok" });
+          return refreshSilences();
+        }).finally(function () { delete silenceLifting[id]; silenceLiftButtons(); });
+      });
+  }
+
+  function refreshSilences() {
+    return Promise.all([api("/alerts"), api("/silences")]).then(function (r) {
+      data.alerts = r[0]; data.silences = r[1]; renderKPIs(); renderAlerts();
+      if (route.view === "host" && hostCache[route.host]) renderHost(route.host);
+    }).catch(function (err) {
+      if (err.unauthorized) { showGate(true); return; }
+      setRefreshError(refreshFailure(err));
+    });
   }
 
   function openAlertDrawer(a) {
@@ -5868,8 +5939,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       row("Level", a.level) +
       (a.value ? row("Value", a.value + (a.unit === "percent" ? "%" : a.unit === "hours" ? " h" : "")) : "") +
       (a.threshold ? row("Threshold", a.threshold + (a.unit === "percent" ? "%" : a.unit === "hours" ? " h" : "")) : "") +
-      row("Since", a.since ? new Date(a.since).toLocaleString() : "") +
-      row("First observed", a.first_seen
+      row("Condition active since", a.since ? new Date(a.since).toLocaleString() : "") +
+      row("First observed by inventory", a.first_seen
         ? new Date(a.first_seen).toLocaleString() + " (" + forAge(a.first_seen).replace(" · for ", "") + " ago)"
         : "") +
       "</dl>" +
@@ -5879,11 +5950,11 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       html += '<div class="note"><b>Silenced.</b> ' +
         (a.silence_reason ? esc(a.silence_reason) + " " : "") +
         (a.silence_until
-          ? "Lapses " + esc(new Date(a.silence_until).toLocaleString()) + "."
+          ? "Expires " + esc(new Date(a.silence_until).toLocaleString()) + "."
           : "No expiry") +
         "</div>" +
         '<div class="form"><div class="actions">' +
-        '<button class="btn" id="s-unsilence" type="button">Un-silence</button></div></div>';
+        '<button class="btn" id="s-unsilence" type="button">Lift silence</button></div></div>';
     } else {
       html += silenceForm(a);
     }
@@ -5891,7 +5962,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     html += '<div class="freebar" style="margin-top:16px">' +
       '<button class="chip" type="button" data-gohost="' + esc(a.host) + '">open ' + esc(a.host) + " →</button></div>";
 
-    openDrawer(html);
+    openDrawer(html, "Alert details for " + (a.subject || a.rule));
     if (a.silenced) {
       var id = silenceID(a);
       $("s-unsilence").addEventListener("click", function () { unsilence(id); });
@@ -5939,7 +6010,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       })
       .catch(function (err) {
         openDrawer("<h3>Ruleset · " + esc(hostName) + "</h3>" +
-          '<div class="empty">' + esc(err.message) + "</div>");
+          '<div class="empty">Could not load the ruleset. Close this sheet and open it again.</div>');
       });
   }
 
@@ -5967,8 +6038,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   var LEVEL_WORDS = {
     critical: "critical only",
-    warning: "warning+",
-    info: "info+"
+    warning: "Warning and critical",
+    info: "All severities"
   };
 
   function adminHostsHTML() {
@@ -6043,7 +6114,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var stale = s.hosts.filter(function (h) { return h.stale; }).map(function (h) {
       return '<div class="storage-stale"><span>' + esc(h.host) + ' · last run ' +
         esc(h.newest.slice(0,10)) + '</span><button class="btn rs-forget" data-host="' +
-        esc(h.host) + '">Forget</button></div>';
+        esc(h.host) + '">Forget host</button></div>';
     }).join("");
     return '<section class="setting" id="run-storage"><h2>' + ic("disk") + 'Storage</h2>' +
       '<div class="kpis" style="margin:10px 0 12px;grid-template-columns:repeat(2,minmax(0,1fr))">' +
@@ -6130,13 +6201,15 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     document.querySelectorAll(".rs-forget").forEach(function (b) {
       b.addEventListener("click", function () {
         var host = b.getAttribute("data-host");
-        if (!confirm("Forget " + host + " and delete all its stored runs?")) return;
-        storageBusy = true; storageDisable(); adminMsg("rs-msg", "Forgetting…");
-        write("/storage/runs/" + encodeURIComponent(host), "DELETE").then(function () {
-          storagePreview = null; return load().then(storageRefresh);
-        }).then(function () { adminMsg("rs-msg", "Forgot " + host); })
-          .catch(function (e) { adminMsg("rs-msg", e.message, true); })
-          .finally(function () { storageBusy = false; storageDisable(); });
+        confirmDrawer("Forget " + host + "?",
+          "This deletes all stored runs for the host. Deleted runs cannot be recovered.",
+          "Forget host", "Forgetting host…", function () {
+            storageBusy = true; storageDisable();
+            return write("/storage/runs/" + encodeURIComponent(host), "DELETE").then(function () {
+              storagePreview = null; return load().then(storageRefresh);
+            }).then(function () { adminMsg("rs-msg", "Forgot " + host); })
+              .finally(function () { storageBusy = false; storageDisable(); });
+          });
       });
     });
   }
@@ -6237,7 +6310,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         '</div><div class="src settings-field-note" id="digest-interval-help"><code>0</code> = off</div></div>' +
         '<div class="actions settings-actions">' +
           '<button class="btn" id="a-save">Save</button>' +
-          '<button class="btn" id="a-reset">Reset overrides</button>' +
+          '<button class="btn" id="a-reset">Reset dashboard overrides</button>' +
           '<span id="a-msg" class="src"></span>' +
         "</div>" +
       "</div></div></div>";
@@ -6281,17 +6354,19 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     el.style.color = bad ? "var(--warning)" : "var(--muted)";
   }
 
+  var APPRISE_ACCEPTED = "Apprise accepted the test. Check the destination for the message. If it’s missing, check the notification targets in Apprise.";
+
   function saveSettings(body, msgID) {
-    adminMsg(msgID, "saving…");
+    adminMsg(msgID, "Saving settings…");
     return write("/settings", "PUT", body)
       .then(function (s) {
         data.settings = s;
         renderAdmin();
-        adminMsg(msgID, "saved");
+        adminMsg(msgID, "Settings saved");
       })
       .catch(function (err) {
         if (err.unauthorized) { showGate(true); return; }
-        adminMsg(msgID, err.message, true);
+        adminMsg(msgID, writeFailure(err, "save settings", "Check the settings and try again."), true);
       });
   }
 
@@ -6329,27 +6404,31 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     });
 
     $("a-reset").addEventListener("click", function () {
-      adminMsg("a-msg", "resetting…");
-      write("/settings/reset", "POST").then(function (s) {
-        data.settings = s;
-        if (data.runStorage) data.runStorage.policy = s.run_retention;
-        renderAdmin();
-        adminMsg("a-msg", "back to the environment defaults");
-      }).catch(function (err) { adminMsg("a-msg", err.message, true); });
+      confirmDrawer("Reset dashboard overrides?",
+        "This discards saved overrides for notifications, dashboard appearance, VPN recovery, and run retention. The server’s defaults will take effect.",
+        "Reset overrides", "Resetting settings…", function () {
+          return write("/settings/reset", "POST").then(function (s) {
+            data.settings = s;
+            if (data.runStorage) data.runStorage.policy = s.run_retention;
+            applyBrand(s.dashboard_name);
+            renderAdmin();
+            adminMsg("a-msg", "Dashboard overrides reset");
+          });
+        });
     });
 
     var test = $("a-test");
     if (test) test.addEventListener("click", function () {
-      adminMsg("a-test-msg", "sending…");
+      adminMsg("a-test-msg", "Sending test…");
       write("/notify/test", "POST")
         .then(function () {
           // Apprise answers 2xx for a key it has no targets for, so this
           // confirms the API reached apprise and nothing beyond that. Only
           // the message arriving proves the key is right.
-          adminMsg("a-test-msg", "apprise accepted it — if nothing arrives, the key is wrong");
+          adminMsg("a-test-msg", APPRISE_ACCEPTED);
           return loadSettings();
         })
-        .catch(function (err) { adminMsg("a-test-msg", err.message, true); });
+        .catch(function (err) { adminMsg("a-test-msg", writeFailure(err, "send the test", "Check the Apprise URL and try again."), true); });
     });
   }
 
@@ -6364,8 +6443,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       renderAdmin();
     }).catch(function (err) {
       if (err.unauthorized) { showGate(true); return; }
-      $("admin").innerHTML = recentActionsHTML() + '<div class="empty">Could not load settings: ' +
-        esc(err.message) + "</div>";
+      $("admin").innerHTML = recentActionsHTML() + '<div class="empty">Could not load settings. Refresh to try again.</div>';
       renderActionLog();
     });
   }
@@ -7838,11 +7916,11 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   var auth = { status: null, retried: false, tokenOpen: false, passkeyBusy: false, passkeyMsg: "" };
   var LOGIN_ERRORS = {
     state: "Sign-in took too long or was started in another tab. Try again.",
-    denied: "Sign-in was cancelled at the provider.",
-    provider: "The provider could not be reached, or did not answer properly. Try again, or use a token.",
-    unverified: "The provider has not verified that email address, so it cannot be used here.",
+    denied: "Sign-in did not finish. Try again or use an API token.",
+    provider: "The provider could not be reached, or did not answer properly. Try again or use an API token.",
+    unverified: "Verify your email with your sign-in provider, then try again.",
     not_allowed: "That account is not on this dashboard's allowed list. Ask the owner to add it.",
-    disabled: "Sign-in is turned off on this dashboard. Use a token instead."
+    disabled: "Sign-in is turned off on this dashboard. Use an API token instead."
   };
 
   function loadAuthStatus() {
@@ -7939,11 +8017,11 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       return write("/auth/passkey/login", "POST", { id: cred.id, clientDataJSON: bytesB64u(r.clientDataJSON),
         authenticatorData: bytesB64u(r.authenticatorData), signature: bytesB64u(r.signature) });
     }).catch(function (err) {
-      var text = "Passkey sign-in failed: " + err.message;
-      if (err.unauthorized) text = "That passkey is not registered on this dashboard.";
-      else if (err.status === 404) text = "No passkey is registered for this address.";
+      var text = "Sign-in did not finish. Try again or use an API token.";
+      if (err.unauthorized) text = "Use a registered passkey or an API token.";
+      else if (err.status === 404) text = "Use a registered passkey or an API token.";
       else if (err.status === 429) text = "Too many sign-in attempts. Try again in a minute.";
-      else if (err.name === "NotAllowedError" || err.name === "AbortError") text = "Passkey sign-in was cancelled or timed out.";
+      else if (err.name === "NotAllowedError" || err.name === "AbortError") text = "Sign-in did not finish. Try again or use an API token.";
       throw new Error(text);
     });
   }
@@ -9107,7 +9185,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       data.overview = o;
     }, function (err) {
       if (seq !== overviewSeq) return;
-      if (err.unauthorized) { showGate(!!token); return; }
+      if (err.unauthorized) { if (!loading) showGate(!!token); return; }
       data.overview = {status: 'unavailable', error: 'Overview could not be refreshed'};
     }).then(function () {
       if (seq !== overviewSeq || !data.overview) return;
@@ -9115,10 +9193,10 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       if (route.view === "host" && hostCache[route.host]) renderHost(route.host);
     });
   }
-  function load() {
+  function load(checkingToken) {
     if (loading) return loading;
     loadOverview();
-    $("meta").textContent = "loading…";
+    $("meta").textContent = "Loading dashboard…";
     $("refresh").classList.add("spin");
     loading = Promise.all([api("/alerts"), api("/hosts"), api("/ports"), api("/services"),
                         api("/silences"), api("/storage/runs"), api("/capabilities")])
@@ -9142,7 +9220,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         loadUploadTargets();
       })
       .catch(function (err) {
-        if (err.unauthorized) { showGate(!!token); return; }
+        if (err.unauthorized) { showGate(!!token, "", checkingToken === true); return; }
         // The server lost its owner (fresh data dir) or never had one.
         if (err.status === 503 && err.message === "setup required") { boot(); return; }
         setRefreshError(refreshFailure(err));
@@ -9155,8 +9233,10 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     return loading;
   }
 
-  function showGate(failed, note) {
+  function showGate(failed, note, checkingToken) {
     setRefreshError("");
+    if (!note && !checkingToken && (failed || appShown())) note = "Your session has ended. Sign in again.";
+    failed = !!checkingToken;
     closePalette(true);
     closeMore(false);
     auth.passkeyBusy = false; auth.passkeyMsg = "";
@@ -9189,7 +9269,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   // the first visitor to finish becomes the owner.
 
   var SETUP_KEY = "homelab-inventory.setup-step";
-  var SETUP_STEPS = ["Claim", "Admin token", "Notifications", "Hosts"];
+  var SETUP_STEPS = ["Claim", "API token", "Notifications", "Hosts"];
   var setupState = { step: 0, deadline: 0, http: false, agentToken: "", savedURL: "" };
   var setupTimers = [];      // countdowns owned by the current wizard step
   var enrollSession = null;  // the live add-a-host panel, wizard or drawer
@@ -9379,7 +9459,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var total = setupState.total || 600;
     setupRender(
       '<h1>Set up <span class="nb">homelab-inventory</span></h1>' +
-      '<p>Nobody owns this instance yet. Whoever finishes this step first becomes the owner and gets the admin token.</p>' +
+      '<p>Nobody owns this instance yet. Whoever finishes this step first becomes the owner and gets the API token.</p>' +
       '<div class="window" id="setup-window"><span class="lbl">Setup closes in</span>' +
       '<span class="t" role="timer" aria-live="off" id="setup-left">—</span>' +
       '<span class="bar" aria-hidden="true"><i id="setup-bar"></i></span></div>' +
@@ -9406,7 +9486,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         if (err.status === 410) { setupExpired(); return; }
         b.disabled = false; b.textContent = "Claim this instance";
         if (err.status === 409) {
-          $("setup-claim-msg").innerHTML = 'Someone else claimed this instance first. Sign in with the admin token they received. ' +
+          $("setup-claim-msg").innerHTML = 'Someone else claimed this instance first. Sign in with the API token they received. ' +
             '<button class="btn" type="button" id="setup-to-gate">Go to sign-in</button>';
           b.classList.add("hidden");
           $("setup-to-gate").addEventListener("click", function () { $("setup").classList.add("hidden"); showGate(false); });
@@ -9420,12 +9500,12 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   function setupToken() {
     var agent = setupState.agentToken;
     setupRender(
-      '<h1>Your admin token</h1>' +
+      '<h1>Your API token</h1>' +
       '<p>This is the only time it is shown. Save it in a password manager now.</p>' +
-      '<div class="cmd-label">Admin token</div>' + cmdBox(token, { secret: true, label: "Admin token" }) +
+      '<div class="cmd-label">API token</div>' + cmdBox(token, { secret: true, label: "API token" }) +
       '<div class="uses">' + ic("key", "sm") + '<span>Signs you in to this dashboard from other browsers. This one stays signed in until you close the tab.</span>' +
       ic("link", "sm") + '<span>Lets AI assistants read your inventory over MCP.</span></div>' +
-      '<label class="check"><input type="checkbox" id="setup-saved"> I have saved the admin token</label>' +
+      '<label class="check"><input type="checkbox" id="setup-saved"> I have saved the API token</label>' +
       (agent ? '<details class="manual"><summary>Manual setup</summary>' +
         '<p>Hosts you add in the next step get their own token automatically. Only if you install an agent by hand, give it this token as <code>AGENT_TOKEN</code>.</p>' +
         '<div class="cmd-label">Agent token</div>' + cmdBox(agent, { secret: true, label: "Agent token" }) + '</details>' : "") +
@@ -9466,7 +9546,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       save().then(function () { return write("/notify/test", "POST"); }).then(function () {
         // Apprise answers 2xx for a key with no targets, so this proves the
         // API reached Apprise and nothing more.
-        result("sent", "Apprise accepted the test. Check that it arrived: Apprise also accepts a key that has nowhere to send.");
+        result("sent", APPRISE_ACCEPTED);
       }, function (err) {
         result("bad", "Test failed: " + err.message);
       }).then(function () { b.disabled = false; });
@@ -9510,12 +9590,12 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   function enrollPanelHTML() {
     return '<div class="enroll">' +
       '<div class="enroll-fresh" data-enroll-fresh role="status"></div>' +
-      '<div class="enroll-options"><label>Hostname (optional)<input data-enroll-host autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" maxlength="128" placeholder="Use this machine’s hostname"></label>' +
-      '<label>Schedule<select data-enroll-scheduler><option value="systemd">Linux · systemd</option><option value="truenas-cron">TrueNAS · cron</option></select></label>' +
+      '<div class="enroll-options"><label>Hostname (optional)<input data-enroll-host autocapitalize="none" autocorrect="off" autocomplete="off" spellcheck="false" maxlength="128" placeholder="nas-01"><span class="sub">Leave blank to use the hostname of the machine where you run the command.</span></label>' +
+      '<label>Scheduler<select data-enroll-scheduler><option value="systemd">Linux · systemd</option><option value="truenas-cron">TrueNAS · cron</option></select></label>' +
       '<div class="enroll-cron" data-enroll-cron hidden><label>Persistent dataset directory<input data-enroll-state autocapitalize="none" autocorrect="off" placeholder="/mnt/pool/agent" autocomplete="off" spellcheck="false"></label>' +
       '<label>Replace cron job ID or description (optional)<input data-enroll-replace autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off"></label><span class="sub">The selected job is disabled only after the new agent reports successfully.</span></div>' +
       '<label>Run command as<select data-enroll-user><option value="linux">User with sudo</option><option value="root">Root</option></select></label>' +
-      '<button class="btn" type="button" data-enroll-new>Generate command</button></div>' +
+      '<button class="btn" type="button" data-enroll-new>Generate install command</button></div>' +
       '<div data-enroll-status role="status"></div>' +
       '<div class="enroll-label" data-enroll-label>Linux, run as a user with sudo</div>' +
       '<div data-enroll-cmd>' + cmdBox("Getting a code…", { shell: true, big: true, label: "Install command" }) + '</div>' +
@@ -9591,7 +9671,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           'Fine on a trusted home network. Beyond that, serve the API over HTTPS, for example behind a reverse proxy.</span></div>' : "";
       meta.innerHTML = '<span>Code <b>' + esc(r.code) + '</b> · works once · ' +
         '<span class="left" data-enroll-left>—</span></span>' +
-        '<button class="btn" type="button" data-enroll-new>' + ic("refresh", "sm") + 'New code</button>';
+        '<button class="btn" type="button" data-enroll-new>' + ic("refresh", "sm") + 'Generate new install command</button>';
       if (s.stopCount) s.stopCount();
       var warned = false;
       s.stopCount = countdown(s.expires, function (left) {
@@ -9599,13 +9679,13 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         if (!el) return;
         el.textContent = left > 0 ? "expires in " + mmss(left) : "expired";
         el.classList.toggle("low", left <= 60);
-        if (left <= 60 && left > 0 && !warned) { warned = true; announce("The install code expires in one minute."); }
+        if (left <= 60 && left > 0 && !warned) { warned = true; announce("Enrollment code expires in one minute."); }
       }, function () {
         s.commands = null;
         var box = cmdEl.querySelector(".cmd");
         if (box) { box.classList.add("dead"); box.querySelector("[data-copy]").disabled = true; }
-        s.q("fresh").innerHTML = ic("clock", "sm") + "<span>This code expired. Get a new code to add another host.</span>";
-        announce("The install code expired.");
+        s.q("fresh").innerHTML = ic("clock", "sm") + "<span>Enrollment code expired. Generate a new install command.</span>";
+        announce("Enrollment code expired. Generate a new install command.");
       });
     }, function (err) {
       s.minting = false;
@@ -9633,7 +9713,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     }
     s.q("cron").hidden = s.q("scheduler").value !== "truenas-cron";
     if (e.target === s.q("scheduler") && s.q("scheduler").value === "truenas-cron") s.q("user").value = "root";
-    s.q("cmd").textContent = "Options changed. Generate a new command.";
+    s.q("cmd").textContent = "Options changed. Generate a new install command.";
     s.commands = null;
     s.q("meta").textContent = '';
     if (s.stopCount) s.stopCount();
@@ -9731,7 +9811,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     token = $("gate-token").value.trim();
     $("gate-token").value = "";
     sessionStorage.setItem(TOKEN_KEY, token);
-    load();
+    load(true);
   });
 
   $("refresh").addEventListener("click", refreshDashboard);

@@ -241,7 +241,7 @@ func TestAdminExplainsWhyNotificationsAreQuiet(t *testing.T) {
 	}
 	// A delivery that apprise accepted is not a delivery that arrived, and
 	// conflating them is how a wrong key looks like a working notifier.
-	if !strings.Contains(page, "apprise accepted") {
+	if !strings.Contains(page, "Apprise accepted the test. Check the destination for the message.") {
 		t.Error("the panel presents an accepted send as a delivered one")
 	}
 }
