@@ -1122,7 +1122,11 @@ button.ops-tile { cursor:pointer; }
 .ops-person { display:flex; align-items:center; gap:6px; margin-top:6px; min-width:0; }
 .ops-person span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .ops-avatar { display:inline-flex; flex:none; width:24px; height:24px; border-radius:50%; background:var(--surface-3); color:var(--text); justify-content:center; align-items:center; font-size: var(--fs-xs); font-weight: 600; }
-.ops-sessions { margin-bottom:16px; }
+.ops-sessions { display:grid; grid-template-rows:0fr; transition:grid-template-rows var(--dur-2) var(--ease-out); }
+.ops-sessions.open { grid-template-rows:1fr; }
+.ops-sessions > div { min-height:0; overflow:hidden; }
+.ops-sessions .ops-card { margin-bottom:16px; }
+@media (prefers-reduced-motion: reduce) { .ops-sessions { transition:none; } }
 .ops-meter { height:4px; background:var(--track); border-radius:4px; overflow:hidden; margin:8px 0; }
 .ops-meter i { display:block; height:100%; background:var(--accent); border-radius:4px; }
 .ops-storage summary { display:block; }
@@ -4627,10 +4631,11 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       html += '<details class="ops-tile" data-ops-key="plex-load"' + (overviewOpen['plex-load'] ? ' open' : '') + '><summary><span class="ops-label">' + ic('server') + esc(load && load.label ? (/\bload$/i.test(load.label) ? load.label : load.label + ' load') : 'Host load') + '</span><span class="ops-number">' + (!opsState(load) ? opsNumber(load.cpu_pct, '%') : '—') + '</span><span class="ops-sub">GPU ' + gpuLabel + '</span>' + (!opsState(load) && (load.cpu_spark || load.spark) ? opsSpark(load.cpu_spark || load.spark, 'CPU usage') : '') + '</summary><div class="ops-detail">' +
         (opsState(load) ? esc(opsState(load)) : 'CPU · host usage' + devices.map(function (g) { return '<br>' + esc(g.name || 'GPU') + ' · ' + (opsState(g) || opsNumber(g.gpu_util_pct, '%')) + '<br>Encode ' + opsNumber(g.gpu_encoder_pct, '%') + ' · decode ' + opsNumber(g.gpu_decoder_pct, '%') + (g.spark && !opsState(g) ? opsSpark(g.spark, 'GPU usage') : ''); }).join('') + (!devices.length ? '<br>GPU · ' + esc(opsState(load.gpu) || 'Not collected') : '') + (load.sampled_at ? '<br>' + esc(ago(load.sampled_at)) : '')) + '</div></details>';
       html += '<details class="ops-tile" data-ops-key="alert-counts"' + (overviewOpen['alert-counts'] ? ' open' : '') + '><summary><span class="ops-label">' + ic('bell') + 'Alerts' + (recent ? '<span class="ops-recent" aria-label="Alert first seen within 24 hours"></span>' : '') + '</span><span class="ops-number">' + (counts ? opsNumber(counts.critical + counts.warning + counts.info) : '—') + '</span><span class="ops-sub">' + (counts ? esc(counts.critical) + ' critical · ' + esc(counts.warning) + ' warn' : esc(opsState(fleet))) + '</span></summary><div class="ops-detail">' + (counts ? esc(counts.info) + ' info · ' + esc(counts.silenced) + ' silenced<br>' : '') + (recent ? 'New in past 24h<br>' : '') + '<a href="#/alerts">Alerts ↗</a></div></details></div>';
-      html += '<div id="ops-sessions" class="ops-card ops-sessions' + (streamsOpen ? '' : ' hidden') + '"><h2>Watching now</h2>' + opsList(streams && !opsState(streams) ? streams.sessions : streams, function (s, i) {
+      html += '<div id="ops-sessions" class="ops-sessions' + (streamsOpen ? ' open' : '') + '"><div' +
+        (streamsOpen ? '' : ' inert') + '><div class="ops-card"><h2>Watching now</h2>' + opsList(streams && !opsState(streams) ? streams.sessions : streams, function (s, i) {
         return opsDetails('session-' + i, '<span class="ops-name"><b>' + esc(s.user || 'Unknown viewer') + '</b><span class="ops-sub">' + esc(s.title) + '</span></span><span class="ops-chip">' + esc(s.state || 'Unknown') + '</span>',
           esc(s.decision || 'Playback —') + ' · ' + esc(s.quality || 'Quality —') + '<br>Progress ' + opsNumber(s.progress_pct, '%') + opsMeter(s.progress_pct));
-      }, 'Idle') + (opsState(streams) ? '' : '<div class="ops-detail">' + opsNumber(streams.direct) + ' direct · ' + opsNumber(streams.transcode) + ' transcode · ' + opsNumber(streams.bandwidth_kbps) + ' kbps</div>') + '</div>';
+      }, 'Idle') + (opsState(streams) ? '' : '<div class="ops-detail">' + opsNumber(streams.direct) + ' direct · ' + opsNumber(streams.transcode) + ' transcode · ' + opsNumber(streams.bandwidth_kbps) + ' kbps</div>') + '</div></div></div>';
     }
     html += '<div class="ops-grid">';
     html += opsCard('Attention', 'bell', opsList(o.attention, function (a, i) {
@@ -4656,7 +4661,13 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     if (archive != null) html += opsCard('Archive', 'archive', opsState(archive) ? opsEmpty(archive) : opsDetails('archive-overview', '<span class="ops-name">' + esc(archive.title || 'Archive') + '<span class="ops-sub">' + esc(archive.phase || 'Not collected') + '</span></span><span class="ops-chip">' + opsNumber(archive.pending_approvals) + ' pending</span>', 'Progress ' + opsNumber(archive.progress_pct, '%') + opsMeter(archive.progress_pct) + 'Lifetime savings: ' + opsBytes(archive.saved_bytes_total) + '<br><a href="#/archive">Archive ↗</a>'), 'archive');
     $('home-ops').innerHTML = html + '</div>';
     var toggle = $('ops-streams-toggle');
-    if (toggle) toggle.addEventListener('click', function () { overviewOpen['streams'] = !streamsOpen; renderOverview(); $('ops-streams-toggle').focus(); });
+    if (toggle) toggle.addEventListener('click', function () {
+      var sessionsPanel = $('ops-sessions'), open = !overviewOpen['streams'];
+      overviewOpen['streams'] = open;
+      toggle.setAttribute('aria-expanded', open);
+      sessionsPanel.firstElementChild.inert = !open;
+      sessionsPanel.classList.toggle('open', open);
+    });
   }
   document.addEventListener('click', function (e) {
     var link = e.target.closest ? e.target.closest('[data-ops-alert]') : null;
