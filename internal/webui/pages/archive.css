@@ -10,11 +10,12 @@
 .arc-now .idle-line { color: var(--text-2); font-size: var(--fs-sm); margin-top: 6px; }
 .arc-code { font-family: var(--mono); font-size: var(--fs-xs); color: var(--text-2); overflow-wrap: anywhere; }
 .arc-bar { position: relative; height: 10px; border-radius: 5px; background: var(--track); overflow: hidden; margin: 14px 0 8px; }
-.arc-bar i { display: block; height: 100%; border-radius: 5px; background: var(--accent); transition: width 0.6s ease; }
+.arc-bar i { display: block; height: 100%; border-radius: 5px; background: var(--accent); transform-origin: left center; transition: transform 0.6s ease; }
 .arc-bar.indeterminate i { width: 30%; animation: archive-copy 1.6s ease-in-out infinite alternate; }
 .arc-bar.held i { background: var(--warn); opacity: 0.6; }
 @keyframes archive-copy { from { transform: translateX(0); } to { transform: translateX(233%); } }
 @media (prefers-reduced-motion: reduce) {
+.arc-bar i { transition: none; }
 .arc-bar.indeterminate i { animation: none; }
 }
 .arc-figs { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: var(--fs-sm); color: var(--text-2); font-variant-numeric: tabular-nums; }
@@ -198,7 +199,7 @@
 @media (prefers-reduced-motion: reduce) {
 .library-bar.busy i { animation: none; width: 100%; opacity: .35; }
 }
-.library-progress .library-bar i { transition: width 0.6s ease; }
+.library-progress .library-bar i { transform-origin: left center; transition: transform 0.6s ease; }
 .arc-strip { position: sticky; top: var(--arc-sticky-top, var(--top-h)); z-index: 6; margin: calc(-1 * var(--s2)) 0 var(--s4); padding: var(--s2) 0 0; background: var(--bg); }
 .arc-strip[hidden] { display: none; }
 .arc-strip-card { background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-lg); padding: 0 14px 4px; box-shadow: var(--shadow); }
@@ -213,7 +214,7 @@
 .arc-op-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); font-weight: 600; }
 .arc-op-w { font-size: var(--fs-xs); color: var(--text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .arc-op .library-bar { grid-column: 1 / -1; margin-top: 2px; }
-.arc-op .library-bar i { transition: width 0.6s ease; }
+.arc-op .library-bar i { transform-origin: left center; transition: transform 0.6s ease; }
 .arc-op.warning .arc-op-w { color: var(--warn); }
 .arc-op.critical .arc-op-w { color: var(--crit); }
 .arc-op.done .arc-op-w { color: var(--ok); }
@@ -230,14 +231,14 @@
 .arc-pill-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px 0 6px; border: 1px solid var(--line-2); border-radius: var(--r-pill); background: var(--surface); font-size: var(--fs-sm); font-weight: 600; font-variant-numeric: tabular-nums; }
 .arc-pill-n { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); font-size: var(--fs-xs); font-weight: 600; }
 .arc-pill .library-bar { width: 34px; height: 4px; margin: 0; }
-.arc-pill .library-bar i { transition: width 0.6s ease; }
+.arc-pill .library-bar i { transform-origin: left center; transition: transform 0.6s ease; }
 @media (max-width: 420px) {
 .arc-pill { padding: 0; }
 .arc-pill-chip { gap: 5px; padding: 0 8px 0 4px; }
 .arc-pill .library-bar { width: 22px; }
 }
 @media (prefers-reduced-motion: reduce) {
-.arc-op, .arc-op .library-bar i, .arc-pill .library-bar i, .arc-strip .arc-bar i, .library-progress .library-bar i { transition: none; }
+.arc-op, .arc-op .library-bar i, .arc-pill .library-bar i, .library-progress .library-bar i { transition: none; }
 .arc-pill .library-bar.busy i { animation: none; width: 100%; opacity: .35; }
 }
 .library-tags > span { display: inline-block; background: var(--surface-3); border-radius: var(--r-pill); padding: 1px 7px; font-size: var(--fs-xs); margin: 2px 2px 2px 0; }

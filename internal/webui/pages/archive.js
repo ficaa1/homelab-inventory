@@ -50,7 +50,10 @@
   }
   function bar(pct, mode, label) {
     return '<div class="arc-bar ' + (mode || "") + '" role="progressbar" aria-label="' + esc(label) + '" aria-valuemin="0" aria-valuemax="100"' +
-      (pct == null ? "" : ' aria-valuenow="' + pct.toFixed(0) + '"') + '><i style="width:' + (pct == null ? 30 : pct) + '%"></i></div>';
+      (pct == null ? "" : ' aria-valuenow="' + pct.toFixed(0) + '"') + '><i' + progressScale(pct) + '></i></div>';
+  }
+  function progressScale(pct) {
+    return pct == null ? "" : ' style="transform:scaleX(' + (pct / 100) + ')"';
   }
   function fail(err) { return err && err.unauthorized; }
   function active(a) { return a && a.job && ["complete", "abandoned", "failed"].indexOf(a.job.phase) < 0; }
@@ -63,7 +66,15 @@
   function morph(el, html) {
     var t = document.createElement("template"), focus = document.activeElement;
     t.innerHTML = html;
-    if (st.strip && el === st.body && st.strip.parentNode === el) el.parentNode.insertBefore(st.strip, el);
+    if (st.strip && el === st.body && st.strip.parentNode === el) {
+      var head = t.content.querySelector(".arc-head");
+      if (head) {
+        // Match the existing strip in place so a status refresh preserves its transitions.
+        head.after(HI.h("section", { "data-key": "archive-activity" }));
+      } else {
+        el.parentNode.insertBefore(st.strip, el);
+      }
+    }
     morphKids(el, t.content);
     if (focus && focus !== document.activeElement && focus.isConnected && el.contains(focus)) focus.focus({ preventScroll: true });
   }
@@ -87,6 +98,7 @@
     want.forEach(function (n) { if (n === at) at = at.nextSibling; else a.insertBefore(n, at); });
   }
   function morphNode(a, b) {
+    if (a === st.strip) return a;
     if (a.nodeType !== b.nodeType || a.nodeName !== b.nodeName) { a.parentNode.replaceChild(b, a); return b; }
     if (a.nodeType !== 1) { if (a.nodeValue !== b.nodeValue) a.nodeValue = b.nodeValue; return a; }
     var details = a.nodeName === "DETAILS", input = a.nodeName === "INPUT";
@@ -551,7 +563,7 @@
     if (p.state === 'importing' && p.total) { word += ' ' + p.imported + '/' + p.total; pct = p.imported / p.total * 100; }
     else if ((p.state === 'downloading' || p.state === 'paused') && p.percent != null) { word += ' ' + p.percent + '%'; pct = p.percent; }
     if (p.state === 'downloading' && p.eta_seconds != null) sub = activityETA(p.eta_seconds);
-    var bar = pct != null ? '<span class="library-bar" aria-hidden="true"><i style="width:' + pct.toFixed(2) + '%"></i></span>' : p.state === 'importing' ? '<span class="library-bar busy" aria-hidden="true"><i></i></span>' : '';
+    var bar = pct != null ? '<span class="library-bar" aria-hidden="true"><i' + progressScale(pct) + '></i></span>' : p.state === 'importing' ? '<span class="library-bar busy" aria-hidden="true"><i></i></span>' : '';
     return '<div class="library-progress">' + pill(word, libActivityLevels[p.state]) + bar + (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') + '</div>';
   }
   function libraryProgressSlot(item, season) {
@@ -1072,7 +1084,7 @@
     return '<button type="button" class="arc-op' + (r.level ? ' ' + r.level : '') + (r.done ? ' done' : '') + (fading ? ' fade' : '') + '" data-key="' + esc(r.key) + '" data-arc-go="' + esc(r.key) + '"' + (r.name ? ' title="' + esc(r.name) + '"' : '') + '>' +
       '<span class="arc-op-t">' + esc(r.title) + '</span><span class="arc-op-w">' + esc(meta) + '</span>' +
       (bar ? '<span class="library-bar' + (r.pct == null ? ' busy' : '') + '" role="progressbar" aria-label="' + esc(r.title) + '" aria-valuemin="0" aria-valuemax="100"' +
-        (r.pct == null ? '' : ' aria-valuenow="' + Math.round(r.pct) + '"') + '><i style="width:' + (r.pct == null ? 35 : r.pct.toFixed(1)) + '%"></i></span>' : '') + '</button>';
+        (r.pct == null ? '' : ' aria-valuenow="' + Math.round(r.pct) + '"') + '><i' + progressScale(r.pct) + '></i></span>' : '') + '</button>';
   }
 
   function renderStrip() {
@@ -1286,7 +1298,7 @@
       root.textContent = "";
       var panel = HI.h("section", { id: "panel-archive" });
       st.tools = HI.h("div", { class: "arc-head-tools" });
-      st.strip = HI.h("section", { class: "arc-strip", "aria-label": "Activity", hidden: true });
+      st.strip = HI.h("section", { class: "arc-strip", "data-key": "archive-activity", "aria-label": "Activity", hidden: true });
       st.body = HI.h("div", { id: st.view === "library" ? "archive-library" : st.view === "seeding" ? "archive-seeding" : "archive", class: "arc-view arc-view-" + st.view });
       st.strip.id = "arc-strip";
       st.strip.innerHTML = '<div class="arc-strip-card"></div><div class="arc-live" aria-live="polite"></div>';
