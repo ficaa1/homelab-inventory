@@ -31,7 +31,7 @@
 
   function esc(s) { return HI.esc(s); }
   function $(id) { return document.getElementById(id); }
-  function sheet(html, label) { HI.openDrawer(html, label || "Archive"); }
+  function sheet(html, label) { return HI.openDrawer(html, label || "Archive"); }
   function msg(id, text, bad) { var el = $(id); if (el) { el.textContent = text; el.style.color = bad ? "var(--crit)" : ""; } }
   function row(k, v) { return "<dt>" + esc(k) + "</dt><dd>" + esc(v == null || v === "" ? "—" : v) + "</dd>"; }
   function real(iso) { return iso && new Date(iso).getFullYear() > 1; }
@@ -769,9 +769,11 @@
   }
 
   // Every seeding write confirms in one sheet: run posts, ok follows success.
-  function seedSheet(headHTML, note, keep, label, run, ok, off) {
+  function seedSheet(headHTML, note, keep, label, run, ok, off, id) {
     var req = ++request;
-    sheet(headHTML + '<div id="seed-message" class="note" role="status">' + note + '</div><div class="seed-confirm-actions"><button class="btn" id="seed-cancel">' + keep + '</button><button class="btn primary" id="seed-confirm"' + (off ? " disabled" : "") + ">" + label + "</button></div>");
+    var html = headHTML + '<div id="seed-message" class="note" role="status">' + note + '</div><div class="seed-confirm-actions"><button class="btn" id="seed-cancel">' + keep + '</button><button class="btn primary" id="seed-confirm"' + (off ? " disabled" : "") + ">" + label + "</button></div>";
+    if (id == null) sheet(html);
+    else HI.updateDrawer(id, html, "Archive");
     $("seed-cancel").onclick = HI.closeDrawer;
     $("seed-confirm").onclick = function () {
       this.disabled = true;
@@ -812,9 +814,9 @@
 
   function previewSeeding(hash) {
     var req = ++request;
-    sheet('<h3>Move seeding data</h3><div class="empty">Loading…</div>');
+    var id = sheet('<h3>Move seeding data</h3><div class="empty">Loading…</div>');
     HI.send(ID, "seeding/preview", "POST", { hash: hash }).then(function (p) {
-      if (req !== request || !HI.drawerIsOpen()) return;
+      if (req !== request || !HI.drawerExists(id)) return;
       var moves = (p.libraryMoves || []).map(function (m) { return "<li>" + esc(m.from) + " → " + esc(m.to) + "</li>"; }).join("");
       seedSheet('<h3 class="seed-title">' + esc(p.name) + "</h3>" + pill(p.mode === "link" ? "Link" : "Move", p.mode === "link" ? "good" : "info") +
         '<div class="seed-metrics"><div><span class="sub">Frees download disk</span><strong>' + esc(size(p.nvmeBytesFreed)) + '</strong></div><div><span class="sub">Costs NAS</span><strong>' + esc(size(p.nasBytesCost)) + "</strong></div></div>" +
@@ -823,8 +825,10 @@
         '<ul class="seed-files">' + (p.files || []).map(function (f) { return "<li><b>" + esc(f.relative) + '</b><span class="sub">' + esc(size(f.size)) + " · " + (f.match ? "Library match" : "Copy") + "</span></li>"; }).join("") + "</ul>",
         p.dryRun ? "Dry-run" : "", "Cancel", "Move to NAS",
         function () { return HI.send(ID, "seeding/move", "POST", { hash: p.hash, planHash: p.planHash, apply: true }); },
-        function () { sheet("<h3>" + esc(p.name) + '</h3><div class="note">Queued</div>'); }, p.dryRun);
-    }).catch(function (e) { if (!fail(e) && req === request) sheet('<h3>Move seeding data</h3><div class="note">' + esc(e.message) + "</div>"); });
+        function () { sheet("<h3>" + esc(p.name) + '</h3><div class="note">Queued</div>'); }, p.dryRun, id);
+    }).catch(function (e) {
+      if (!fail(e) && req === request) HI.updateDrawer(id, '<h3>Move seeding data</h3><div class="note">' + esc(e.message) + "</div>", "Archive");
+    });
   }
 
   // ------------------------------------------------------------ selection view

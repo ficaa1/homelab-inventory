@@ -246,9 +246,10 @@
 
   // ------------------------------------------------------------ drawers
 
-  function drawer(label, kids) {
+  function drawer(label, kids, id) {
     var box = h("div", { class: "tdarr-drawer" }, kids);
-    HI().openDrawer(box, label);
+    if (id == null) HI().openDrawer(box, label);
+    else HI().updateDrawer(id, box, label);
     return box;
   }
   function drawerOpen(box) { return !!box && box.isConnected && HI().drawerIsOpen(); }
@@ -315,20 +316,21 @@
     if (locked() || !total().count) return;
     var epoch = ++st.epoch;
     busy(true);
-    var box = drawer("Tdarr batch review", [h("h3", { text: "Tdarr" }), skel(2)]);
+    var label = "Tdarr batch review";
+    var id = HI().openDrawer(h("div", { class: "tdarr-drawer" }, [h("h3", { text: "Tdarr" }), skel(2)]), label);
     var body = { selection: Object.keys(st.selected).map(function (k) { return st.selected[k].selection; }), withPc: st.pc };
     HI().send(ID, "batch/preview", "POST", body).then(function (v) {
-      if (epoch !== st.epoch || !drawerOpen(box)) return;
+      if (epoch !== st.epoch || !HI().drawerExists(id)) return;
       if (!v || !v.plan) throw new Error((v && v.error) || "Preview unavailable");
-      review(v, epoch);
+      review(v, epoch, id);
     }).catch(function (e) {
-      if (epoch !== st.epoch) return;
+      if (epoch !== st.epoch || !HI().drawerExists(id)) return;
       if (e.canceled) { HI().closeDrawer(); return; }
-      drawer("Tdarr batch review", [h("h3", { text: "Preview unavailable" }), h("div", { class: "note", text: e.message })]);
+      drawer(label, [h("h3", { text: "Preview unavailable" }), h("div", { class: "note", text: e.message })], id);
     }).then(function () { busy(false); });
   }
 
-  function review(v, epoch) {
+  function review(v, epoch, id) {
     var n = v.plan.paths.length, ok = !!v.hash && !!v.confirmation_token && !v.error && n > 0 && n <= LIMIT;
     var msg = h("div", { id: "tdarr-confirm-msg", class: "note", role: "status", text: v.error || (waiting() ? "Tdarr already has " + waiting() + " queued or active; the server refuses a batch until that queue is empty." : "") });
     var queue = h("button", { id: "tdarr-queue", class: "btn primary", type: "button", text: "Queue", disabled: !ok, onclick: run });
@@ -337,7 +339,7 @@
       h("h3", { text: n + (n === 1 ? " file · " : " files · ") + lb(v.plan.total_bytes) }),
       fileList(v.plan), msg,
       h("div", { class: "actions" }, [h("button", { id: "tdarr-cancel", class: "btn", type: "button", text: "Cancel", onclick: HI().closeDrawer }), queue])
-    ]);
+    ], id);
     function expired() { var t = Date.parse(v.expires_at); return !isFinite(t) || Date.now() >= t; }
     function again(text) {
       clearTimeout(st.expiry); msg.textContent = text;

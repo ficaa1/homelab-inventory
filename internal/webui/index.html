@@ -5192,7 +5192,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   var drawer = $("drawer"), scrim = $("scrim"), drawerBody = $("drawer-body"), drawerHead = $("drawer-head");
   var drawerOpen = false, drawerReturnFocus = null, drawerPopping = false, drawerNextRoute = "";
-  var drawerDrag = null, drawerDragged = false;
+  var drawerDrag = null, drawerDragged = false, drawerID = 0;
   var sheet = { y: 0, v: 0, height: 0, frame: null, damping: 1 };
   var drawerPhone = matchMedia("(max-width: 640px)");
 
@@ -5314,14 +5314,28 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     sheet.frame = requestAnimationFrame(frame);
   }
 
+  function setDrawerContent(html, label) {
+    drawer.setAttribute("aria-label", label || "Details");
+    if (typeof html === "string") drawerBody.innerHTML = html;
+    else drawerBody.replaceChildren(html);
+  }
+
+  function drawerExists(id) { return id === drawerID; }
+
+  function updateDrawer(id, html, label) {
+    if (!drawerExists(id)) return;
+    setDrawerContent(html, label);
+    if (phone()) sizeDrawer();
+    else $("drawer-close").focus({ preventScroll: true });
+  }
+
   function openDrawer(html, label) {
     var opening = !drawerOpen, hidden = drawer.classList.contains("hidden"), dragging = !!drawerDrag;
     if (hidden || (opening && !phone())) drawerReturnFocus = document.activeElement;
     var opacity = hidden ? 0 : Number(getComputedStyle(drawer).opacity);
+    var id = ++drawerID;
     drawerOpen = true;
-    drawer.setAttribute("aria-label", label || "Details");
-    if (typeof html === "string") drawerBody.innerHTML = html;
-    else drawerBody.replaceChildren(html);
+    setDrawerContent(html, label);
     resetDrawerDrag();
     if (phone()) {
       reveal(drawer);
@@ -5338,6 +5352,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     }
     syncScrollLock();
     $("drawer-close").focus({ preventScroll: true });
+    return id;
   }
 
   function closeDrawer(fromHistory, released) {
@@ -5359,6 +5374,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
 
   function finishDrawerClose(fromHistory) {
+    drawerID++;
     if (!drawer.motionOut) {
       conceal(drawer);
       conceal(scrim);
@@ -9799,7 +9815,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   window.HI = {
     h: h, str: str, esc: esc, ago: ago, fromNow: fromNow, bytes: bytes, dur: dur,
     iconNode: iconNode, pill: pill, stateBox: stateBox, notice: notice, skeleton: skeleton,
-    openDrawer: openDrawer, closeDrawer: closeDrawer, drawerIsOpen: drawerIsOpen, toast: toast, go: go,
+    openDrawer: openDrawer, closeDrawer: closeDrawer, drawerIsOpen: drawerIsOpen,
+    drawerExists: drawerExists, updateDrawer: updateDrawer, toast: toast, go: go,
     prepareListTable: prepareListTable,
     // GET and mutation helpers for the plugin's own API; a 401 opens the gate.
     get: function (id, path, signal) { return api(pagePath(id, path), signal).catch(pageFail); },
