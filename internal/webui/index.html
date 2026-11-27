@@ -383,8 +383,10 @@ h3, h4 { font-size: var(--fs-md); font-weight: 600; line-height: 1.3; }
 .btn:disabled { opacity: 0.5; cursor: default; }
 .btn[aria-pressed="true"] { background: var(--surface-3); border-color: var(--line-2); color: var(--text); }
 .btn.primary { background: var(--ink-fill); border-color: var(--ink-fill); color: var(--ink-on); }
+.btn.primary.destructive { background: var(--crit); border-color: var(--crit); color: var(--status-ink); }
 @media (hover: hover) and (pointer: fine) {
   .btn.primary:hover { background: var(--ink-fill); opacity: 0.88; }
+  .btn.primary.destructive:hover { background: var(--crit); }
 }
 .btn.danger { color: var(--crit); }
 .seg { display: inline-flex; padding: 2px; gap: 2px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); }
@@ -799,7 +801,8 @@ pre.code {
 @media (prefers-color-scheme: light) {
   :root:where(:not([data-theme="dark"])) { --heat-ink-high: var(--heat-ink-light); }
 }
-.cell:is(.exposed, .has-exposed), .legend .swatch.exposed { box-shadow: inset 0 0 0 1.5px currentColor; }
+.cell.has-exposed, .legend .swatch.exposed { box-shadow: inset 0 0 0 2px var(--warn); }
+.cell.exposed { box-shadow: inset 0 0 0 1.5px currentColor; }
 .cell.ephem {
   background-color: var(--track);
   background-image: repeating-linear-gradient(45deg, transparent, transparent 2px, var(--text-3) 2px, var(--text-3) 3px);
@@ -813,7 +816,7 @@ pre.code {
 .legend .item { display: inline-flex; align-items: center; gap: 6px; }
 .legend .swatch { width: 11px; height: 11px; border-radius: 2px; flex: none; background: var(--track); }
 .legend .swatch.used { background: var(--heat-solid); }
-.legend .swatch.exposed { background: var(--warn); color: var(--status-ink); }
+.legend .swatch.exposed { background: var(--heat-2); }
 .legend .swatch.ephem { background-color: var(--track); background-image: repeating-linear-gradient(45deg, transparent, transparent 2px, var(--text-3) 2px, var(--text-3) 3px); }
 .legend .ramp { display: inline-flex; gap: 1px; }
 .legend .ramp i { width: 9px; height: 11px; display: block; }
@@ -918,6 +921,9 @@ pre.code {
   #drawer-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   .drawer.sheet-lg #drawer-body { flex: 1; }
   .drawer h3 { margin-right: 0; }
+  .drawer.is-confirm .close { display: none; }
+  .drawer.is-confirm .actions { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; margin-top: 16px; }
+  .drawer.is-confirm .actions .btn { min-height: 48px; justify-content: center; }
 }
 
 /* ------------------------------------------------------------------ toast */
@@ -4965,7 +4971,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     });
   }
 
-  function confirmDrawer(title, consequence, label, pending, run) {
+  function confirmDrawer(title, consequence, label, pending, run, destructive) {
     var previous, focus = document.activeElement;
     var previousLabel = drawer.getAttribute("aria-label");
     if (drawerOpen) {
@@ -4974,9 +4980,12 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     }
     var html = '<h3>' + esc(title) + '</h3><p>' + esc(consequence) + '</p><div class="actions">' +
       '<button class="btn" id="confirm-cancel" type="button">Cancel</button>' +
-      '<button class="btn primary" id="confirm-run" type="button">' + esc(label) + '</button></div>' +
+      '<button class="btn primary' + (destructive ? ' destructive' : '') + '" id="confirm-run" type="button">' + esc(label) + '</button></div>' +
       '<div id="confirm-status" class="sub" role="status"></div>';
     var id = openDrawer(html);
+    // Cancel is the dismissal here, and the safe place for focus to start.
+    drawer.classList.add("is-confirm");
+    $("confirm-cancel").focus({ preventScroll: true });
     $("confirm-cancel").onclick = function () {
       if (!previous) { closeDrawer(); return; }
       openDrawer(previous, previousLabel);
@@ -5009,7 +5018,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
           data.services = catalog;
           renderHome();
         });
-      });
+      }, true);
   }
 
   function acceptAll() {
@@ -5628,6 +5637,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
 
   function openDrawer(html, label, opener) {
+    drawer.classList.remove("is-confirm");
     var opening = !drawerOpen, hidden = drawer.classList.contains("hidden"), dragging = !!drawerDrag;
     if (hidden || (opening && !phone())) {
       drawerReturnFocus = document.activeElement;
@@ -6209,7 +6219,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
               storagePreview = null; return load().then(storageRefresh);
             }).then(function () { adminMsg("rs-msg", "Forgot " + host); })
               .finally(function () { storageBusy = false; storageDisable(); });
-          });
+          }, true);
       });
     });
   }
@@ -6414,7 +6424,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
             renderAdmin();
             adminMsg("a-msg", "Dashboard overrides reset");
           });
-        });
+        }, true);
     });
 
     var test = $("a-test");
