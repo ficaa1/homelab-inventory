@@ -849,7 +849,8 @@ pre.code {
 
 /* ------------------------------------------------------------------ tooltip */
 .tip {
-  position: fixed; z-index: 90; pointer-events: none; max-width: 300px;
+  position: fixed; z-index: 90; pointer-events: none; max-width: min(300px, calc(100vw - 16px));
+  max-height: calc(100dvh - 16px); overflow: hidden; overflow-wrap: anywhere;
   background: var(--surface-3); color: var(--text); border: 1px solid var(--line-2); border-radius: var(--r-sm);
   padding: 8px 10px; font-size: var(--fs-xs); line-height: 1.45; box-shadow: 0 8px 28px var(--shadow-medium);
 }
@@ -1455,6 +1456,7 @@ button.ops-tile { cursor:pointer; }
 .more-sheet {
   position: fixed; z-index: 62; right: 8px; bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
   width: min(280px, calc(100vw - 16px)); padding: 6px; display: grid; gap: 2px;
+  max-height: calc(100dvh - var(--nav-h) - var(--safe-b) - 16px); overflow-y: auto;
   background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-lg);
   box-shadow: var(--shadow);
 }
@@ -2347,7 +2349,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
 <div id="more-scrim" class="more-scrim hidden"></div>
 <div id="more-sheet" class="more-sheet hidden" role="menu" aria-label="More sections"></div>
-<div id="tip" class="tip hidden" role="status" aria-live="polite"></div>
+<div id="tip" class="tip hidden" role="tooltip"></div>
 <div id="scrim" class="scrim hidden"></div>
 <aside id="drawer" class="drawer hidden" role="dialog" aria-modal="true" aria-label="Details">
   <div class="drawer-head" id="drawer-head">
@@ -3358,6 +3360,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   function renderGrid(containerId, hostName) {
     var el = $(containerId);
+    if (tipAnchor && el.contains(tipAnchor)) hideTip();
     var h = hostPortMap(hostName);
     if (!h) {
       el.innerHTML = '<div class="empty">No port data.</div>';
@@ -3434,7 +3437,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         html += '<button type="button" class="' + cls + '" tabindex="' + (tab ? "0" : "-1") + '"' +
           ' data-lo="' + a + '" data-hi="' + b + '" data-used="' + used +
           '" data-exposed="' + exposed + '" data-ephem="' + ephem +
-          '" aria-label="' + esc(label) + '" title="' + esc(label) + '">' +
+          '" aria-label="' + esc(label) + '">' +
           (used ? '<span class="cell-value" aria-hidden="true">' + used + (exposed ? "!" : "") + "</span>" : "") + "</button>";
       }
       html += "</div>";
@@ -5240,19 +5243,51 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   // ------------------------------------------------------------ tooltip
 
-  var tip = $("tip");
+  var tip = $("tip"), tipAnchor = null;
 
-  function showTip(html, x, y) {
-    tip.innerHTML = html;
-    tip.classList.remove("hidden");
-    var r = tip.getBoundingClientRect();
-    var left = Math.min(x + 14, window.innerWidth - r.width - 8);
-    var top = y + 18 + r.height > window.innerHeight ? y - r.height - 12 : y + 18;
-    tip.style.left = Math.max(8, left) + "px";
-    tip.style.top = Math.max(8, top) + "px";
+  function placeAnchored(panel, trigger, above) {
+    var gap = 8, width = panel.offsetWidth, height = panel.offsetHeight;
+    var anchor = trigger.getBoundingClientRect();
+    var maxX = document.documentElement.clientWidth - gap, maxY = window.innerHeight - gap;
+    var x = (anchor.left + anchor.right) / 2, y = (anchor.top + anchor.bottom) / 2;
+    var left = x - width / 2, top = y - height / 2;
+    if (!above && anchor.right + gap + width <= maxX) left = anchor.right + gap;
+    else if (!above && anchor.left - gap - width >= gap) left = anchor.left - gap - width;
+    else {
+      var roomAbove = anchor.top - 2 * gap, roomBelow = maxY - anchor.bottom - gap;
+      top = (above ? roomAbove >= height || roomAbove >= roomBelow : roomBelow < height && roomAbove > roomBelow)
+        ? anchor.top - height - gap : anchor.bottom + gap;
+    }
+    left = Math.max(gap, Math.min(maxX - width, left));
+    top = Math.max(gap, Math.min(maxY - height, top));
+    panel.style.left = left + "px";
+    panel.style.top = top + "px";
+    panel.style.right = panel.style.bottom = "auto";
+    panel.style.transformOrigin = Math.max(0, Math.min(width, x - left)) + "px " +
+      Math.max(0, Math.min(height, y - top)) + "px";
   }
 
-  function hideTip() { tip.classList.add("hidden"); }
+  function showTip(cell) {
+    if (!cell || cell.classList.contains("na") || cell === tipAnchor) return;
+    hideTip();
+    var wrap = cell.closest(".gridwrap");
+    var html = cellTip(cell, wrap ? wrap.dataset.grid : portHost);
+    if (!html) return;
+    tipAnchor = cell;
+    cell.setAttribute("aria-describedby", "tip");
+    tip.innerHTML = html;
+    tip.classList.remove("hidden");
+    placeAnchored(tip, cell, false);
+    animateIn(tip, [{ opacity: 0, transform: "scale(0.97)" }, { opacity: 1, transform: "none" }], motion.d1);
+  }
+
+  function hideTip() {
+    if (!tipAnchor) return;
+    tipAnchor.removeAttribute("aria-describedby");
+    tipAnchor = null;
+    stopEntrance(tip);
+    tip.classList.add("hidden");
+  }
 
   function cellTip(cell, hostName) {
     var lo = +cell.dataset.lo, hi = +cell.dataset.hi;
@@ -5371,12 +5406,6 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   else if (reducedMotion.addListener) reducedMotion.addListener(settleMotion);
 
   var FADE_IN = [{ opacity: 0 }, { opacity: 1 }], FADE_OUT = [{ opacity: 1 }, { opacity: 0 }];
-  function sheetFrames(base) {
-    base = base || "";
-    var from = phone() ? base + " translateY(32px)" : base + " scale(0.97)";
-    return [{ opacity: 0, transform: from.trim() }, { opacity: 1, transform: base || "none" }];
-  }
-
   // A details panel the reader opens eases in; refreshes re-render it open
   // without motion, and closing stays instant.
   document.addEventListener("click", function (e) {
@@ -6673,6 +6702,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     return { opacity: style.opacity, transform: style.transform };
   }
 
+  var MORE_HIDDEN = { opacity: 0, transform: "scale(0.96)" };
+
   function openMore() {
     var sheet = $("more-sheet"), items = [];
     navEntries().filter(function (e) { return !navDirect(e); }).forEach(function (e) {
@@ -6682,9 +6713,10 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     });
     if (!items.length) return;
     sheet.replaceChildren.apply(sheet, items);
-    var frames = sheetFrames();
-    if (!sheet.classList.contains("hidden")) frames[0] = overlayPose(sheet);
-    reveal(sheet, frames, motion.d2, motion.out);
+    var from = sheet.classList.contains("hidden") ? MORE_HIDDEN : overlayPose(sheet);
+    reveal(sheet);
+    placeAnchored(sheet, $("tab-more"), true);
+    animateIn(sheet, [from, { opacity: 1, transform: "none" }], motion.d1);
     $("more-scrim").classList.remove("hidden");
     $("tab-more").setAttribute("aria-expanded", "true");
     setModal("more-sheet", true);
@@ -6694,7 +6726,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   function closeMore(refocus) {
     if (!moreOpen()) return;
     var sheet = $("more-sheet");
-    conceal(sheet, phone() ? [overlayPose(sheet), sheetFrames()[0]] : null, motion.d1);
+    conceal(sheet, phone() ? [overlayPose(sheet), MORE_HIDDEN] : null, motion.d1);
     $("more-scrim").classList.add("hidden");
     $("tab-more").setAttribute("aria-expanded", "false");
     setModal("more-sheet", false);
@@ -6717,7 +6749,10 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     e.preventDefault();
     list[(next + list.length) % list.length].focus();
   });
-  window.addEventListener("resize", function () { if (!phone()) closeMore(false); });
+  window.addEventListener("resize", function () {
+    if (!phone()) closeMore(false);
+    else if (moreOpen()) placeAnchored($("more-sheet"), $("tab-more"), true);
+  });
 
   // ------------------------------------------------------------ plugin views
 
@@ -10149,10 +10184,10 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
 
   document.addEventListener("pointermove", function (e) {
-    var cell = e.target.closest ? e.target.closest(".cell") : null;
-    if (!cell || cell.classList.contains("na")) { hideTip(); return; }
-    var wrap = cell.closest(".gridwrap");
-    showTip(cellTip(cell, wrap ? wrap.dataset.grid : portHost), e.clientX, e.clientY);
+    if (e.pointerType === "touch") return;
+    var cell = e.target.closest ? e.target.closest(".cell:not(.na)") : null;
+    if (cell) showTip(cell);
+    else if (tipAnchor && !tipAnchor.matches(":focus-visible")) hideTip();
   });
   // An icon the server does not have 404s; drop the image so the lettered
   // placeholder underneath shows through. error does not bubble, hence capture.
@@ -10165,6 +10200,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   window.addEventListener("scroll", hideTip, true);
   window.addEventListener("blur", hideTip);
+  window.addEventListener("resize", hideTip);
 
   // Roving focus inside a grid: arrow keys move a cell at a time, so the
   // whole port space is reachable without tabbing through a thousand
@@ -10207,8 +10243,10 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var prev = wrap.querySelector('.cell[tabindex="0"]');
     if (prev && prev !== cell) prev.tabIndex = -1;
     cell.tabIndex = 0;
-    var r = cell.getBoundingClientRect();
-    showTip(cellTip(cell, wrap ? wrap.dataset.grid : portHost), r.right, r.top);
+    if (cell.matches(":focus-visible")) showTip(cell);
+  });
+  document.addEventListener("focusout", function (e) {
+    if (e.target === tipAnchor) hideTip();
   });
 
   $("drawer-close").addEventListener("click", closeDrawer);
