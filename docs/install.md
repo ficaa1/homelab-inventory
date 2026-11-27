@@ -88,6 +88,12 @@ project `homelab-inventory`, with `compose.yml` in `--dir` and data mounted at
 `/data` (owned by UID 10001). No Docker socket is mounted. Docker itself must
 already be installed.
 
+**Unreleased builds.** Every merge to `main` also publishes
+`ghcr.io/ficaa1/homelab-inventory:sha-<commit>` and `:main`, for linux/amd64
+only. Pin the `sha-` tag to run an exact commit: you update by changing the tag,
+and roll back by restoring the old one. These images haven't been through a
+release, so prefer a `v` tag unless you need a specific merge.
+
 **Binary install.** Checks the download against the release `SHA256SUMS`, then
 installs `/usr/local/bin/homelab-inventory`, a `homelab-inventory` service and
 system user, and the agent files under `/usr/share/homelab-inventory/agent`. The
