@@ -301,7 +301,7 @@ filters on the hub, and they combine.
       "trial": {"since": "2026-11-10", "ends": "2026-12-10", "state": "running"},
       "hosts": null,
       "removable": true,
-      "counts": {"skills": 12, "model": 5, "user": 4, "exclude": 3}
+      "counts": {"skills": 9, "model": 5, "user": 4, "exclude": 3}
     }
   ],
   "own_counts": {"skills": 20, "model": 14, "user": 6, "exclude": 0},
@@ -327,7 +327,9 @@ filters on the hub, and they combine.
 - `defined_in`: `config` (hand-written) or `policy` (written by the hub).
 - `trial` is `null` for sources that aren't on trial.
 - `hosts` is `null` when the source installs on every host.
-- `counts` and `own_counts` count every skill, whatever the filter. `sources` is never filtered.
+- Source counts follow the source's selection, host scope and per-skill decisions. `skills` is
+  the total of `model` and `user`. Explicit per-skill exclusions appear under `exclude` and
+  remain editable. Query filters affect the skill list only, and `sources` is never filtered.
 - `mode`: `model` (model-invoked), `user` (user-only) or `exclude` (not installed).
 - `mode_from`: `source` (the source's lists), `decision` (a per-skill decision, with
   `decided_at`) or `frontmatter` (own skills).
@@ -361,6 +363,8 @@ filters on the hub, and they combine.
 - `threads` counts since `since`. `suggestion` follows `rules`: at least `keep_model_min_threads`
   suggests `model`, at least `keep_user_min_threads` suggests `user`, and fewer suggests
   `exclude`.
+- Trial rows follow the source's selection and per-skill decisions. Usage comes from hosts in
+  the source's scope.
 - The hub never acts on a suggestion. Only an action does.
 
 ### `GET /v1/usage` (planned)
@@ -530,6 +534,8 @@ Content-Type: application/json
     rate-limit and upstream errors, interrupted or unusable replies and `working` receipts.
   - Resubmitting while the action runs replays the receipt and shows Working again. The first
     resubmit after completion shows the final result and releases the key.
+  - A precondition conflict (the Conflicts column below) returns `409 conflict` with a fix-it
+    message and stores no receipt, so the key stays available for a corrected request.
 - **Deadline.** The hub answers within 8 seconds. If the push isn't done by then, it answers
   `202` with `state: "working"`, and the receipt route reports the outcome.
 - **Locking.** Actions are serialized on the repository. A request that can't get the lock within
@@ -554,7 +560,7 @@ Content-Type: application/json
 | `proxy_reauth_start` | `account` | the account's provider can't sign in again from here |
 | `proxy_reauth_finish` | `session`, `redirect_url` | the session isn't `waiting` or has expired |
 
-- `end_trial` keeps every per-skill decision. Skills without one get `undecided`. With
+- `end_trial` keeps every per-skill decision. Other selected skills get `undecided`. With
   `suggestion`, each gets its row's suggestion from `GET /v1/trials`.
 - `remove_source` uninstalls the source's skills on every host at their next sync. Hand-edited
   copies (drift) are left in place and reported.
