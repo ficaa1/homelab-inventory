@@ -308,3 +308,26 @@ func TestFleetRegistryLifecycle(t *testing.T) {
 		t.Fatal("re-enable lost credentials", err)
 	}
 }
+
+func TestHubURLPathPrefix(t *testing.T) {
+	var seen []string
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.URL.Path)
+		if r.URL.Path != "/fleet-hub/v1/overview" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Write(fixture(t, "overview"))
+	}))
+	t.Cleanup(s.Close)
+	p := New(testHost{s.Client()}).(*Fleet)
+	if err := p.Configure(plugin.Config{"hub_url": s.URL + "/fleet-hub/", "read_token": readToken}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.View(t.Context(), "overview", nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(seen) == 0 || seen[0] != "/fleet-hub/v1/overview" {
+		t.Fatalf("hub requests dropped the base path: %q", seen)
+	}
+}
