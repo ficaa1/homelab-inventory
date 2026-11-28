@@ -36,6 +36,9 @@ func TestManifestAndViews(t *testing.T) {
 	var names []string
 	for _, v := range m.Tab.Views {
 		names = append(names, v.Name)
+		if v.Hidden != slices.Contains([]string{"host", "skill", "account", "sign-in"}, v.Name) {
+			t.Fatal("wrong visibility", v.Name)
+		}
 	}
 	if !slices.Equal(names, []string{"overview", "hosts", "skills", "trials", "proxy", "host", "skill", "account", "sign-in"}) {
 		t.Fatal(names)

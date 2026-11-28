@@ -35,7 +35,7 @@ func (*Fleet) Manifest() plugin.Manifest {
 			{Key: "operator_token", Label: "Operator token", Type: plugin.Secret, Help: "Optional. Lets this dashboard change fleet through the hub. Leave it empty to keep it read-only."},
 		},
 		Tab: &plugin.Tab{Title: "Fleet", Icon: "grid", Views: []plugin.ViewRef{
-			{Name: "overview", Title: "Overview"}, {Name: "hosts", Title: "Hosts"}, {Name: "skills", Title: "Skills"}, {Name: "trials", Title: "Trials"}, {Name: "proxy", Title: "Proxy"}, {Name: "host", Title: "Host"}, {Name: "skill", Title: "Skill"}, {Name: "account", Title: "Account"}, {Name: "sign-in", Title: "Sign-in"},
+			{Name: "overview", Title: "Overview"}, {Name: "hosts", Title: "Hosts"}, {Name: "skills", Title: "Skills"}, {Name: "trials", Title: "Trials"}, {Name: "proxy", Title: "Proxy"}, {Name: "host", Title: "Host", Hidden: true}, {Name: "skill", Title: "Skill", Hidden: true}, {Name: "account", Title: "Account", Hidden: true}, {Name: "sign-in", Title: "Sign-in", Hidden: true},
 		}},
 	}
 }

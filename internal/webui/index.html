@@ -6597,14 +6597,14 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       { key: "taste", title: "Taste", plugin: "taste", view: "picks", icon: "film" }
     ];
     var out = defs.filter(function (d) { return !!pluginInfo(d.plugin); }).map(function (d) {
-      var info = pluginInfo(d.plugin), views = pluginViews(info), v = views.filter(function (x) { return x.name === d.view; })[0];
+      var info = pluginInfo(d.plugin), views = pluginViews(info), v = views.find(function (x) { return x.name === d.view && !x.hidden; });
       if (!v && views.length) d = Object.assign({}, d, { view: views[0].name });
       return d;
     });
     // The read-only media plugin's views join the switcher only when none of
     // the five sections exist; otherwise they stay reachable from search.
     var media = pluginInfo("media");
-    if (media && !out.length) pluginViews(media).forEach(function (v) {
+    if (media && !out.length) pluginViews(media).filter(function (v) { return !v.hidden; }).forEach(function (v) {
       out.push({ key: "media-" + v.name, title: v.name === "library" ? "Services" : str(v.title) || v.name, plugin: "media", view: v.name, icon: "film", extra: true });
     });
     return out;
@@ -6636,8 +6636,9 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
   // The page header for a plugin: media's flat section row, then a plugin's
   // own sub-views only when it has more than one.
-  function pluginHead(id, current, trailing, attrs) {
-    var info = pluginInfo(id), views = pluginViews(info), g = groupOf(id);
+  function pluginHead(id, current, trailing, attrs, title) {
+    var info = pluginInfo(id), views = pluginViews(info).filter(function (v) { return !v.hidden; }), g = groupOf(id);
+    var detail = pluginViews(info).find(function (v) { return v.name === current && v.hidden; });
     var name = info ? str(info.tab.title) || str(info.name) : id;
     var seg = function (label, list, on, pick) {
       return h("div", { class: "seg", role: "group", "aria-label": label }, list.map(function (x) {
@@ -6651,17 +6652,17 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       // switcher, then the section's own buttons (CSS orders the page's tools).
       var sections = mediaSections(), here = sections.filter(function (x) { return x.plugin === id && x.view === current; })[0] || sections.filter(function (x) { return x.plugin === id; })[0];
       var nav = seg("Media views", sections.map(function (x) { return { key: x.key, section: x, title: x.title }; }),
-        function (x) { return x === here || x.section === here; }, function (x) { go(mediaHash(x.section)); });
+        function (x) { return !detail && x.section === here; }, function (x) { go(mediaHash(x.section)); });
       nav.className = "library-nav";
       Array.prototype.forEach.call(nav.children, function (btn, i) { btn.setAttribute("data-library-view", sections[i].key); });
-      var mbar = [h("h1", { text: here ? here.title : "Media" }), h("span", { class: "spacer" }), nav];
+      var mbar = [h("h1", { text: detail ? title || detail.title : here ? here.title : "Media" }), h("span", { class: "spacer" }), nav];
       if (trailing) { var tools = trailing.tagName === "DIV" ? trailing : h("div", {}, [trailing]); tools.classList.add("media-tools"); mbar.push(tools); }
       var mhead = h("div", attrs || { class: "pv-head media-head" }, mbar);
       if (!viewSeg) return [mhead];
       viewSeg.classList.add("pv-sub");
       return [mhead, viewSeg];
     }
-    var bar = [h("h1", { text: name })];
+    var bar = [h("h1", { text: title || name })];
     if (viewSeg) bar.push(viewSeg);
     if (trailing) bar.push(trailing);
     var head = h("div", attrs || { class: "pv-head" }, bar);
@@ -6814,8 +6815,10 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   function openPluginView() {
     var g = groupOf(route.plugin);
     if (g) {
-      var info = pluginInfo(route.plugin), views = pluginViews(info);
-      groupLast[g] = route.plugin + "/" + (route.pview || (views[0] && views[0].name) || "");
+      var groupViews = pluginViews(pluginInfo(route.plugin));
+      if (groupViews[0] && !groupViews.some(function (v) { return v.name === route.pview && v.hidden; })) {
+        groupLast[g] = route.plugin + "/" + (route.pview || groupViews[0].name);
+      }
     }
     if (Object.prototype.hasOwnProperty.call(PAGES, route.plugin)) {
       if (pv.key) { var keep = activePage; activePage = null; leavePluginView(); activePage = keep; }
@@ -6831,7 +6834,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     if (pv.ctrl) pv.ctrl.abort();
     clearTimeout(pv.timer);
     pv = { key: key, plugin: route.plugin, view: view, params: route.params, data: null, err: null, at: 0, ctrl: null, timer: 0 };
-    if (views.some(function (v) { return v.name === view; })) pluginLastView[route.plugin] = view === views[0].name ? "" : view;
+    if (views.some(function (v) { return v.name === view && !v.hidden; })) pluginLastView[route.plugin] = view === views[0].name ? "" : view;
     renderPluginView();
     if (!PLUGIN_ID.test(route.plugin) || !VIEW_NAME.test(view)) {
       pv.err = { status: 404, message: "not found" };
@@ -6976,19 +6979,19 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     if (chartRO) chartRO.disconnect();   // the charts being replaced; new ones observe themselves
     var name = info ? str(info.tab.title) || str(info.name) : pv.plugin;
     var currentTab = views.find(function (v) { return v.name === pv.view; });
-    var inTab = !!currentTab;
+    var inTab = !!currentTab && !currentTab.hidden;
     var v = pv.data, err = pv.err;
     // Keep keyboard focus across a refresh: links carry a stable key.
     var focusKey = document.activeElement && root.contains(document.activeElement) ? document.activeElement.getAttribute("data-fk") : null;
 
     var head = [];
-    if (!inTab && views.length) {
+    if (!currentTab && views.length) {
       var back = pluginLastView[pv.plugin] || views[0].name;
       var backTitle = (views.filter(function (x) { return x.name === back; })[0] || views[0]).title || name;
       head.push(h("button", { class: "back", type: "button", "data-fk": "back", onclick: function () { go(pluginHash(pv.plugin, back === views[0].name ? "" : back, "")); } },
         [iconNode("back", "sm"), str(backTitle) || name]));
     }
-    var title = inTab || !v ? name : str(v.title) || name;
+    var title = inTab ? name : str(v && v.title) || str(currentTab && currentTab.title) || name;
     var stampNode = null;
     if (v) {
       var when = Date.parse(v.updated_at) || pv.at, every = refreshEvery();
@@ -6996,7 +6999,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       if (err) stamp = "Refresh failed · showing " + new Date(when).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       stampNode = h("span", { class: "pv-stamp" + (err ? " stale" : ""), title: new Date(when).toLocaleString() + (every ? " · refreshes every " + Math.round(every / 1000) + " s" : "") }, [stamp]);
     }
-    if (inTab) head = head.concat(pluginHead(pv.plugin, pv.view, stampNode));
+    if (currentTab) head = head.concat(pluginHead(pv.plugin, pv.view, stampNode, null, title));
     else head.push(h("div", { class: "pv-head" }, [h("h1", { text: title }), stampNode]));
 
     var body;
@@ -7011,7 +7014,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     } else {
       var blocks = Array.isArray(v.blocks) ? v.blocks : [];
       body = h("div", { class: "pv-blocks" });
-      if (v.title && (pv.actionResult || (pv.params && currentTab && currentTab.title !== v.title))) body.appendChild(h("h2", {text: v.title}));
+      if (v.title && inTab && (pv.actionResult || (pv.params && currentTab.title !== v.title))) body.appendChild(h("h2", {text: v.title}));
       if (v.actions && v.actions.length) {
         var bar = h("div", {class: "actions pv-actions"});
         var counts = Object.create(null);

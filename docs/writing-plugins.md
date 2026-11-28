@@ -24,9 +24,11 @@ Close() error
 
 The method signatures above describe the interface; implement them as methods on
 your own type. Manifest contains ID, Name, Description, Version, Settings and an
-optional Tab. A Tab has Title, Icon and Views (`Name`, `Title`); the first view is
-the default. View names match `[a-z][a-z0-9-]{0,31}`. Unknown icon names fall back
-to the dashboard's generic icon.
+optional Tab. A Tab has Title, Icon and Views (`Name`, `Title`, optional `Hidden`).
+The first view is the default and cannot be hidden. Set `Hidden: true` for detail
+views that stay accessible by link or URL. The dashboard uses the detail view's
+title as the page heading and leaves every tab unselected. View names match
+`[a-z][a-z0-9-]{0,31}`. Unknown icon names fall back to the dashboard's generic icon.
 
 Settings use `plugin.Field`: Key, Label, Help, Type, Required, Default,
 Placeholder, Options and Group. Keys match `[a-z][a-z0-9_]{0,39}`. Types are
