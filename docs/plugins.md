@@ -1,6 +1,6 @@
 # Plugins
 
-Plugins add tabs to the dashboard. Eleven ship with it. The built-ins are **Media**, **Uploads**, **Network**, **Dusk**, **Taste**,
+Plugins add tabs to the dashboard. Eleven ship with it: **Media**, **Uploads**, **Network**, **Dusk**, **Taste**,
 **Archive**, **Tdarr**, **Cloudflare**, **Security canaries**, **Vulnerabilities** and **Fleet**. They are already installed and start switched off.
 This page covers the first four. [Fleet](fleet.md), [Vulnerabilities](cve.md), [Taste](taste-plugin.md)
 and [Tdarr](tdarr.md) have their own pages; Archive uses the
