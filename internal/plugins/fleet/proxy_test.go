@@ -2,7 +2,6 @@ package fleet
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -251,8 +250,7 @@ func TestProxySignInFlow(t *testing.T) {
 	}
 	private([]byte(err.Error()))
 	files, err := os.ReadDir(filepath.Join(h.dir, "receipts"))
-	want := sha256.Sum256([]byte(p.base + "\x00proxy_reauth_finish\x00" + `{"session":"ras_a"}`))
-	if err != nil || len(files) != 1 || files[0].Name() != fmt.Sprintf("%x", want) {
+	if err != nil || len(files) != 1 {
 		t.Fatal("unexpected pending receipt")
 	}
 	err = filepath.WalkDir(h.dir, func(path string, d fs.DirEntry, err error) error {
@@ -273,8 +271,8 @@ func TestProxySignInFlow(t *testing.T) {
 		t.Fatal("missing fixed redirect address help")
 	}
 	private([]byte(err.Error()))
+	key = ""
 	for _, status = range []int{202, 200} {
-		key = ""
 		v, err = p.Action(t.Context(), "proxy_reauth_finish", values)
 		if err != nil {
 			t.Fatal(err)
@@ -284,7 +282,7 @@ func TestProxySignInFlow(t *testing.T) {
 			t.Fatal("missing pending copy")
 		}
 	}
-	receiptState, key = "done", ""
+	receiptState = "done"
 	v, err = p.Action(t.Context(), "proxy_reauth_finish", values)
 	if err != nil || v.Title != "Signed in. The account is usable again." {
 		t.Fatal("missing success copy")
@@ -312,6 +310,44 @@ func TestProxySignInFlow(t *testing.T) {
 	state = "waiting"
 	if len(checkedView(t, p, "sign-in", url.Values{"session": {session}}).Actions) > 0 {
 		t.Fatal("read-only session offers writes")
+	}
+}
+
+func TestSignInCallbacksHaveSeparatePrivateReservations(t *testing.T) {
+	const prefix = "http://localhost:1455/callback?code="
+	codes := []string{"first-synthetic-code", "second-synthetic-code"}
+	keys := make(chan string, len(codes))
+	p, h := actionHub(t, func(w http.ResponseWriter, r *http.Request) {
+		keys <- r.Header.Get("Idempotency-Key")
+		w.WriteHeader(http.StatusBadGateway)
+		fmt.Fprint(w, `{"error":{"code":"upstream_failed"}}`)
+	})
+	for _, code := range codes {
+		values := plugin.Config{"session": "ras_a", "redirect_url": prefix + code}
+		if _, err := p.Action(t.Context(), "proxy_reauth_finish", values); err == nil {
+			t.Fatal("expected an upstream error")
+		}
+	}
+	if <-keys == <-keys {
+		t.Fatal("different callback reused the same key")
+	}
+	dir := filepath.Join(h.dir, "receipts")
+	files, err := os.ReadDir(dir)
+	if err != nil || len(files) != len(codes) {
+		t.Fatal("expected a reservation for each callback")
+	}
+	for _, file := range files {
+		raw, err := os.ReadFile(filepath.Join(dir, file.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, code := range codes {
+			for _, part := range []string{prefix + code, code} {
+				if strings.Contains(file.Name(), part) || bytes.Contains(raw, []byte(part)) {
+					t.Fatal("callback credential persisted")
+				}
+			}
+		}
 	}
 }
 func unsafeFleetLinks() []string {

@@ -516,12 +516,19 @@ Content-Type: application/json
   commits and pushes, except `force_file`, which queues a request for one host. Hosts apply
   repository changes on their next sync.
 - **Idempotency.** `Idempotency-Key` is required: 16 to 64 characters from `[A-Za-z0-9-]`. The
-  hub keeps receipts for 30 days.
-  - The same key with the same action and params returns the stored receipt with
-    `"replayed": true`, and nothing is applied twice.
-  - The same key with anything else returns `409 idempotency_mismatch`.
-  - The plugin stores the key in a receipt before it sends, and reuses it only to reconcile an
-    attempt whose outcome it doesn't know, for up to 30 days and only for the same hub.
+  hub authenticates, then looks up the key before validation, locking or rate limiting. A known
+  key always returns its stored receipt with HTTP 200 and `"replayed": true`. The hub keeps
+  receipts for 30 days.
+  - The plugin reserves a key before sending. It reuses that key for up to 30 days for the same
+    hub URL, operator token, action and canonical parameters, including the redirect address.
+    The operator token keys the HMAC-SHA256 filename. The reservation stores only its key and
+    creation time.
+  - A validated `done` or `failed` receipt releases the key, as does a 4xx with
+    `bad_request`, `invalid_param`, `not_found`, `conflict`, `not_editable`, `too_large`
+    or `idempotency_mismatch`. All other outcomes retain the key, including authorization,
+    rate-limit and upstream errors, interrupted or unusable replies and `working` receipts.
+  - Resubmitting while the action runs replays the receipt and shows Working again. The first
+    resubmit after completion shows the final result and releases the key.
 - **Deadline.** The hub answers within 8 seconds. If the push isn't done by then, it answers
   `202` with `state: "working"`, and the receipt route reports the outcome.
 - **Locking.** Actions are serialized on the repository. A request that can't get the lock within

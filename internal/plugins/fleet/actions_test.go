@@ -238,11 +238,10 @@ func TestActionLocalValidation(t *testing.T) {
 
 func TestReceiptLifetimeAndHubScope(t *testing.T) {
 	p, h := actionHub(t, func(http.ResponseWriter, *http.Request) { t.Error("reservation made a hub request") })
-	spec := action("remove_source", "", false)
 	values := plugin.Config{"source": "example-skills"}
 	reserve := func() (string, string) {
 		t.Helper()
-		path, key, err := p.reserve(spec, values)
+		path, key, err := p.reserve("remove_source", values)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -280,6 +279,10 @@ func TestReceiptLifetimeAndHubScope(t *testing.T) {
 	if same, fresh := reserve(); same != path || fresh == key {
 		t.Fatal("expired reservation was reused")
 	}
+	p.operatorToken = "different-synthetic-operator-token"
+	if other, otherKey := reserve(); other == path || otherKey == key {
+		t.Fatal("different operator token reused the pending reservation")
+	}
 }
 
 func TestActionKeepsReservationUntilDefinitiveReply(t *testing.T) {
@@ -309,16 +312,17 @@ func TestActionKeepsReservationUntilDefinitiveReply(t *testing.T) {
 		{"unknown 500", 500, `{"error":{"code":"unknown"}}`, false},
 		{"upstream failure", 502, `{"error":{"code":"upstream_failed"}}`, false},
 		{"bad_request", 400, `{"error":{"code":"bad_request"}}`, true},
-		{"unauthorized", 401, `{"error":{"code":"unauthorized"}}`, true},
-		{"forbidden", 403, `{"error":{"code":"forbidden"}}`, true},
+		{"unauthorized", 401, `{"error":{"code":"unauthorized"}}`, false},
+		{"forbidden", 403, `{"error":{"code":"forbidden"}}`, false},
 		{"not_found", 404, `{"error":{"code":"not_found"}}`, true},
 		{"conflict", 409, `{"error":{"code":"conflict"}}`, true},
 		{"not_editable", 409, `{"error":{"code":"not_editable"}}`, true},
 		{"idempotency_mismatch", 409, `{"error":{"code":"idempotency_mismatch"}}`, true},
 		{"too_large", 413, `{"error":{"code":"too_large"}}`, true},
 		{"invalid_param", 422, `{"error":{"code":"invalid_param","message":"Check <source>","field":"source"}}`, true},
-		{"rate_limited", 429, `{"error":{"code":"rate_limited"}}`, true},
-		{"busy", 503, `{"error":{"code":"busy"}}`, true},
+		{"rate_limited", 429, `{"error":{"code":"rate_limited"}}`, false},
+		{"busy", 503, `{"error":{"code":"busy"}}`, false},
+		{"validation code with server error", 500, `{"error":{"code":"invalid_param"}}`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p, h := actionHub(t, func(w http.ResponseWriter, r *http.Request) {
@@ -346,17 +350,81 @@ func TestActionKeepsReservationUntilDefinitiveReply(t *testing.T) {
 	}
 }
 
-func TestActionWorkingReceiptOnAcceptedAndReplay(t *testing.T) {
-	for _, status := range []int{http.StatusAccepted, http.StatusOK} {
+func TestActionReplaysAfterLostReplyAndRejectedRetry(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusTooManyRequests} {
 		t.Run(fmt.Sprint(status), func(t *testing.T) {
-			p, _ := actionHub(t, func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(status)
-				fmt.Fprint(w, strings.Replace(doneReceipt("proxy_refresh_account"), "done", "working", 1))
+			keys := make(chan string, 3)
+			p, h := actionHub(t, func(w http.ResponseWriter, r *http.Request) {
+				keys <- r.Header.Get("Idempotency-Key")
+				switch len(keys) {
+				case 1:
+					body := doneReceipt("remove_source")
+					w.Header().Set("Content-Length", fmt.Sprint(len(body)))
+					w.WriteHeader(http.StatusAccepted)
+					fmt.Fprint(w, body[:len(body)/2])
+				case 2:
+					w.WriteHeader(status)
+					code := map[int]string{http.StatusUnauthorized: "unauthorized", http.StatusTooManyRequests: "rate_limited"}[status]
+					fmt.Fprintf(w, `{"error":{"code":%q}}`, code)
+				case 3:
+					fmt.Fprint(w, doneReceipt("remove_source"))
+				}
 			})
-			v, err := p.Action(t.Context(), "proxy_refresh_account", plugin.Config{"account": "acc_a"})
-			if err != nil || v.Title != "Working: Saved" || len(v.Blocks) != 1 || v.Blocks[0].Text != "Still working. The result shows here when it lands." {
-				t.Fatal("working receipt was not shown as pending")
+			values := plugin.Config{"source": "example-skills"}
+			for i := 0; i < 2; i++ {
+				if _, err := p.Action(t.Context(), "remove_source", values); err == nil {
+					t.Fatal("expected error on incomplete or rejected reply")
+				}
+				files, err := os.ReadDir(filepath.Join(h.dir, "receipts"))
+				if err != nil || len(files) != 1 {
+					t.Fatal("pending receipt was lost")
+				}
+			}
+			if _, err := p.Action(t.Context(), "remove_source", values); err != nil {
+				t.Fatal(err)
+			}
+			first := <-keys
+			if <-keys != first || <-keys != first {
+				t.Fatal("retry changed key")
 			}
 		})
+	}
+}
+
+func TestActionWorkingReceiptOnAcceptedAndReplay(t *testing.T) {
+	const id = "proxy_refresh_account"
+	keys := make(chan string, 4)
+	p, h := actionHub(t, func(w http.ResponseWriter, r *http.Request) {
+		keys <- r.Header.Get("Idempotency-Key")
+		body := doneReceipt(id)
+		if len(keys) == 1 {
+			w.WriteHeader(http.StatusAccepted)
+		}
+		if len(keys) <= 2 {
+			body = strings.Replace(body, "done", "working", 1)
+		}
+		fmt.Fprint(w, body)
+	})
+	values := plugin.Config{"account": "acc_a"}
+	for range 2 {
+		v, err := p.Action(t.Context(), id, values)
+		if err != nil || v.Title != "Working: Saved" || len(v.Blocks) != 1 || v.Blocks[0].Text != "Still working. The result shows here when it lands." {
+			t.Fatal("working receipt was not shown as pending")
+		}
+	}
+	v, err := p.Action(t.Context(), id, values)
+	if err != nil || v.Title != "Saved" {
+		t.Fatal("final replay was not shown as done")
+	}
+	files, err := os.ReadDir(filepath.Join(h.dir, "receipts"))
+	if err != nil || len(files) != 0 {
+		t.Fatal("done replay did not release key")
+	}
+	if _, err = p.Action(t.Context(), id, values); err != nil {
+		t.Fatal(err)
+	}
+	first := <-keys
+	if <-keys != first || <-keys != first || <-keys == first {
+		t.Fatal("expected key reuse through the done replay, then a new key")
 	}
 }

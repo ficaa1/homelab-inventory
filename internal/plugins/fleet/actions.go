@@ -3,6 +3,7 @@ package fleet
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -174,23 +175,19 @@ type pendingReceipt struct {
 	Created time.Time `json:"created_at"`
 }
 
-func (p *Fleet) reserve(a plugin.ActionSpec, params plugin.Config) (path, key string, err error) {
-	public := maps.Clone(params)
-	for _, f := range a.Fields {
-		if f.Type == plugin.Secret {
-			delete(public, f.Key)
-		}
-	}
-	canonical, err := json.Marshal(public)
+func (p *Fleet) reserve(id string, params plugin.Config) (path, key string, err error) {
+	canonical, err := json.Marshal(params)
 	if err != nil {
 		return "", "", err
 	}
-	hash := sha256.Sum256(append([]byte(p.base+"\x00"+a.ID+"\x00"), canonical...))
+	hash := hmac.New(sha256.New, []byte(p.operatorToken))
+	hash.Write([]byte(p.base + "\x00" + id + "\x00"))
+	hash.Write(canonical)
 	dir := filepath.Join(p.host.CacheDir(), "receipts")
 	if err = os.MkdirAll(dir, 0700); err != nil {
 		return "", "", err
 	}
-	path = filepath.Join(dir, hex.EncodeToString(hash[:]))
+	path = filepath.Join(dir, hex.EncodeToString(hash.Sum(nil)))
 	data, err := os.ReadFile(path)
 	now := p.host.Now()
 	if err == nil {
@@ -225,10 +222,13 @@ type receiptResponse struct {
 	}
 }
 
-func definitiveActionError(code string) bool {
-	switch code {
-	case "bad_request", "unauthorized", "forbidden", "not_found", "conflict", "not_editable",
-		"idempotency_mismatch", "too_large", "invalid_param", "rate_limited", "busy":
+func (e *hubError) actionValidationError() bool {
+	if e.status/100 != 4 {
+		return false
+	}
+	switch e.code {
+	case "bad_request", "not_found", "conflict", "not_editable",
+		"idempotency_mismatch", "too_large", "invalid_param":
 		return true
 	}
 	return false
@@ -259,16 +259,6 @@ func (p *Fleet) Action(ctx context.Context, id string, in plugin.Config) (plugin
 	if p.operatorToken == "" || p.base == "" {
 		return v, errors.New("Set the hub URL and operator token in Admin → Plugins.")
 	}
-	var spec plugin.ActionSpec
-	for _, a := range p.Manifest().Actions {
-		if a.ID == id {
-			spec = a
-			break
-		}
-	}
-	if spec.ID == "" {
-		return v, plugin.ErrNotFound
-	}
 	params, err := actionParams(id, in)
 	if err != nil {
 		return v, err
@@ -295,7 +285,7 @@ func (p *Fleet) Action(ctx context.Context, id string, in plugin.Config) (plugin
 	}
 	// A transport retry would bypass the user's decision to reconcile the receipt.
 	req.GetBody = nil
-	path, key, err := p.reserve(spec, params)
+	path, key, err := p.reserve(id, params)
 	if err != nil {
 		return v, errors.New("Could not save the receipt. Check the fleet plugin cache permissions and free space.")
 	}
@@ -322,7 +312,7 @@ func (p *Fleet) Action(ctx context.Context, id string, in plugin.Config) (plugin
 	if err = p.decode(reply, p.operatorToken, &response, finish); err != nil {
 		var failure *hubError
 		if errors.As(err, &failure) {
-			if definitiveActionError(failure.code) {
+			if failure.actionValidationError() {
 				if removeErr := releaseReceipt(path); removeErr != nil {
 					return v, removeErr
 				}
@@ -341,14 +331,16 @@ func (p *Fleet) Action(ctx context.Context, id string, in plugin.Config) (plugin
 		return v, errResponse
 	}
 	r := response.Receipt
-	if id == "proxy_reauth_start" && r.State != "failed" {
+	if id == "proxy_reauth_start" && r.State == "done" {
 		v, err = p.signInStarted(response, accountLabel)
 		if err != nil {
 			return v, err
 		}
 	}
-	if err = releaseReceipt(path); err != nil {
-		return plugin.View{}, err
+	if r.State != "working" {
+		if err = releaseReceipt(path); err != nil {
+			return plugin.View{}, err
+		}
 	}
 	if r.State == "failed" {
 		if finish {
@@ -362,12 +354,14 @@ func (p *Fleet) Action(ctx context.Context, id string, in plugin.Config) (plugin
 		}
 		return v, errors.New("The hub could not apply the change.")
 	}
-	if id == "proxy_reauth_start" {
+	if id == "proxy_reauth_start" && r.State == "done" {
 		return v, nil
 	}
 	v = plugin.View{UpdatedAt: response.Generated}
 	if finish {
 		v.Title, _ = signInCopy("ok")
+	} else if id == "proxy_reauth_start" {
+		v.Title = "Starting sign-in."
 	} else {
 		v.Title = p.clean(r.Summary, 400)
 	}
