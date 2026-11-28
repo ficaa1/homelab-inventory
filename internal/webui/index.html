@@ -628,6 +628,7 @@ td.num, th.num { text-align: right; }
     position: absolute; inset: 0 0 0 auto; display: grid; place-items: center; width: 44px;
     border: 0; border-radius: var(--r); background: none; color: var(--text-3); cursor: pointer;
   }
+  [data-list] tr.c-tap .c-list-open { inset: 0; width: auto; justify-items: end; padding-right: 15px; }
   [data-list] .c-list-open:focus-visible { outline-offset: -3px; }
   [data-list] .c-list-open .ic { width: 14px; height: 14px; transform: rotate(-90deg); }
   [data-list] .c-list-open[aria-expanded] { bottom: auto; min-height: 52px; }
@@ -3150,6 +3151,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         var open = h("button", { class: "c-list-open", type: "button", "aria-label": "View details for " + title },
           [iconNode("chevron", "sm")]);
         if (!tr.classList.contains("clickable")) {
+          // With nothing else to press in the row, the whole row opens it.
+          if (!tr.querySelector("a[href], button, input, select, textarea, summary")) tr.classList.add("c-tap");
           if (drawer.contains(table)) open.setAttribute("aria-expanded", "false");
           open.addEventListener("click", function () {
             var fields = '<dl class="dl">' +
