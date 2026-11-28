@@ -61,12 +61,8 @@ func (p *Fleet) View(ctx context.Context, name string, params url.Values) (plugi
 			v.Blocks = []plugin.Block{notice("info", "Choose a filter from the Skills view.")}
 			break
 		}
-		path := "skills"
-		if query := filters.values().Encode(); query != "" {
-			path += "?" + query
-		}
 		var data skillsResponse
-		err = p.get(ctx, path, p.readToken, &data)
+		err = p.get(ctx, filters.path(), p.readToken, &data)
 		if err == nil {
 			v.Blocks = p.skills(data, filters)
 			p.sourceActions(&v, data, filters)
@@ -74,12 +70,13 @@ func (p *Fleet) View(ctx context.Context, name string, params url.Values) (plugi
 	case "skill":
 		v.Title = "Skill"
 		id := params.Get("id")
-		if len(params["id"]) != 1 || !skillID.MatchString(id) {
+		filters := skillFilters{source: params.Get("source"), origin: params.Get("origin")}
+		if len(params["id"]) != 1 || !skillID.MatchString(id) || !filters.validSource(params) {
 			v.Blocks = []plugin.Block{notice("info", "Open a skill from Skills.")}
 			break
 		}
 		var data skillsResponse
-		err = p.get(ctx, "skills", p.readToken, &data)
+		err = p.get(ctx, filters.path(), p.readToken, &data)
 		if err == nil {
 			p.skillDetail(&v, data, id)
 		}

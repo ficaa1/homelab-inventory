@@ -17,8 +17,11 @@ var suggestions = map[string]string{"model": "Keep model-invoked", "user": "Keep
 type skillFilters struct{ source, mode, origin string }
 
 func (f skillFilters) valid(params url.Values) bool {
+	return f.validSource(params) && (!params.Has("mode") || (len(params["mode"]) == 1 && modes[f.mode] != ""))
+}
+
+func (f skillFilters) validSource(params url.Values) bool {
 	return (!params.Has("source") || (len(params["source"]) == 1 && sourceID.MatchString(f.source))) &&
-		(!params.Has("mode") || (len(params["mode"]) == 1 && modes[f.mode] != "")) &&
 		(!params.Has("origin") || (len(params["origin"]) == 1 && (f.origin == "own" || f.origin == "third_party")))
 }
 
@@ -30,6 +33,13 @@ func (f skillFilters) values() url.Values {
 		}
 	}
 	return params
+}
+
+func (f skillFilters) path() string {
+	if query := f.values().Encode(); query != "" {
+		return "skills?" + query
+	}
+	return "skills"
 }
 
 func (f skillFilters) link() *plugin.Link {
@@ -188,7 +198,12 @@ func (p *Fleet) skills(data skillsResponse, filters skillFilters) []plugin.Block
 			item.Badges = []plugin.Badge{badge(trial, "info")}
 		}
 		if skillID.MatchString(s.ID) && p.word(s.ID) == s.ID {
-			item.Link = &plugin.Link{View: "skill", Params: map[string]string{"id": s.ID}}
+			item.Link = detailLink("skill", "id", s.ID)
+			if sourceFilter != "" {
+				item.Link.Params["source"] = sourceFilter
+			} else if filters.origin == "own" {
+				item.Link.Params["origin"] = "own"
+			}
 		}
 		rows.Items = append(rows.Items, item)
 	}

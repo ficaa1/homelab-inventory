@@ -295,6 +295,47 @@ func TestSkillsFiltersUseHubQueryAndCounts(t *testing.T) {
 	}
 }
 
+func TestSkillDetailKeepsSourceFilterAndMatchesFullID(t *testing.T) {
+	for _, tc := range []struct{ key, value, name, id string }{
+		{"source", "example-skills", "sort-notes", "example-skills/sort-notes"},
+		{"origin", "own", "read-notes", "read-notes"},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			h := newHub(t, false, func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/v1/skills" || r.URL.RawQuery != tc.key+"="+tc.value {
+					t.Error("expected the filtered skills request")
+				}
+				var data map[string]any
+				if err := json.Unmarshal(fixture(t, "skills"), &data); err != nil {
+					t.Error(err)
+					return
+				}
+				json.NewEncoder(w).Encode(data)
+			})
+			v := h.view(t, "skills", url.Values{tc.key: {tc.value}})
+			for _, row := range v.Blocks[2].Items {
+				if row.Title != tc.name {
+					continue
+				}
+				link := row.Link
+				if link.View != "skill" || !maps.Equal(link.Params, map[string]string{"id": tc.id, tc.key: tc.value}) {
+					t.Fatal("skill detail link lost its source filter")
+				}
+				params := url.Values{"id": {link.Params["id"]}, tc.key: {link.Params[tc.key]}}
+				if detail := h.view(t, link.View, params); detail.Title != tc.name {
+					t.Fatal("skill detail did not load")
+				}
+				params.Set("id", "different-source/"+tc.name)
+				if detail := h.view(t, link.View, params); detail.Title != "Skill" || detail.Blocks[0].Type != "notice" {
+					t.Fatal("skill detail matched a name instead of its full ID")
+				}
+				return
+			}
+			t.Fatal("skill missing from fixture")
+		})
+	}
+}
+
 func TestByHostUsageInSkillsAndTrials(t *testing.T) {
 	for _, tc := range []struct{ name, usage, hosts, want, wantTrial string }{
 		{"rank all positive", `[{"host":"host-d","threads":2},{"host":"host-c","threads":2},{"host":"host-b","threads":5},{"host":"host-a","threads":3},{"host":"host-e","threads":0}]`, "null", "host-b 5 · host-a 3 · host-c 2 · host-d 2", "host-b 5 · host-a 3 · host-c 2 · host-d 2"},
