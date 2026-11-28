@@ -12,8 +12,9 @@ safe areas) in the PR.
 
 - Wide tables become list rows: a main line, a sub line, a badge and a chevron. In a plugin
   `table`, the first column is the main line, the first right-aligned column after it is the
-  trailing value, and the other columns join into the sub line. Put the identifying value first
-  and keep the columns short.
+  trailing value, and the other columns join into the sub line. The trailing value carries its
+  column label as a caption. In the sub line, numbers and Yes/No get their column label, and
+  empty (`—`) cells are left out. Put the identifying value first and keep the columns short.
 - Drawers are bottom sheets. Open them with `openDrawer`. Don't build a separate overlay.
 - Admin uses grouped inset rows, with switches that carry `role="switch"`. Help text stays
   attached to its field.

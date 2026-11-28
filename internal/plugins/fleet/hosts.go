@@ -236,9 +236,9 @@ func (p *Fleet) overview(ctx context.Context, data overviewResponse) ([]plugin.B
 		att.Hint = "on " + plural(affected, "host", "hosts")
 		att.Tone = "warn"
 	}
-	sync := plugin.Item{Label: "Pending sync", Value: strconv.Itoa(pending)}
+	sync := plugin.Item{Label: "Pending sync", Value: strconv.Itoa(pending), Hint: "All hosts up to date"}
 	if pending > 0 {
-		sync.Tone = "info"
+		sync.Hint, sync.Tone = "Behind "+shortRevision(p.word(data.Head)), "info"
 	}
 	if data.Hosts == nil {
 		hosts.Value, hosts.Hint = "Not reported", ""
@@ -249,7 +249,9 @@ func (p *Fleet) overview(ctx context.Context, data overviewResponse) ([]plugin.B
 		att.Hint = fmt.Sprintf("from %d of %d hosts", reportedCounts, len(data.Hosts))
 	}
 	if (len(data.Hosts) > 0 || data.Hosts == nil) && knownCommits == 0 {
-		sync.Value = "Not reported"
+		sync.Value, sync.Hint = "Not reported", ""
+	} else if pending == 0 && knownCommits < len(data.Hosts) {
+		sync.Hint = fmt.Sprintf("from %d of %d hosts", knownCommits, len(data.Hosts))
 	}
 	trials := plugin.Item{Label: "Trials", Value: strconv.Itoa(running), Hint: fmt.Sprintf("%d end within %s", soon, plural(*data.Policy.DueSoon, "day", "days"))}
 	if due > 0 {
