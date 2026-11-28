@@ -130,7 +130,7 @@ is set when one request field caused the error.
   - `drift`: files that changed since fleet wrote them.
   - `broken_links`: links whose target is missing.
   - `refused`: drifted files that also have a repository change waiting, which fleet won't apply
-    over the drift.
+    over the drift. A file counts in `drift` or in `refused`, never both.
   - `pending`: changes the host hasn't applied yet.
   - `updates`: components with a newer version available.
 - `disk` describes the filesystem that holds the host's home, and is `null` if not reported.
