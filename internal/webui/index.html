@@ -624,6 +624,11 @@ td.num, th.num { text-align: right; }
     grid-area: end; max-width: none; text-align: right; white-space: normal; overflow-wrap: anywhere;
   }
   [data-list] .c-end .pill { white-space: normal; }
+  [data-list] .c-end[data-list-blank] { visibility: hidden; }
+  [data-list] .c-end[data-list-label]::after {
+    content: attr(data-list-label); display: block;
+    font-size: var(--fs-xs); line-height: 1.4; font-weight: 400; color: var(--text-3);
+  }
   [data-list] > tbody > tr > .c-detail, [data-list] .c-extra { display: none; }
   [data-list] > tbody > tr > .c-sub { display: block; grid-area: sub; color: var(--text-3); font-size: var(--fs-sm); line-height: 1.45; font-weight: 400; white-space: normal; }
   [data-list] .c-sub > span {
@@ -3166,7 +3171,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         cells.forEach(function (cell, i) {
           if (cell === main || cell === end) return;
           cell.classList.add("c-detail");
-          if (details[i][1]) parts.push(cell.dataset.listText || details[i][1]);
+          var text = cell.hasAttribute("data-list-text") ? cell.dataset.listText : details[i][1];
+          if (text) parts.push(text);
         });
         var title = Array.prototype.filter.call(main.childNodes, function (node) {
           return node.nodeType === 3 || (node.nodeType === 1 && !node.classList.contains("c-extra"));
@@ -7389,14 +7395,23 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     if (!rows.length || !cols.length) { card.appendChild(h("div", { class: "pv-empty", text: str(b.empty) || "Nothing to show" })); return card; }
     function align(c) { return c.align === "right" || c.align === "left" ? c.align : NUMERIC[c.format] ? "right" : "left"; }
     var numeric = cols.findIndex(function (c, i) { return i > 0 && align(c) === "right"; });
+    // On a phone the cells collapse into one line, so a bare "14" or "Yes" needs its column name.
+    function phoneText(c, i, text) {
+      if (i === 0 || i === numeric) return null;
+      if (text === "—") return "";
+      var label = str(c.label) || c.key;
+      return align(c) === "right" || /^(yes|no)$/i.test(text) || !/[a-z]/i.test(text) ? label + " " + text : null;
+    }
     var table = h("table", { "data-list": "0," + numeric, "data-list-id": id }, [
       h("thead", {}, [h("tr", {}, cols.map(function (c) { return h("th", { class: align(c) === "right" ? "num" : null, scope: "col", text: str(c.label) || c.key }); }))]),
       h("tbody", {}, rows.map(function (r) {
         var key = JSON.stringify([r[cols[0].key], r.id]);
-        return h("tr", { "data-list-key": key }, cols.map(function (c) {
+        return h("tr", { "data-list-key": key }, cols.map(function (c, i) {
           var ct = cellText(r[c.key], c.format);
           return h("td", { class: align(c) === "right" ? "num" : (c.format || "text") === "text" ? "txt" : null,
-            title: ct.title || (ct.text.length > 40 ? ct.text : null), text: ct.text });
+            title: ct.title || (ct.text.length > 40 ? ct.text : null), text: ct.text,
+            "data-list-text": phoneText(c, i, ct.text), "data-list-label": i === numeric && ct.text !== "—" ? str(c.label) || c.key : null,
+            "data-list-blank": i === numeric && ct.text === "—" ? "" : null });
         }));
       }))]);
     prepareListTable(table);
