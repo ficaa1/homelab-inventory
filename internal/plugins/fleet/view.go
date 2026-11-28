@@ -48,6 +48,9 @@ func (p *Fleet) View(ctx context.Context, name string, params url.Values) (plugi
 		} else if err == nil {
 			v.Title = p.word(data.Host.Name)
 			v.Blocks, err = p.hostDetail(data)
+			if data.Host.Name == host {
+				p.forceActions(&v, data)
+			}
 		}
 	case "skills":
 		v.Title = "Skills"
@@ -64,6 +67,19 @@ func (p *Fleet) View(ctx context.Context, name string, params url.Values) (plugi
 		err = p.get(ctx, path, p.readToken, &data)
 		if err == nil {
 			v.Blocks = p.skills(data, filters)
+			p.sourceActions(&v, data, filters)
+		}
+	case "skill":
+		v.Title = "Skill"
+		id := params.Get("id")
+		if len(params["id"]) != 1 || !skillID.MatchString(id) {
+			v.Blocks = []plugin.Block{notice("info", "Open a skill from Skills.")}
+			break
+		}
+		var data skillsResponse
+		err = p.get(ctx, "skills", p.readToken, &data)
+		if err == nil {
+			p.skillDetail(&v, data, id)
 		}
 	case "trials":
 		v.Title = "Trials"
@@ -71,6 +87,7 @@ func (p *Fleet) View(ctx context.Context, name string, params url.Values) (plugi
 		err = p.get(ctx, "trials", p.readToken, &data)
 		if err == nil {
 			v.Blocks = p.trials(data)
+			p.trialActions(&v, data)
 		}
 	default:
 		return v, plugin.ErrNotFound
@@ -78,7 +95,8 @@ func (p *Fleet) View(ctx context.Context, name string, params url.Values) (plugi
 	if err != nil {
 		return v, err
 	}
-	v.Blocks = fitBlocks(v.Blocks)
+	actionData, _ := json.Marshal(v.Actions)
+	v.Blocks = fitBlocks(v.Blocks, len(actionData))
 	return v, nil
 }
 
@@ -196,6 +214,12 @@ func fitBlock(b plugin.Block, slots, bytes int) (plugin.Block, bool) {
 		}
 		return b, len(b.Blocks) > 0
 	}
+	if len(b.Items) > 0 {
+		items := b.Items
+		n := sort.Search(len(items), func(i int) bool { b.Items = items[:i+1]; return blockBytes(b) > bytes })
+		b.Items = items[:n]
+		return b, n > 0
+	}
 	rows := sort.Search(len(b.Rows), func(i int) bool {
 		prefix := b
 		prefix.Rows = prefix.Rows[:i+1]
@@ -206,10 +230,10 @@ func fitBlock(b plugin.Block, slots, bytes int) (plugin.Block, bool) {
 }
 
 // A legal 4 MiB hub response can exceed the 1 MiB dashboard limit.
-func fitBlocks(blocks []plugin.Block) []plugin.Block {
+func fitBlocks(blocks []plugin.Block, actionBytes int) []plugin.Block {
 	chunks := splitBlocks(blocks)
 	var result []plugin.Block
-	slots, bytes := 50, plugin.MaxViewBytes-2048 // Leave room for the view envelope and cut notice.
+	slots, bytes := 50, plugin.MaxViewBytes-2048-actionBytes // Leave room for the view envelope and cut notice.
 	for i, b := range chunks {
 		cost, size := 1+len(b.Blocks), blockBytes(b)+1
 		if size <= bytes && (cost < slots || (cost == slots && i == len(chunks)-1)) {

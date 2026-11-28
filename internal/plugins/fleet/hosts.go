@@ -359,3 +359,25 @@ func (p *Fleet) hostDetail(data hostResponse) ([]plugin.Block, error) {
 	}
 	return blocks, nil
 }
+
+func (p *Fleet) forceActions(v *plugin.View, data hostResponse) {
+	if data.Report == nil || p.operatorToken == "" {
+		return
+	}
+	host := data.Host.Name
+	for _, item := range data.Report.Items {
+		if !item.Forceable {
+			continue
+		}
+		edit := "The hand edit is lost."
+		if d := item.Diff; d != nil {
+			edit = fmt.Sprintf("The hand edit (+%d −%d lines) is lost.", d.Added, d.Removed)
+		}
+		suffix := " on " + host + " with the fleet version? " + edit + " " + host + " applies it at its next sync, and only if the file hasn't changed again."
+		confirm := "Overwrite " + p.clean(item.Path, 300-len([]rune("Overwrite "+suffix))) + suffix
+		p.offer(v, "force_file", "Overwrite "+p.clean(item.Path, 400), confirm, plugin.Config{"host": host, "item": item.ID, "live_sha256": item.LiveHash}, nil)
+		if len(v.Actions) >= 20 {
+			return
+		}
+	}
+}

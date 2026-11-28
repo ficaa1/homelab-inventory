@@ -70,8 +70,10 @@ type hostResponse struct {
 type report struct {
 	OK    *int `json:"ok_count"`
 	Items []struct {
-		Path, Harness, Kind, State, Detail string
-		Diff                               *struct {
+		ID, Path, Harness, Kind, State, Detail string
+		Forceable                              bool
+		LiveHash                               string `json:"live_sha256"`
+		Diff                                   *struct {
 			Added   int `json:"lines_added"`
 			Removed int `json:"lines_removed"`
 		}
@@ -86,6 +88,7 @@ type report struct {
 
 type source struct {
 	Name, Origin string
+	Removable    bool
 	Defined      string `json:"defined_in"`
 	Trial        *trialDates
 	Counts       *skillCounts
@@ -100,12 +103,13 @@ type installation struct {
 	Installed bool
 }
 type skill struct {
-	Name, Mode string
-	Source     *string
-	ModeFrom   string `json:"mode_from"`
-	DecidedAt  string `json:"decided_at"`
-	Hosts      []installation
-	Usage      *struct {
+	ID, Name, Mode string
+	Editable       bool
+	Source         *string
+	ModeFrom       string `json:"mode_from"`
+	DecidedAt      string `json:"decided_at"`
+	Hosts          []installation
+	Usage          *struct {
 		Threads *int
 		ByHost  []hostUsage `json:"by_host"`
 	}

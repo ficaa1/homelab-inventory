@@ -157,7 +157,7 @@ func (p *Fleet) skills(data skillsResponse, filters skillFilters) []plugin.Block
 		own.Badges = []plugin.Badge{badge("Showing", "info")}
 	}
 	sources.Items = append(sources.Items, own)
-	rows := table("Skills", "No skills match this filter", col("skill", "Skill"), number("threads", fmt.Sprintf("Threads (%d days)", data.Window)), col("source", "Source"), col("mode", "Mode"), col("set", "Set by"), col("trial", "Trial"), col("hosts", "By host"))
+	rows := plugin.Block{Type: "list", Title: "Skills", Empty: "No skills match this filter"}
 	if data.Skills == nil {
 		rows.Empty = "Skills not reported"
 	}
@@ -182,7 +182,15 @@ func (p *Fleet) skills(data skillsResponse, filters skillFilters) []plugin.Block
 			threads = displayCount(s.Usage.Threads)
 			byHost = s.Usage.ByHost
 		}
-		rows.Rows = append(rows.Rows, map[string]any{"skill": p.word(s.Name), "threads": threads, "source": source, "mode": p.label(s.Mode, modes), "set": set, "trial": trial, "hosts": p.byHost(byHost, s.Hosts)})
+		item := plugin.Item{Title: p.word(s.Name), Subtitle: join(source, p.label(s.Mode, modes), set),
+			Meta: join(fmt.Sprintf("Threads (%d days): %v", data.Window, threads), p.byHost(byHost, s.Hosts))}
+		if trial != "—" {
+			item.Badges = []plugin.Badge{badge(trial, "info")}
+		}
+		if skillID.MatchString(s.ID) && p.word(s.ID) == s.ID {
+			item.Link = &plugin.Link{View: "skill", Params: map[string]string{"id": s.ID}}
+		}
+		rows.Items = append(rows.Items, item)
 	}
 	blocks := []plugin.Block{show, sources}
 	if data.Truncated {
@@ -254,4 +262,99 @@ func (p *Fleet) trials(data trialsResponse) []plugin.Block {
 		sections = append(sections, plugin.Block{Type: "section", Title: join(p.word(t.Source), "ends "+shortDate(t.Ends)), Blocks: children})
 	}
 	return sections
+}
+
+func (p *Fleet) sourceActions(v *plugin.View, data skillsResponse, filters skillFilters) {
+	p.offer(v, "add_trial_source", "", "Add a trial source? The selected hosts install its skills at their next sync.", nil, nil)
+	for _, s := range data.Sources {
+		if s.Removable && filters.source == s.Name && sourceID.MatchString(s.Name) {
+			p.offer(v, "remove_source", "Remove source "+s.Name, "Remove "+s.Name+"? Its skills are uninstalled on every host at their next sync. Hand-edited copies stay and are reported.", plugin.Config{"source": s.Name}, nil)
+			return
+		}
+	}
+}
+
+func (p *Fleet) trialActions(v *plugin.View, data trialsResponse) {
+	for _, t := range data.Trials {
+		if !sourceID.MatchString(t.Source) {
+			continue
+		}
+		affected := "Undecided skills get the mode you pick here."
+		if t.Skills != nil {
+			n := 0
+			for _, s := range t.Skills {
+				if !s.Decided {
+					n++
+				}
+			}
+			affected = "Its " + plural(n, "undecided skill gets", "undecided skills get") + " the mode you pick here."
+		}
+		p.offer(v, "end_trial", "End trial: "+t.Source, "End the trial for "+t.Source+"? "+affected+" Every host applies the change at its next sync.", plugin.Config{"source": t.Source}, nil)
+	}
+}
+
+func (p *Fleet) skillDetail(v *plugin.View, data skillsResponse, id string) {
+	for _, s := range data.Skills {
+		if s.ID != id {
+			continue
+		}
+		v.Title = p.word(s.Name)
+		source, trial := "Own", "No"
+		if s.Source != nil {
+			source = p.word(*s.Source)
+			for _, src := range data.Sources {
+				if src.Name == *s.Source && src.Trial != nil {
+					trial = p.trialLabel(src.Trial, true)
+				}
+			}
+		}
+		threads := "No data"
+		usage := map[string]int{}
+		var byHost []hostUsage
+		if s.Usage != nil {
+			threads = fmt.Sprint(displayCount(s.Usage.Threads))
+			byHost = s.Usage.ByHost
+		}
+		for _, h := range byHost {
+			usage[h.Host] = h.Threads
+		}
+		mode := p.label(s.Mode, modes)
+		v.Blocks = []plugin.Block{{Type: "stats", Items: []plugin.Item{{Label: "Mode", Value: mode}, {Label: "Source", Value: source}, {Label: "Trial", Value: trial}, {Label: "Threads", Value: threads}}}}
+		rows := table("Hosts", "No hosts", col("host", "Host"), col("installed", "Installed"), number("threads", "Threads"))
+		if s.Hosts == nil {
+			rows.Empty = "Hosts not reported"
+		}
+		installed := map[string]bool{}
+		for _, h := range s.Hosts {
+			flag := "No"
+			if h.Installed {
+				flag = "Yes"
+			}
+			var n any = "No data"
+			if byHost != nil {
+				n = usage[h.Host]
+			}
+			rows.Rows = append(rows.Rows, map[string]any{"host": p.word(h.Host), "installed": flag, "threads": n})
+			installed[h.Host] = true
+		}
+		for _, h := range byHost {
+			if !installed[h.Host] {
+				rows.Rows = append(rows.Rows, map[string]any{"host": p.word(h.Host), "installed": "Not reported", "threads": h.Threads})
+			}
+		}
+		v.Blocks = append(v.Blocks, rows)
+		if s.Editable {
+			defaults := plugin.Config{}
+			if modes[s.Mode] != "" {
+				defaults["mode"] = s.Mode
+			}
+			p.offer(v, "set_skill_mode", "", "Change the mode for "+p.clean(s.Name, 120)+"? Hosts apply the new mode at their next sync.", plugin.Config{"skill": id}, defaults)
+		}
+		return
+	}
+	message := "This skill was not found."
+	if data.Truncated {
+		message = "This skill was not among the first 2000 skills returned by the hub."
+	}
+	v.Blocks = []plugin.Block{notice("info", message)}
 }

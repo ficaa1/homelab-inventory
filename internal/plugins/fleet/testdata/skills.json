@@ -7,6 +7,7 @@
       "name": "example-skills",
       "origin": "third_party",
       "defined_in": "policy",
+      "removable": true,
       "trial": {
         "since": "2026-11-10",
         "ends": "2026-12-10",
@@ -32,6 +33,7 @@
       "source": "example-skills",
       "mode": "model",
       "mode_from": "decision",
+      "editable": true,
       "decided_at": "2026-11-20",
       "hosts": [
         {

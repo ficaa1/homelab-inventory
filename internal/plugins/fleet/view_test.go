@@ -30,14 +30,14 @@ func assertText(t *testing.T, v any, parts ...string) {
 func TestManifestAndViews(t *testing.T) {
 	h := fixtureHub(t)
 	m := h.Manifest()
-	if m.ID != "fleet" || m.Version != "1" || m.Name != "Fleet" || m.Tab.Icon != "grid" || len(m.Actions) > 0 {
+	if m.ID != "fleet" || m.Version != "1" || m.Name != "Fleet" || m.Tab.Icon != "grid" || len(m.Actions) != 5 {
 		t.Fatal(m)
 	}
 	var names []string
 	for _, v := range m.Tab.Views {
 		names = append(names, v.Name)
 	}
-	if !slices.Equal(names, []string{"overview", "hosts", "skills", "trials", "host"}) {
+	if !slices.Equal(names, []string{"overview", "hosts", "skills", "trials", "host", "skill"}) {
 		t.Fatal(names)
 	}
 	for _, tc := range []struct {
@@ -98,8 +98,8 @@ func TestManifestAndViews(t *testing.T) {
 			}
 			assertText(t, sources, "12 skills · 5 model-invoked", "Counts not reported", "Hand-written", "On trial until 10 Dec", "Own skills", "20 skills · 14 model-invoked")
 			assertText(t, rows, "Threads (30 days)", "Source lists", "Decision, 20 Nov", "SKILL.md", "Until 10 Dec")
-			if rows.Rows[0]["hosts"] != "host-a 5" || rows.Rows[1]["threads"] != 0 || rows.Rows[1]["hosts"] != "—" || rows.Rows[2]["threads"] != "No data" || rows.Rows[2]["source"] != "Own" {
-				t.Fatal(rows.Rows)
+			if rows.Items[0].Meta != "Threads (30 days): 5 · host-a 5" || rows.Items[1].Meta != "Threads (30 days): 0 · —" || rows.Items[2].Meta != "Threads (30 days): No data · No data" || !strings.HasPrefix(rows.Items[2].Subtitle, "Own") {
+				t.Fatal(rows.Items)
 			}
 		}},
 		{"trials", "", func(t *testing.T, v plugin.View) {
@@ -268,12 +268,12 @@ func TestSkillsFiltersUseHubQueryAndCounts(t *testing.T) {
 				t.Fatal(sources)
 			}
 			if tc.row == "" {
-				if len(rows.Rows) != 0 || rows.Empty != "No skills match this filter" || sources[2].Meta != "Counts not reported" {
+				if len(rows.Items) != 0 || rows.Empty != "No skills match this filter" || sources[2].Meta != "Counts not reported" {
 					t.Fatal(v)
 				}
 				return
 			}
-			if len(rows.Rows) != 1 || rows.Rows[0]["skill"] != tc.row || sources[2].Meta != "20 skills · 14 model-invoked" || show[2].Badges[0].Text != "Showing" {
+			if len(rows.Items) != 1 || rows.Items[0].Title != tc.row || sources[2].Meta != "20 skills · 14 model-invoked" || show[2].Badges[0].Text != "Showing" {
 				t.Fatal(v)
 			}
 			for _, item := range show {
@@ -317,7 +317,7 @@ func TestByHostUsageInSkillsAndTrials(t *testing.T) {
 					fmt.Fprintf(w, `{"api_version":1,"generated_at":"2026-12-01T09:15:00Z","trials":[{"source":"example-skills","state":"running","skills":[{"name":"example-skill","by_host":%s}]}]}`, trialUsage)
 				}
 			})
-			if got := h.view(t, "skills", nil).Blocks[2].Rows[0]["hosts"]; got != tc.want {
+			if got := h.view(t, "skills", nil).Blocks[2].Items[0].Meta; !strings.HasSuffix(got, " · "+tc.want) {
 				t.Fatal(got)
 			}
 			if got := h.view(t, "trials", nil).Blocks[0].Blocks[1].Rows[0]["hosts"]; got != tc.wantTrial {
@@ -419,7 +419,9 @@ func TestLargeViews(t *testing.T) {
 	v = h.view(t, "skills", nil)
 	n := 0
 	for _, b := range v.Blocks {
-		n += len(b.Rows)
+		if b.Title == "Skills" {
+			n += len(b.Items)
+		}
 	}
 	if n != 2000 || v.Blocks[2].Text != "The hub returned the first 2000 skills." {
 		t.Fatal("missing skills or cap notice")
@@ -477,7 +479,7 @@ func TestSectionKeepsLeadingTableWithinBlockLimit(t *testing.T) {
 		{Type: "table", Columns: []plugin.Column{col("skill", "Skill")}, Rows: rows},
 	}}
 	blocks := append(slices.Repeat([]plugin.Block{notice("info", "Example notice")}, 46), section, notice("info", "Another notice"))
-	fit := fitBlocks(blocks)
+	fit := fitBlocks(blocks, 0)
 	if len(fit) != 48 || len(fit[46].Blocks) != 2 || len(fit[46].Blocks[1].Rows) != 500 || fit[47].Type != "notice" {
 		t.Fatal("expected the section, its first 500 rows and the cut notice")
 	}

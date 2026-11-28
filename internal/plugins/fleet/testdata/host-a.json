@@ -45,6 +45,8 @@
         "kind": "skill",
         "path": "skills/lint-docs/SKILL.md",
         "state": "refused",
+        "forceable": true,
+        "live_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "detail": "A hand edit has a newer version waiting.",
         "diff": {
           "lines_added": 4,
@@ -53,6 +55,8 @@
       },
       {
         "id": "harness-a:notes.md",
+        "forceable": true,
+        "live_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "harness": "harness-a",
         "kind": "skill",
         "path": "notes.md",

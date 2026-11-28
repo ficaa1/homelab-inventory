@@ -19,20 +19,22 @@ import (
 )
 
 type Fleet struct {
-	host                           plugin.Host
-	base, readToken, operatorToken string
+	host                                     plugin.Host
+	base, readToken, operatorToken, panelURL string
 }
 
 func (*Fleet) Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		ID: "fleet", Name: "Fleet", Version: "1", Description: "Hosts, drift, skills and trials from a fleet hub.",
+		Actions: fleetActions(),
 		Settings: []plugin.Field{
 			{Key: "hub_url", Label: "Hub URL", Type: plugin.URL, Required: true, Placeholder: "https://hub.example.lan:8790", Help: "The hub's base URL, without /v1."},
+			{Key: "proxy_panel_url", Label: "Proxy panel URL", Type: plugin.URL, Help: "Optional. A link to the proxy's own management panel. The plugin never calls it."},
 			{Key: "read_token", Label: "Read token", Type: plugin.Secret, Required: true, Help: "Bearer token for views and alerts."},
 			{Key: "operator_token", Label: "Operator token", Type: plugin.Secret, Help: "Optional. Lets this dashboard change fleet through the hub. Leave it empty to keep it read-only."},
 		},
 		Tab: &plugin.Tab{Title: "Fleet", Icon: "grid", Views: []plugin.ViewRef{
-			{Name: "overview", Title: "Overview"}, {Name: "hosts", Title: "Hosts"}, {Name: "skills", Title: "Skills"}, {Name: "trials", Title: "Trials"}, {Name: "host", Title: "Host"},
+			{Name: "overview", Title: "Overview"}, {Name: "hosts", Title: "Hosts"}, {Name: "skills", Title: "Skills"}, {Name: "trials", Title: "Trials"}, {Name: "host", Title: "Host"}, {Name: "skill", Title: "Skill"},
 		}},
 	}
 }
@@ -68,12 +70,13 @@ func (p *Fleet) Configure(c plugin.Config) error {
 	if operator != "" && subtle.ConstantTimeCompare([]byte(operator), []byte(read)) == 1 {
 		return &plugin.FieldError{Key: "operator_token", Message: "Use a different token from the read token."}
 	}
+	p.panelURL, _ = c["proxy_panel_url"].(string)
 	p.base, p.readToken, p.operatorToken = base, read, operator
 	return nil
 }
 
 func (p *Fleet) Close() error {
-	p.base, p.readToken, p.operatorToken = "", "", ""
+	p.base, p.readToken, p.operatorToken, p.panelURL = "", "", "", ""
 	return nil
 }
 
@@ -133,6 +136,10 @@ func (p *Fleet) get(ctx context.Context, path, token string, out interface{ head
 		return errors.New("Fleet hub unavailable. Check hub_url and that the hub is running.")
 	}
 	defer resp.Body.Close()
+	return p.decode(resp, token, out, nil)
+}
+
+func (p *Fleet) decode(resp *http.Response, token string, out interface{ header() envelope }, scrub func(string) string) error {
 	dec := json.NewDecoder(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		message := fmt.Sprintf("Fleet hub returned HTTP %d. Check the hub and try again.", resp.StatusCode)
@@ -144,6 +151,9 @@ func (p *Fleet) get(ctx context.Context, path, token string, out interface{ head
 		} else {
 			var body struct{ Error struct{ Message string } }
 			if dec.Decode(&body) == nil {
+				if scrub != nil {
+					body.Error.Message = scrub(body.Error.Message)
+				}
 				if s := strings.TrimSpace(p.clean(queryText.ReplaceAllString(body.Error.Message, ""), 400)); s != "" {
 					message = s
 				}
