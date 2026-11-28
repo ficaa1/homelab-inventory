@@ -1507,6 +1507,11 @@ button.ops-tile { cursor:pointer; }
 .pv-blocks { align-items: start; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
 .pv-blocks > * { grid-column: 1 / -1; min-width: 0; }
 .pv-blocks > .pv-half { grid-column: auto; }
+.pv-actions .btn, .pv-action .btn { white-space: normal; overflow-wrap: anywhere; min-width: 0; max-width: 100%; }
+.pv-action { overflow-wrap: anywhere; }
+.pv-action input[type=checkbox] { width: auto; }
+.pv-action textarea { box-sizing: border-box; width: 100%; min-height: 5rem; font: inherit; }
+.pv-action [role=alert]:empty { display: none; }
 .pv-blocks .kpis, .pv-blocks .banner { margin-bottom: 0; }
 .tile .value.info { color: var(--info); }
 .tile .value.muted { color: var(--text-3); }
@@ -1583,7 +1588,7 @@ button.ops-tile { cursor:pointer; }
 @media (max-width: 640px) {
   .pv-head { gap: 8px 12px; }
   .pv-line { flex-wrap: wrap; }
-  .pv-head .seg { order: 3; width: 100%; }
+  .pv-head .seg { order: 3; width: 100%; min-width: 0; overflow-x: auto; }
   .pv-head .seg .btn { flex: 1; min-height: 40px; }
   .pv-blocks { gap: var(--s3); }
   .pv-item { padding: 10px 12px; }
@@ -5682,11 +5687,11 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     else $("drawer-close").focus({ preventScroll: true });
   }
 
-  function openDrawer(html, label, opener) {
+  function openDrawer(html, label, opener, confirmation) {
     drawer.classList.remove("is-confirm");
     var opening = !drawerOpen, hidden = drawer.classList.contains("hidden"), dragging = !!drawerDrag;
     if (hidden || (opening && !phone())) {
-      drawerReturnFocus = document.activeElement;
+      drawerReturnFocus = opener || document.activeElement;
       drawerReturnRow = phone() ? listOpener(opener) : null;
     }
     var opacity = hidden ? 0 : Number(getComputedStyle(drawer).opacity);
@@ -5700,12 +5705,18 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       drawerBody.scrollTop = 0;
       sizeDrawer();
       markDrawerHistory();
-      if (hidden) { sheet.y = sheet.height; sheet.v = 0; }
-      if (opening || dragging) moveSheet(1, false, opacity);
+      if (opening && confirmation) {
+        settleSheet();
+        animateIn(drawer, [{opacity: 0, transform: "translateY(24px)"}, {opacity: 1, transform: "none"}], motion.d1);
+        animateIn(scrim, FADE_IN, motion.d1);
+      } else {
+        if (hidden) { sheet.y = sheet.height; sheet.v = 0; }
+        if (opening || dragging) moveSheet(1, false, opacity);
+      }
       if (!reducedMotion.matches && sheet.frame !== null) paintSheet();
     } else {
-      reveal(drawer, opening && [{ opacity: 0, transform: "translateX(28px)" }, { opacity: 1, transform: "none" }], motion.d3);
-      reveal(scrim, opening && FADE_IN, motion.d2);
+      reveal(drawer, opening && [{ opacity: 0, transform: "translateX(28px)" }, { opacity: 1, transform: "none" }], confirmation ? motion.d1 : motion.d3);
+      reveal(scrim, opening && FADE_IN, confirmation ? motion.d1 : motion.d2);
     }
     setModal("drawer", true);
     syncScrollLock();
@@ -5721,7 +5732,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     resetDrawerDrag();
     drawerOpen = false;
     if (phone()) {
-      if (drawerNextRoute) settleSheet();
+      if (drawerNextRoute || (reducedMotion.matches && drawer.classList.contains("is-confirm"))) settleSheet();
       else moveSheet(1, released, Number(getComputedStyle(drawer).opacity));
     } else {
       var opacity = getComputedStyle(scrim).opacity;
@@ -5740,6 +5751,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       conceal(scrim);
       syncScrollLock();
     }
+    drawerBody.querySelectorAll(".pv-action input[type=password]").forEach(function (input) { input.value = ""; });
     setModal("drawer", false);
     restartSession++; stopRestartHealth();
     if (enrollSession && enrollSession.fromAdmin) {
@@ -6838,7 +6850,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     api("/plugins/" + encodeURIComponent(pv.plugin) + "/views/" + encodeURIComponent(pv.view) + q, ctrl.signal).then(function (v) {
       if (pv.ctrl !== ctrl) return;
       pv.data = v && typeof v === "object" ? v : { blocks: [] };
-      pv.err = null; pv.at = Date.now();
+      pv.err = null; pv.actionResult = false; pv.at = Date.now();
     }, function (err) {
       if (pv.ctrl !== ctrl || err.name === "AbortError") return;
       if (err.unauthorized) { showGate(true); return; }
@@ -6871,13 +6883,100 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     if (every && Date.now() - pv.at >= every) fetchPluginView(); else schedulePluginRefresh();
   });
 
+  function openPluginAction(a, opener) {
+    var page = pv, presets = a.values || {}, controls = [], errors = Object.create(null);
+    var form = h("form", {class: "form pv-action"}, [h("h3", {text: a.label})]);
+    var consequence = a.confirm || (a.operator ? "This changes an external service." : "");
+    if (consequence) form.appendChild(h("p", {text: consequence}));
+    (a.fields || []).forEach(function (f) {
+      var id = "action-field-" + f.key;
+      var error = errors[f.key] = h("div", {class: "t-crit sub", id: id + "-error"});
+      if (Object.prototype.hasOwnProperty.call(presets, f.key)) {
+        var value = presets[f.key];
+        var option = (f.options || []).find(function (o) { return o.value === value; });
+        var display = f.type === "bool" ? (value ? "Yes" : "No") : option ? option.label : String(value);
+        form.appendChild(h("div", {}, [h("strong", {text: f.label + ": "}), display, error]));
+        return;
+      }
+      var type = {bool: "checkbox", number: "number", secret: "password", url: "url"}[f.type] || "text";
+      var tag = f.type === "select" ? "select" : f.type === "text" && (f.key === "items" || f.key === "selections") ? "textarea" : "input";
+      var input = h(tag, {id: id, type: tag === "input" ? type : null, required: f.required && f.type !== "bool",
+        autocomplete: f.type === "secret" ? "off" : null, step: type === "number" ? "any" : null,
+        placeholder: f.placeholder, "aria-describedby": (f.help ? id + "-help " : "") + id + "-error"});
+      (f.options || []).forEach(function (o) { input.appendChild(h("option", {value: o.value}, [o.label])); });
+      if (f.default != null) {
+        if (f.type === "bool") input.checked = f.default;
+        else input.value = f.default;
+      }
+      controls.push({field: f, input: input});
+      form.appendChild(h("div", {}, [h("label", {for: id, text: f.label + (f.required ? " (required)" : "")}),
+        input, f.help ? h("div", {id: id + "-help", class: "sub", text: f.help}) : null, error]));
+    });
+    var cancel = h("button", {class: "btn", type: "button", onclick: function () { closeDrawer(); }}, ["Cancel"]);
+    var submit = h("button", {class: "btn primary" + (a.destructive ? " destructive" : ""), type: "submit"}, [a.label]);
+    var status = h("div", {role: "alert", class: "t-crit"});
+    form.appendChild(status);
+    form.appendChild(h("div", {class: "actions"}, [cancel, submit]));
+    var sheetID = openDrawer(form, a.label, opener, true);
+    drawer.classList.add("is-confirm");
+    cancel.focus({preventScroll: true});
+    form.onsubmit = function (event) {
+      event.preventDefault();
+      if (submit.disabled) return;
+      var values = Object.assign({}, presets);
+      Object.keys(errors).forEach(function (key) { errors[key].textContent = ""; });
+      controls.forEach(function (c) {
+        var f = c.field, input = c.input;
+        input.removeAttribute("aria-invalid");
+        if (f.type === "bool") values[f.key] = input.checked;
+        else if (input.value === "") values[f.key] = null;
+        else values[f.key] = f.type === "number" ? Number(input.value) : input.value;
+      });
+      status.textContent = "";
+      submit.disabled = true;
+      submit.textContent = "Working…";
+      (a.operator ? operatorWrite : write)("/plugins/" + encodeURIComponent(page.plugin) + "/actions/" + encodeURIComponent(a.id),
+        "POST", {confirmed: true, values: values}).then(function (result) {
+        if (drawerExists(sheetID)) closeDrawer();
+        if (pv !== page) return;
+        if (a.result === "toast") {
+          var first = (result.blocks || []).find(function (b) { return b.type === "notice"; });
+          toast(result.title, {kind: "ok", sub: first && first.text});
+          fetchPluginView();
+        } else {
+          if (pv.ctrl) pv.ctrl.abort();
+          pv.ctrl = null;
+          clearTimeout(pv.timer);
+          pv.data = result;
+          pv.err = null;
+          pv.actionResult = true;
+          pv.at = Date.now();
+          renderPluginView();
+          schedulePluginRefresh();
+        }
+      }, function (err) {
+        if (!drawerExists(sheetID)) return;
+        submit.disabled = false;
+        submit.textContent = a.label;
+        status.textContent = err.message;
+        Object.keys(err.fields || {}).forEach(function (key) {
+          if (errors[key]) errors[key].textContent = err.fields[key];
+        });
+        controls.forEach(function (c) {
+          if (err.fields && err.fields[c.field.key]) c.input.setAttribute("aria-invalid", "true");
+        });
+      });
+    };
+  }
+
   function renderPluginView() {
     if (chartGesture && chartGesture.view === pv) { chartGesture.redraw = true; return; }
     chartGesture = null;
     var root = $("plugin-body"), info = pluginInfo(pv.plugin), views = pluginViews(info);
     if (chartRO) chartRO.disconnect();   // the charts being replaced; new ones observe themselves
     var name = info ? str(info.tab.title) || str(info.name) : pv.plugin;
-    var inTab = views.some(function (v) { return v.name === pv.view; });
+    var currentTab = views.find(function (v) { return v.name === pv.view; });
+    var inTab = !!currentTab;
     var v = pv.data, err = pv.err;
     // Keep keyboard focus across a refresh: links carry a stable key.
     var focusKey = document.activeElement && root.contains(document.activeElement) ? document.activeElement.getAttribute("data-fk") : null;
@@ -6912,30 +7011,31 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     } else {
       var blocks = Array.isArray(v.blocks) ? v.blocks : [];
       body = h("div", { class: "pv-blocks" });
-      (v.actions || []).forEach(function (a) {
-        var values = {}, controls = [], message = h("span", {role:"status"});
-        (a.fields || []).forEach(function(f) {
-          var input = (f.key === "items" || f.key === "selections") ? h("textarea") : f.type === "select" ? h("select") : h("input", {type:f.type === "bool" ? "checkbox" : f.type === "number" ? "number" : "text"});
-          (f.options || []).forEach(function(o) {input.appendChild(h("option",{value:o.value},[o.label]));});
-          controls.push(h("label",{},[f.label," ",input])); values[f.key] = function(){if (!f.required && f.type !== "bool" && input.value === "") return undefined; return f.type === "bool" ? input.checked : f.type === "number" ? Number(input.value) : input.value;};
+      if (v.title && (pv.actionResult || (pv.params && currentTab && currentTab.title !== v.title))) body.appendChild(h("h2", {text: v.title}));
+      if (v.actions && v.actions.length) {
+        var bar = h("div", {class: "actions pv-actions"});
+        var counts = Object.create(null);
+        v.actions.forEach(function (a) { counts[a.id] = (counts[a.id] || 0) + 1; });
+        v.actions.forEach(function (a) {
+          var button = h("button", {class: "btn", type: "button",
+            "data-fk": counts[a.id] === 1 ? "action-" + a.id : JSON.stringify([a.id, a.values || {}, a.label]),
+            onclick: function () { openPluginAction(a, button); }}, [a.label]);
+          bar.appendChild(button);
         });
-        var button = h("button",{class:"btn",type:"button",onclick:function(){
-          if (!confirm(a.label + "?" + (a.operator ? " This changes the external service." : ""))) return;
-          var fields = {}; Object.keys(values).forEach(function(k){fields[k]=values[k]();});
-          button.disabled=true; message.textContent="Working…";
-          (a.operator ? operatorWrite : write)("/plugins/"+encodeURIComponent(pv.plugin)+"/actions/"+encodeURIComponent(a.id),"POST",{confirmed:true,values:fields}).then(function(result){pv.data=result;renderPluginView();},function(e){button.disabled=false;message.textContent=e.message;});
-        }},[a.label]);
-        body.appendChild(h("details",{class:"card"},[h("summary",{},[a.label]),h("div",{class:"plug-group"},controls.concat([button,message]))]));
-      });
+        body.appendChild(bar);
+      }
 
       if (err) body.appendChild(notice("warn", "Could not refresh: " + err.message + ". Showing the last view that loaded."));
       if (!blocks.length) body.appendChild(stateBox("Nothing to show yet", name + " returned an empty view."));
       appendBlocks(body, blocks, 1, "b");
     }
+    var openerKey = drawerReturnFocus && root.contains(drawerReturnFocus) && drawerReturnFocus.getAttribute("data-fk");
     root.replaceChildren.apply(root, head.concat([body]));
+    if (openerKey) drawerReturnFocus = root.querySelector('[data-fk="' + CSS.escape(openerKey) + '"]') || root.querySelector(".pv-actions button, [data-fk]");
     hydratePluginImages(root);
     if (focusKey) {
       var again = root.querySelector('[data-fk="' + CSS.escape(focusKey) + '"]');
+      if (!again) again = root.querySelector(".pv-actions button, [data-fk]");
       if (again) again.focus({ preventScroll: true });
     }
   }

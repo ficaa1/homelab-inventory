@@ -24,3 +24,13 @@ func TestRestartDisabledContract(t *testing.T) {
 		t.Fatalf("restart helpers: %v\n%s", err, out)
 	}
 }
+
+func TestPluginActionSheet(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node unavailable")
+	}
+	if out, err := exec.Command(node, "testdata/plugin-action-contract.cjs", "index.html").CombinedOutput(); err != nil {
+		t.Fatalf("plugin action sheet: %v\n%s", err, out)
+	}
+}

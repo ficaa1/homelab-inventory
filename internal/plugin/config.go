@@ -13,6 +13,7 @@ import (
 
 var idPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
 var keyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
+var actionPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
 var viewPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 var refPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`)
 
@@ -27,8 +28,11 @@ func validateManifest(m Manifest) error {
 	}
 	actions := map[string]bool{}
 	for _, a := range m.Actions {
-		if !viewPattern.MatchString(a.ID) || actions[a.ID] || a.Label == "" || a.TimeoutSeconds < 0 || a.TimeoutSeconds > 360 {
+		if !actionPattern.MatchString(a.ID) || actions[a.ID] || a.Label == "" || a.TimeoutSeconds < 0 || a.TimeoutSeconds > 360 {
 			return errors.New("invalid action manifest")
+		}
+		if err := a.validatePresentation(); err != nil {
+			return err
 		}
 		actions[a.ID] = true
 		if err := validateManifest(Manifest{ID: m.ID, Name: m.Name, Settings: a.Fields}); err != nil {
