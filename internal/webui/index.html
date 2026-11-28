@@ -5496,7 +5496,9 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     toastEl.inert = !!topModal();
     toastHovered = matchMedia("(hover: hover) and (pointer: fine)").matches && toastEl.matches(":hover");
     toastFocused = toastEl.contains(document.activeElement);
-    $("toast-status").textContent = title + (opts.sub ? ". " + opts.sub : "");
+    if (opts.announcement !== "") {
+      $("toast-status").textContent = opts.announcement || title + (opts.sub ? ". " + opts.sub : "");
+    }
     timeToast();
   }
 
@@ -5737,8 +5739,15 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   function dismissDrawer(fromHistory, released) {
     var parent = drawerParent;
     if (!drawerOpen || !parent) { closeDrawer(fromHistory, released); return; }
+    var offset = sheet.y, opacity = scrim.style.opacity;
+    if (released) resetDrawerDrag();
     clearActionSecrets();
     openDrawer(parent.content, parent.label);
+    if (released) {
+      settleSheet();
+      animateIn(drawer, [{transform: "translateY(" + offset + "px)"}, {transform: "none"}], motion.d1);
+      animateIn(scrim, [{opacity: opacity}, {opacity: 1}], motion.d1);
+    }
     drawerBody.scrollTop = parent.scroll;
     if (parent.focus && parent.focus.isConnected && !parent.focus.disabled) parent.focus.focus({ preventScroll: true });
   }
@@ -5818,6 +5827,13 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var fields = e.target.closest(".pv-action-fields");
     if (!header && (drawerBody.scrollTop > 0 || fields && fields.scrollTop > 0)) return;
     stopSheet();
+    if (drawer.motionIn) {
+      var transform = getComputedStyle(drawer).transform;
+      sheet.y = transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m42;
+      stopEntrance(drawer);
+      stopEntrance(scrim);
+      paintSheet();
+    }
     // Invert the rubber band so grabbing a sheet above its rest position
     // preserves the point under the finger.
     var offset = reducedMotion.matches ? 0 : sheet.y;
@@ -5878,8 +5894,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   function endDrawerDrag(e, cancelled) {
     var d = drawerDrag;
     if (!d || d.id !== e.pointerId) return;
-    resetDrawerDrag();
     if (!d.active) {
+      resetDrawerDrag();
       moveSheet(sheet.damping, false, Number(getComputedStyle(drawer).opacity));
       return;
     }
@@ -5887,9 +5903,10 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     else sheet.v = dragVelocity(d.samples, e.clientY, e.timeStamp, sheet.v);
     if (!cancelled && sheet.y + 0.499 * sheet.v > sheet.height / 2) {
       if (drawerOpen) dismissDrawer(false, true);
-      else moveSheet(1, true);
+      else { resetDrawerDrag(); moveSheet(1, true); }
       return;
     }
+    resetDrawerDrag();
     drawerOpen = true;
     markDrawerHistory();
     moveSheet(0.82, true);
@@ -6621,10 +6638,13 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       { key: "archive-seeding", title: "Seeding", plugin: "archive", view: "seeding", icon: "upload" },
       { key: "taste", title: "Taste", plugin: "taste", view: "picks", icon: "film" }
     ];
-    var out = defs.filter(function (d) { return !!pluginInfo(d.plugin); }).map(function (d) {
-      var info = pluginInfo(d.plugin), views = pluginViews(info), v = views.find(function (x) { return x.name === d.view && !x.hidden; });
-      if (!v && views.length) d = Object.assign({}, d, { view: views[0].name });
-      return d;
+    var out = [];
+    defs.forEach(function (d) {
+      var info = pluginInfo(d.plugin);
+      if (!info) return;
+      var views = pluginViews(info), v = views.find(function (x) { return x.name === d.view; });
+      if (v && v.hidden) return;
+      out.push(!v && views.length ? Object.assign({}, d, { view: views[0].name }) : d);
     });
     // The read-only media plugin's views join the switcher only when none of
     // the five sections exist; otherwise they stay reachable from search.
@@ -6871,22 +6891,26 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     fetchPluginView();
   }
 
-  function fetchPluginView() {
+  function fetchPluginView(actionTitle) {
     if (!pv.key || !VIEW_NAME.test(pv.view) || !PLUGIN_ID.test(pv.plugin)) return;
     clearTimeout(pv.timer);
     if (pv.ctrl) pv.ctrl.abort();
     var ctrl = pv.ctrl = new AbortController();
+    if (typeof actionTitle === "string") pv.refreshActionTitle = actionTitle;
     var q = pv.params ? "?" + pv.params : "";
     api("/plugins/" + encodeURIComponent(pv.plugin) + "/views/" + encodeURIComponent(pv.view) + q, ctrl.signal).then(function (v) {
       if (pv.ctrl !== ctrl) return;
       pv.data = v && typeof v === "object" ? v : { blocks: [] };
       pv.err = null; pv.actionResult = false; pv.at = Date.now();
+      pv.refreshActionTitle = "";
+      refreshPluginActionList();
       setRefreshError("", "plugin");
     }, function (err) {
       if (pv.ctrl !== ctrl || err.name === "AbortError") return;
       if (err.unauthorized) { showGate(true); return; }
       pv.err = err;
-      if (pv.data) setRefreshError(refreshFailure(err), "plugin");
+      if (pv.data) setRefreshError(refreshFailure(err), "plugin", pv.refreshActionTitle);
+      pv.refreshActionTitle = "";
     }).then(function () {
       if (pv.ctrl !== ctrl) return;
       pv.ctrl = null;
@@ -6933,12 +6957,50 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     });
   }
 
-  function pluginActionButton(page, action, focusKey) {
+  function pluginActionButton(page, action, focusKey, listStatus) {
     var key = pluginActionKey(page.plugin, action), pending = pluginActionsPending.has(key);
     var button = h("button", {class: "btn", type: "button", "data-fk": focusKey,
       "data-action-key": key, "data-action-label": action.label, disabled: pending,
-      onclick: function () { openPluginAction(page, action, button); }}, [pending ? "Working…" : action.label]);
+      onclick: function () {
+        if (pv !== page) return;
+        if (listStatus) {
+          var current = currentPluginActions(page).find(function (offer) { return pluginActionKey(page.plugin, offer) === key; });
+          listStatus.textContent = current ? "" : "This action changed. Pick again.";
+          if (!current) return;
+          openPluginAction(page, current, button);
+        } else {
+          openPluginAction(page, action, button);
+        }
+      }}, [pending ? "Working…" : action.label]);
     return button;
+  }
+
+  function currentPluginActions(page) {
+    return page.data && Array.isArray(page.data.actions) ? page.data.actions : [];
+  }
+
+  function fillPluginActionList(page, list, status) {
+    var buttons = currentPluginActions(page).map(function (action) { return pluginActionButton(page, action, null, status); });
+    list.replaceChildren.apply(list, buttons);
+    if (!buttons.length) list.appendChild(h("p", {class: "sub", text: "No actions available."}));
+    return buttons;
+  }
+
+  function refreshPluginActionList() {
+    if (!drawerOpen) return;
+    var parent = drawerParent;
+    var root = parent ? parent.content : drawerBody;
+    var list = root.querySelector(".pv-action-list");
+    if (!list) return;
+    var active = parent ? parent.focus : document.activeElement;
+    var key = active && list.contains(active) && active.getAttribute("data-action-key");
+    var buttons = fillPluginActionList(pv, list, root.querySelector(".pv-action-list-status"));
+    if (!parent) sizeDrawer();
+    if (!key) return;
+    var focus = buttons.find(function (button) { return !button.disabled && button.getAttribute("data-action-key") === key; })
+      || buttons.find(function (button) { return !button.disabled; });
+    if (parent) parent.focus = focus;
+    else (focus || $("drawer-close")).focus({ preventScroll: true });
   }
 
   function pluginActionBar(page, actions) {
@@ -6956,8 +7018,11 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var first = actions.find(function (action) { return !action.destructive; });
     if (first) addToBar(first);
     var more = h("button", {class: "btn", type: "button", "data-fk": "all-actions", onclick: function () {
-      var list = h("div", {class: "pv-action-list"}, actions.map(function (action) { return pluginActionButton(page, action); }));
-      openDrawer(h("div", {}, [h("h3", {text: "All actions"}), list]), null, more);
+      if (pv !== page) return;
+      var status = h("div", {class: "sub pv-action-list-status", role: "status"});
+      var list = h("div", {class: "pv-action-list"});
+      fillPluginActionList(page, list, status);
+      openDrawer(h("div", {}, [h("h3", {text: "All actions"}), status, list]), null, more);
     }}, ["All actions (" + actions.length + ")"]);
     bar.appendChild(more);
     return bar;
@@ -7028,8 +7093,9 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         if (pv !== page) return;
         if (a.result === "toast") {
           var first = (result.blocks || []).find(function (b) { return b.type === "notice"; });
-          toast(result.title, {kind: "ok", sub: first && first.text});
-          fetchPluginView();
+          if (toastPersistent) announce(result.title);
+          else toast(result.title, {kind: "ok", sub: first && first.text});
+          fetchPluginView(result.title);
         } else {
           if (pv.ctrl) pv.ctrl.abort();
           pv.ctrl = null;
@@ -9507,20 +9573,27 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   // ------------------------------------------------------------ loading
 
-  var loading = null, refreshTimer = null, refreshError = "", refreshErrors = {};
-  function setRefreshError(reason, source) {
+  var loading = null, refreshTimer = null, refreshError = "", refreshErrors = {}, actionRefreshToast = false;
+  function setRefreshError(reason, source, actionTitle) {
+    var clearActionToast = actionRefreshToast && source === "plugin" && !reason;
     refreshErrors[source || "dashboard"] = reason;
     reason = refreshErrors.dashboard || refreshErrors.plugin || "";
-    if (reason === refreshError || reason && refreshError) return;
+    if (!actionTitle && !clearActionToast && (reason === refreshError || reason && refreshError)) return;
+    var continuing = !!refreshError;
+    actionRefreshToast = !!actionTitle;
     refreshError = reason;
     var button = $("refresh"), label = reason ? "Refresh failed · Retry" : "Refresh";
     button.classList.toggle("refresh-error", !!reason);
     button.setAttribute("aria-label", label);
     button.title = label;
     if (reason) {
-      toast("Couldn't refresh · " + reason, {
-        kind: "error", persistent: true, action: { label: "Retry", fn: refreshDashboard }
+      var title = actionTitle ? actionTitle + (/[.!?]$/.test(actionTitle) ? "" : ".") + " Couldn't refresh the view."
+        : "Couldn't refresh · " + reason;
+      toast(title, {
+        kind: "error", persistent: true, action: { label: "Retry", fn: refreshDashboard },
+        announcement: continuing || actionTitle ? "" : title
       });
+      if (actionTitle && !continuing) announce("Couldn't refresh the view.");
     } else if (toastPersistent) {
       var retryFocused = document.activeElement === toastAction;
       dismissToast();
