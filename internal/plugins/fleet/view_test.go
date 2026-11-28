@@ -430,3 +430,58 @@ func TestLargeViews(t *testing.T) {
 		t.Fatal(v)
 	}
 }
+
+func TestLargeTrialKeepsLeadingRowsWithinViewLimit(t *testing.T) {
+	long := strings.Repeat("界", 790)
+	var usage []hostUsage
+	for i := range 14 {
+		usage = append(usage, hostUsage{Host: fmt.Sprintf("host-%02d-%s", i, strings.Repeat("x", 23)), Threads: 1})
+	}
+	var skills []map[string]any
+	for i := range 500 {
+		skills = append(skills, map[string]any{
+			"name": fmt.Sprintf("skill-%03d-%s", i, long), "mode": long, "suggestion": long,
+			"threads": len(usage), "by_host": usage,
+		})
+	}
+	raw, err := json.Marshal(map[string]any{
+		"api_version": 1, "generated_at": "2026-12-01T09:15:00Z",
+		"trials": []map[string]any{{"source": "example-skills", "state": "running", "ends": "2026-12-10", "skills": skills}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) < 3<<20 || len(raw) >= 4<<20 {
+		t.Fatalf("fixture needs to be near the hub's 4 MiB limit, got %d bytes", len(raw))
+	}
+	h := newHub(t, false, func(w http.ResponseWriter, _ *http.Request) { w.Write(raw) })
+	v := h.view(t, "trials", nil)
+	if len(v.Blocks) != 2 || v.Blocks[0].Title != "example-skills · ends 10 Dec" || v.Blocks[1].Type != "notice" || v.Blocks[1].Tone != "info" || v.Blocks[1].Text != "More results were cut to fit this view." {
+		t.Fatal("expected one trial and the cut notice")
+	}
+	rows := v.Blocks[0].Blocks[1].Rows
+	if len(rows) == 0 || len(rows) == len(skills) {
+		t.Fatalf("expected a partial decision table, got %d rows", len(rows))
+	}
+	for i, row := range rows {
+		if !strings.HasPrefix(row["skill"].(string), fmt.Sprintf("skill-%03d-", i)) {
+			t.Fatalf("incorrect row at %d", i)
+		}
+	}
+}
+
+func TestSectionKeepsLeadingTableWithinBlockLimit(t *testing.T) {
+	rows := slices.Repeat([]map[string]any{{"skill": "example-skill"}}, 501)
+	section := plugin.Block{Type: "section", Title: "example-skills", Blocks: []plugin.Block{
+		{Type: "stats", Items: []plugin.Item{{Label: "Since", Value: "10 Nov"}}},
+		{Type: "table", Columns: []plugin.Column{col("skill", "Skill")}, Rows: rows},
+	}}
+	blocks := append(slices.Repeat([]plugin.Block{notice("info", "Example notice")}, 46), section, notice("info", "Another notice"))
+	fit := fitBlocks(blocks)
+	if len(fit) != 48 || len(fit[46].Blocks) != 2 || len(fit[46].Blocks[1].Rows) != 500 || fit[47].Type != "notice" {
+		t.Fatal("expected the section, its first 500 rows and the cut notice")
+	}
+	if _, err := plugin.ValidateView(plugin.View{Title: "Trials", Blocks: fit}, new(Fleet).Manifest()); err != nil {
+		t.Fatal(err)
+	}
+}

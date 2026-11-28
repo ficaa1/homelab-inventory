@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -141,42 +142,20 @@ func displayCount(n *int) any {
 	return *n
 }
 
-// Split long tables and lists without losing rows. Bound the complete payload
-// too: a legal 4 MiB hub response can expand beyond the dashboard's 1 MiB view.
-func fitBlocks(blocks []plugin.Block) []plugin.Block {
+func splitBlocks(blocks []plugin.Block) []plugin.Block {
 	const limit = 500
 	var result []plugin.Block
-	count, size := 0, 0
-	for i, b := range blocks {
+	for _, b := range blocks {
+		if b.Type == "section" {
+			b.Blocks = splitBlocks(b.Blocks)
+		}
 		for {
 			chunk := b
 			chunk.Rows = b.Rows[:min(limit, len(b.Rows))]
 			chunk.Items = b.Items[:min(limit, len(b.Items))]
 			b.Rows = b.Rows[len(chunk.Rows):]
 			b.Items = b.Items[len(chunk.Items):]
-			cost := 1 + len(chunk.Blocks)
-			data, _ := json.Marshal(chunk)
-			last := i == len(blocks)-1 && len(b.Rows)+len(b.Items) == 0
-			if count+cost > 50 || (count+cost == 50 && !last) || size+len(data) > plugin.MaxViewBytes-2048 {
-				// Keep the leading rows when only the remainder of this table is too large.
-				if count < 49 && size+len(data) > plugin.MaxViewBytes-2048 && len(chunk.Rows) > 1 {
-					for len(chunk.Rows) > 1 && size+len(data) > plugin.MaxViewBytes-2048 {
-						chunk.Rows = chunk.Rows[:len(chunk.Rows)/2]
-						data, _ = json.Marshal(chunk)
-					}
-					if size+len(data) <= plugin.MaxViewBytes-2048 {
-						result = append(result, chunk)
-					}
-				}
-				msg := "More results were cut to fit this view."
-				if chunk.Type == "section" {
-					msg = "More trials were cut to fit this view."
-				}
-				return append(result, notice("info", msg))
-			}
 			result = append(result, chunk)
-			size += len(data) + 1
-			count += cost
 			if len(b.Rows)+len(b.Items) == 0 {
 				break
 			}
@@ -184,4 +163,71 @@ func fitBlocks(blocks []plugin.Block) []plugin.Block {
 	}
 	return result
 }
+
+func blockBytes(b plugin.Block) int {
+	data, _ := json.Marshal(b)
+	return len(data)
+}
+
+// Keep the leading rows or children that fit the space left in the view.
+func fitBlock(b plugin.Block, slots, bytes int) (plugin.Block, bool) {
+	if slots <= 0 || bytes <= 0 {
+		return b, false
+	}
+	if 1+len(b.Blocks) <= slots && blockBytes(b) <= bytes {
+		return b, true
+	}
+	if b.Type == "section" {
+		children := b.Blocks
+		b.Blocks = nil
+		slots--
+		bytes -= blockBytes(b) + len(`,"blocks":[]`)
+		for _, child := range children {
+			fit, ok := fitBlock(child, slots, bytes)
+			if !ok {
+				break
+			}
+			b.Blocks = append(b.Blocks, fit)
+			slots--
+			bytes -= blockBytes(fit) + 1
+			if len(fit.Rows) < len(child.Rows) {
+				break
+			}
+		}
+		return b, len(b.Blocks) > 0
+	}
+	rows := sort.Search(len(b.Rows), func(i int) bool {
+		prefix := b
+		prefix.Rows = prefix.Rows[:i+1]
+		return blockBytes(prefix) > bytes
+	})
+	b.Rows = b.Rows[:rows]
+	return b, rows > 0
+}
+
+// A legal 4 MiB hub response can exceed the 1 MiB dashboard limit.
+func fitBlocks(blocks []plugin.Block) []plugin.Block {
+	chunks := splitBlocks(blocks)
+	var result []plugin.Block
+	slots, bytes := 50, plugin.MaxViewBytes-2048 // Leave room for the view envelope and cut notice.
+	for i, b := range chunks {
+		cost, size := 1+len(b.Blocks), blockBytes(b)+1
+		if size <= bytes && (cost < slots || (cost == slots && i == len(chunks)-1)) {
+			result = append(result, b)
+			slots -= cost
+			bytes -= size
+			continue
+		}
+		fit, ok := fitBlock(b, slots-1, bytes-1)
+		msg := "More results were cut to fit this view."
+		if ok {
+			result = append(result, fit)
+		} else if b.Type == "section" {
+			msg = "More trials were cut to fit this view."
+		}
+		return append(result, notice("info", msg))
+	}
+	return result
+}
+
 func join(parts ...string) string { return strings.Join(parts, " · ") }

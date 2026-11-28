@@ -251,7 +251,7 @@ func (p *Fleet) trials(data trialsResponse) []plugin.Block {
 			children = append(children, notice("warn", msg+". Decide each one, then end the trial."))
 		}
 		children = append(children, rows)
-		sections = append(sections, plugin.Block{Type: "section", Title: join(p.word(t.Source), "ends "+shortDate(t.Ends)), Blocks: fitBlocks(children)})
+		sections = append(sections, plugin.Block{Type: "section", Title: join(p.word(t.Source), "ends "+shortDate(t.Ends)), Blocks: children})
 	}
 	return sections
 }
