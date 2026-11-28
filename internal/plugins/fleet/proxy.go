@@ -229,9 +229,32 @@ func (a proxyAccount) totals() (ok, failed string) {
 }
 func (p *Fleet) accountItem(a proxyAccount, now time.Time) plugin.Item {
 	state := p.enum(a.Status, accountStates)
-	ok, failed := a.totals()
-	item := plugin.Item{Title: p.word(a.Label), Subtitle: join(p.word(a.Provider), state.Text), Tone: state.Tone,
-		Meta: join("Priority "+quantity(a.Priority), "weight "+quantity(a.Weight), ok+" ok, "+failed+" failed")}
+	// Name what the hub left out once, rather than "Not reported" after each label.
+	var meta, missing []string
+	if a.Priority != nil {
+		meta = append(meta, "Priority "+quantity(a.Priority))
+	} else {
+		missing = append(missing, "priority")
+	}
+	if a.Weight != nil {
+		meta = append(meta, "weight "+quantity(a.Weight))
+	} else {
+		missing = append(missing, "weight")
+	}
+	if a.Requests != nil {
+		ok, failed := a.totals()
+		meta = append(meta, ok+" ok, "+failed+" failed")
+	} else {
+		missing = append(missing, "requests")
+	}
+	if len(missing) > 0 {
+		list := strings.Join(missing, ", ")
+		if i := strings.LastIndex(list, ", "); i >= 0 {
+			list = list[:i] + " and " + list[i+2:]
+		}
+		meta = append(meta, strings.ToUpper(list[:1])+list[1:]+" not reported")
+	}
+	item := plugin.Item{Title: p.word(a.Label), Subtitle: join(p.word(a.Provider), state.Text), Tone: state.Tone, Meta: join(meta...)}
 	if proxyID.MatchString(a.ID) && p.word(a.ID) == a.ID {
 		item.Link = detailLink("account", "id", a.ID)
 	}

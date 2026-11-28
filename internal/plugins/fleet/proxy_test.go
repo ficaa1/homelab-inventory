@@ -59,7 +59,7 @@ func TestProxyViews(t *testing.T) {
 	if v.Actions[0].Values["etag"] != `"r-41"` || v.Actions[0].Fields[0].Default != "round-robin" {
 		t.Fatal("missing strategy defaults")
 	}
-	assertText(t, v.Blocks, "Round robin", "Cooling down, 25 min left", "Renewal failed", "Quota 80% used", "Priority 0 · weight 1 · 1204 ok, 31 failed", "https://panel.example.com/manage", "Needs sign-in")
+	assertText(t, v.Blocks, "Round robin", "Cooling down, 25 min left", "Renewal failed", "Quota 80% used", "Priority 0 · weight 1 · 1204 ok, 31 failed", "Priority 2 · weight 0 · Requests not reported", "Priority, weight and requests not reported", "https://panel.example.com/manage", "Needs sign-in")
 	if v.Blocks[1].Items[0].Link.Params["id"] != "acc_a" || v.Blocks[1].Items[0].Badges[2].Tone != "warn" {
 		t.Fatal("wrong account link or quota tone")
 	}
