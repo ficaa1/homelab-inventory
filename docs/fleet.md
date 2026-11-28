@@ -24,7 +24,7 @@ the clear, so use it only on a network you control. **Test** reports which one i
 | View | Shows |
 | --- | --- |
 | Overview | Host count, attention items, trials past their end date or ending within the hub's policy window, the model-invoked context cost per host, and a list of hosts with their status |
-| Hosts | One row per host: last report, drift, broken links, refused changes, updates, free disk |
+| Hosts | One row per host: last report, drift, broken links, refused changes, updates, pending changes, free disk |
 | Host | One host's items that need attention, its provider mapping, its updates and its force requests |
 | Skills | Every skill with its source, mode, trial and per-host usage. Filter by source, origin or mode |
 | Trials | One section per trial source with its decision table and end date |
@@ -144,6 +144,8 @@ copy based on state and error code. `field` is set when one request field caused
   counts as stale only once `stale_after_seconds` have passed since then. It is `null` if unknown,
   and then a host that never reported counts as stale at once.
 - `last_seen_at`, `fleet_version` and `synced_commit` are `null` if the host never reported.
+- A host shows as **Not reporting** when its last report is more than 30 minutes old (two sync
+  intervals) and the hub's stale threshold has yet to pass, while alerts still use `stale_after_seconds`.
 - `counts` is `null` if the host never reported.
   - `drift`: files that changed since fleet wrote them.
   - `broken_links`: links whose target is missing.
@@ -155,7 +157,7 @@ copy based on state and error code. `field` is set when one request field caused
 - `context_cost` has one entry per harness on the host, and is `null` if not reported.
 - A host is pending when `synced_commit` differs from the hub's `repo_head`.
 
-**Policy.** The hub owns fleet's thresholds and sends them, so the plugin hardcodes none:
+**Policy.** The hub sends these fleet thresholds:
 
 ```json
 {

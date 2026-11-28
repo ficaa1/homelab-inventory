@@ -4,11 +4,25 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
 )
+
+// Hosts normally sync every 15 minutes. Flag a missed report after two intervals.
+const notReportingAfter = 30 * time.Minute
+
+var revisionSHA = regexp.MustCompile(`^[0-9a-f]{12,64}$`)
+
+func shortRevision(revision string) string {
+	if revisionSHA.MatchString(revision) {
+		return revision[:7]
+	}
+	return revision
+}
 
 func (d *disk) ratio() (float64, bool) {
 	if d == nil || d.Total <= 0 {
@@ -50,6 +64,9 @@ func (h hostSummary) stale(env hostEnvelope) bool {
 	}
 	return since == nil || env.Generated.Sub(*since).Seconds() > float64(*env.Policy.StaleSeconds)
 }
+func (h hostSummary) notReporting(now time.Time) bool {
+	return h.Seen != nil && now.Sub(*h.Seen) > notReportingAfter
+}
 func (h hostSummary) status(env hostEnvelope) plugin.Badge {
 	d := h.Disk.status(env.Policy)
 	switch {
@@ -57,6 +74,8 @@ func (h hostSummary) status(env hostEnvelope) plugin.Badge {
 		return badge("Stale", "warn")
 	case h.Seen == nil:
 		return badge("Waiting for first report", "muted")
+	case h.notReporting(env.Generated):
+		return badge("Not reporting", "warn")
 	case d.Tone == "crit":
 		return d
 	case h.Counts.attention() > 0 || d.Tone == "warn":
@@ -68,7 +87,7 @@ func (h hostSummary) status(env hostEnvelope) plugin.Badge {
 	}
 }
 
-func (p *Fleet) hostList(data hostsResponse, counts bool) plugin.Block {
+func (p *Fleet) hostList(data hostsResponse) plugin.Block {
 	list := plugin.Block{Type: "list", Title: "Hosts", Empty: "No hosts have a profile yet"}
 	if data.Hosts == nil {
 		list.Empty = "Hosts not reported"
@@ -80,9 +99,13 @@ func (p *Fleet) hostList(data hostsResponse, counts bool) plugin.Block {
 			item.Link = &plugin.Link{View: "host", Params: map[string]string{"name": h.Name}}
 		}
 		if h.Seen != nil {
-			item.Subtitle = "Reported " + age(data.Generated, *h.Seen)
+			prefix := "Reported "
+			if status.Text == "Stale" || status.Text == "Not reporting" {
+				prefix = "Last report "
+			}
+			item.Subtitle = prefix + age(data.Generated, *h.Seen)
 			if h.Version != nil {
-				item.Subtitle = join(item.Subtitle, "fleet "+p.word(*h.Version))
+				item.Subtitle = join(item.Subtitle, "fleet "+shortRevision(p.word(*h.Version)))
 			}
 		}
 		if c := h.Counts; c != nil {
@@ -95,20 +118,24 @@ func (p *Fleet) hostList(data hostsResponse, counts bool) plugin.Block {
 			if c.Broken > 0 {
 				item.Badges = append(item.Badges, badge(plural(c.Broken, "broken link", "broken links"), "warn"))
 			}
-			if counts {
-				item.Meta = join(item.Meta, plural(c.Updates, "update", "updates"), fmt.Sprintf("%d pending", c.Pending))
+			if c.Updates > 0 {
+				item.Meta = join(item.Meta, plural(c.Updates, "update", "updates"))
 			}
-		} else if counts {
+			if c.Pending > 0 {
+				item.Meta = join(item.Meta, plural(c.Pending, "pending change", "pending changes"))
+			}
+		} else {
 			item.Meta = join(item.Meta, "Counts not reported")
 		}
-		if h.pending(data.Head) {
-			item.Badges = append(item.Badges, badge("Pending sync", "info"))
-		}
 		switch status.Text {
-		case "Stale", "OK":
+		case "Stale", "Not reporting", "OK":
 			item.Badges = append(item.Badges, status)
 		case "Waiting for first report":
 			item.Subtitle = status.Text
+		default:
+			if h.pending(data.Head) {
+				item.Badges = append(item.Badges, badge("Pending sync", "info"))
+			}
 		}
 		if d := h.Disk.status(data.Policy); d.Text != "" {
 			item.Badges = append(item.Badges, d)
@@ -129,18 +156,7 @@ func (p *Fleet) hosts(data hostsResponse) ([]plugin.Block, error) {
 	if !data.Policy.complete() {
 		return nil, errResponse
 	}
-	counts := table("Counts", "No host counts to show", col("host", "Host"), col("status", "Status"), number("drift", "Drift"), number("refused", "Refused"), number("broken", "Broken links"), number("pending", "Pending"), number("updates", "Updates"), plugin.Column{Key: "free", Label: "Free", Format: "percent", Align: "right"})
-	for _, h := range data.Hosts {
-		row := map[string]any{"host": p.word(h.Name), "status": h.status(data.hostEnvelope).Text, "drift": "—", "refused": "—", "broken": "—", "pending": "—", "updates": "—", "free": "—"}
-		if c := h.Counts; c != nil {
-			row["drift"], row["refused"], row["broken"], row["pending"], row["updates"] = c.Drift, c.Refused, c.Broken, c.Pending, c.Updates
-		}
-		if r, ok := h.Disk.ratio(); ok {
-			row["free"] = r
-		}
-		counts.Rows = append(counts.Rows, row)
-	}
-	return append(data.hostListNotices(), p.hostList(data, true), counts), nil
+	return append(data.hostListNotices(), p.hostList(data)), nil
 }
 
 var receiptStates = map[string]plugin.Badge{"done": badge("Done", "ok"), "working": badge("Working", "info"), "failed": badge("Failed", "crit")}
@@ -153,13 +169,16 @@ func (p *Fleet) overview(ctx context.Context, data overviewResponse) ([]plugin.B
 	if !data.Policy.complete() {
 		return nil, errResponse
 	}
-	var stale, waiting, attention, affected, pending, reportedCounts, knownCommits int
+	var stale, notReporting, waiting, attention, affected, pending, reportedCounts, knownCommits int
 	cost := table("Model-invoked skills", "No context cost reported", col("host", "Host"), col("harness", "Harness"), number("tokens", "Tokens (est.)"), number("skills", "Skills"), number("chars", "Characters"))
 	var skipped []string
 	for _, h := range data.Hosts {
-		if h.stale(data.hostEnvelope) {
+		switch {
+		case h.stale(data.hostEnvelope):
 			stale++
-		} else if h.Seen == nil {
+		case h.notReporting(data.Generated):
+			notReporting++
+		case h.Seen == nil:
 			waiting++
 		}
 		if h.Counts != nil {
@@ -194,18 +213,24 @@ func (p *Fleet) overview(ctx context.Context, data overviewResponse) ([]plugin.B
 			due++
 		}
 	}
-	hosts := plugin.Item{Label: "Hosts", Value: strconv.Itoa(len(data.Hosts)), Hint: "All reporting"}
+	hosts := plugin.Item{Label: "Hosts", Value: strconv.Itoa(len(data.Hosts))}
+	var reporting []string
 	if stale > 0 {
-		hosts.Hint = fmt.Sprintf("%d stale", stale)
+		reporting = append(reporting, fmt.Sprintf("%d stale", stale))
+	}
+	if notReporting > 0 {
+		reporting = append(reporting, fmt.Sprintf("%d not reporting", notReporting))
+	}
+	if stale > 0 || notReporting > 0 {
 		hosts.Tone = "warn"
 	}
 	if waiting > 0 {
-		hint := fmt.Sprintf("%d waiting for first report", waiting)
-		if stale > 0 {
-			hint = join(hosts.Hint, hint)
-		}
-		hosts.Hint = hint
+		reporting = append(reporting, fmt.Sprintf("%d waiting for first report", waiting))
 	}
+	if len(reporting) == 0 {
+		reporting = append(reporting, "All reporting")
+	}
+	hosts.Hint = join(reporting...)
 	att := plugin.Item{Label: "Attention", Value: strconv.Itoa(attention), Hint: "Nothing to fix"}
 	if attention > 0 {
 		att.Hint = "on " + plural(affected, "host", "hosts")
@@ -239,7 +264,7 @@ func (p *Fleet) overview(ctx context.Context, data overviewResponse) ([]plugin.B
 	if data.Trials == nil {
 		trials.Value, trials.Hint = "Not reported", ""
 	}
-	blocks := append(data.hostListNotices(), plugin.Block{Type: "stats", Items: []plugin.Item{hosts, att, trials, sync}}, p.hostList(data.hostsResponse, false), cost)
+	blocks := append(data.hostListNotices(), plugin.Block{Type: "stats", Items: []plugin.Item{hosts, att, trials, sync}}, p.hostList(data.hostsResponse), cost)
 	if len(skipped) > 0 {
 		blocks = append(blocks, notice("info", "Context cost not reported for "+strings.Join(skipped, ", ")))
 	}
@@ -331,13 +356,19 @@ func (p *Fleet) hostDetail(data hostResponse) ([]plugin.Block, error) {
 	if h.Seen != nil {
 		last.Value = age(data.Generated, *h.Seen)
 	}
+	if status.Text == "Not reporting" {
+		last.Hint = status.Text
+	}
 	synced := plugin.Item{Label: "Synced", Value: "Not reported"}
 	if h.Commit != nil {
-		commit := []rune(p.word(*h.Commit))
-		synced.Value = string(commit[:min(7, len(commit))])
+		commit := p.word(*h.Commit)
+		synced.Value = shortRevision(commit)
 		synced.Hint = "Up to date"
 		if h.pending(data.Head) {
 			synced.Hint, synced.Tone = "Pending sync", "info"
+		}
+		if synced.Value != commit {
+			synced.Hint = join(synced.Hint, commit)
 		}
 	}
 	free := plugin.Item{Label: "Free disk", Value: "Not reported"}
@@ -354,7 +385,15 @@ func (p *Fleet) hostDetail(data hostResponse) ([]plugin.Block, error) {
 	if r.OK != nil {
 		matches.Value, matches.Hint = strconv.Itoa(*r.OK), "files"
 	}
-	blocks := []plugin.Block{{Type: "stats", Items: []plugin.Item{last, synced, free, matches}}}
+	version := plugin.Item{Label: "Fleet version", Value: "Not reported"}
+	if h.Version != nil {
+		full := p.word(*h.Version)
+		version.Value = shortRevision(full)
+		if version.Value != full {
+			version.Hint = full
+		}
+	}
+	blocks := []plugin.Block{{Type: "stats", Items: []plugin.Item{last, synced, free, matches, version}}}
 	if c := h.Counts; c != nil {
 		switch {
 		case c.Refused == 1:

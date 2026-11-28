@@ -84,6 +84,8 @@
   --nav-h: 60px;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
+  --upload-button-size: 52px;
+  --upload-button-phone-offset: 14px;
 
   /* Older names, kept as aliases so inline styles in the script stay valid. */
   --page: var(--bg); --ink: var(--text); --ink-2: var(--text-2); --muted: var(--text-3);
@@ -327,7 +329,11 @@ code {
   .ibtn.search-btn { flex: none; width: 44px; justify-content: center; padding: 0; background: none; border-color: transparent; }
   .ibtn.search-btn .lab, .ibtn.search-btn kbd { display: none; }
   .strip { top: calc(var(--top-h) + var(--safe-t)); padding: 4px 12px; min-height: 0; gap: 0; }
-  .wrap { padding: 20px 16px calc(var(--nav-h) + var(--safe-b) + 96px); }
+  .wrap { padding: 20px 16px calc(var(--nav-h) + var(--safe-b) + var(--s4)); }
+  /* Let the last row scroll a full gap above the fixed upload button. */
+  body:has(.up-fab:not(.hidden)) .wrap {
+    padding-bottom: calc(var(--nav-h) + var(--safe-b) + var(--upload-button-phone-offset) + var(--upload-button-size) + var(--s4));
+  }
   .tabs {
     position: fixed; z-index: 45; left: 0; right: 0; bottom: 0; margin: 0;
     height: calc(var(--nav-h) + var(--safe-b)); padding: 4px 4px var(--safe-b);
@@ -1523,6 +1529,7 @@ button.ops-tile { cursor:pointer; }
 .pv-blocks .kpis, .pv-blocks .banner { margin-bottom: 0; }
 .tile .value.info { color: var(--info); }
 .tile .value.muted { color: var(--text-3); }
+.pv-stats .tile :is(.value, .sub) { overflow-wrap: anywhere; }
 .pv-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; min-width: 0; }
 .pv-card > h3 {
   display: flex; align-items: baseline; gap: 8px; margin: 0; padding: 12px 16px;
@@ -1595,7 +1602,11 @@ button.ops-tile { cursor:pointer; }
 }
 @media (max-width: 640px) {
   .pv-head { gap: 8px 12px; }
-  .pv-line { flex-wrap: wrap; }
+  .pv-main { display: grid; grid-template-columns: auto minmax(0, 1fr); }
+  .pv-line { display: contents; }
+  .pv-glyph { margin-inline-end: 8px; align-self: baseline; }
+  .pv-line > :is(.pv-title, .pv-meta), .pv-main > :is(.pv-sub, .pv-badges, .pv-prog) { grid-column: 2; }
+  .pv-meta { margin-left: 0; white-space: normal; overflow-wrap: anywhere; }
   .pv-head .seg { order: 3; width: 100%; min-width: 0; overflow-x: auto; }
   .pv-head .seg .btn { flex: 1; min-height: 40px; }
   .pv-blocks { gap: var(--s3); }
@@ -1945,7 +1956,7 @@ button.ops-tile { cursor:pointer; }
 /* ------------------------------------------------------------------ upload */
 .up-fab {
   position: fixed; z-index: 60; right: max(18px, env(safe-area-inset-right, 0px)); bottom: calc(18px + var(--safe-b));
-  width: 52px; height: 52px; border-radius: 50%; border: 0; padding: 0; cursor: pointer;
+  width: var(--upload-button-size); height: var(--upload-button-size); border-radius: 50%; border: 0; padding: 0; cursor: pointer;
   display: grid; place-items: center; background: var(--ink-fill); color: var(--ink-on);
   box-shadow: 0 4px 12px var(--shadow-light);
   transition: transform var(--dur-2) var(--ease-out);
@@ -1968,7 +1979,7 @@ button.ops-tile { cursor:pointer; }
 .up-fab.done { background: var(--ok); color: var(--status-ink); }
 .up-fab.away { opacity: 0; pointer-events: none; }
 .up-fab.fail { background: var(--crit); color: var(--status-ink); }
-@media (max-width: 640px) { .up-fab { bottom: calc(var(--nav-h) + var(--safe-b) + 14px); right: 14px; } }
+@media (max-width: 640px) { .up-fab { bottom: calc(var(--nav-h) + var(--safe-b) + var(--upload-button-phone-offset)); right: 14px; } }
 
 .up-drop {
   position: fixed; inset: 0; z-index: 95; background: var(--scrim); pointer-events: none;

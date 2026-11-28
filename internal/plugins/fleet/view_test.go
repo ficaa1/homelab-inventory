@@ -6,6 +6,7 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -53,7 +54,7 @@ func TestManifestAndViews(t *testing.T) {
 				t.Fatal(stats)
 			}
 			hosts := v.Blocks[1].Items
-			if hosts[0].Subtitle != "Reported 12 min ago · fleet 0.7.0" || hosts[0].Meta != "61 GB free of 512 GB (12%)" || hosts[0].Link.Params["name"] != "host-a" || hosts[1].Subtitle != "Never reported" {
+			if hosts[0].Subtitle != "Reported 12 min ago · fleet 0.7.0" || hosts[0].Meta != "61 GB free of 512 GB (12%) · 2 updates · 3 pending changes" || hosts[0].Link.Params["name"] != "host-a" || hosts[1].Subtitle != "Never reported" {
 				t.Fatal(hosts)
 			}
 			assertText(t, hosts[0], "2 drift", "1 refused", "1 broken link", "Pending sync", "Disk low")
@@ -62,14 +63,18 @@ func TestManifestAndViews(t *testing.T) {
 			assertText(t, v.Blocks[4], "Set skill mode · 3 h ago", "Done", "Pending on 2 hosts")
 		}},
 		{"hosts", "", func(t *testing.T, v plugin.View) {
-			assertText(t, v.Blocks[0], "2 updates · 3 pending", "Disk not reported", "Counts not reported")
-			rows := v.Blocks[1].Rows
-			if rows[0]["status"] != "Attention" || rows[0]["free"] != 61.0/512 || rows[1]["status"] != "Stale" || rows[1]["drift"] != "—" || rows[2]["status"] != "Stale" || rows[2]["updates"] != 0 {
+			if len(v.Blocks) != 1 || v.Blocks[0].Type != "list" || v.Blocks[0].Title != "Hosts" || len(v.Blocks[0].Items) != 3 {
+				t.Fatal(v.Blocks)
+			}
+			rows := v.Blocks[0].Items
+			if rows[0].Meta != "61 GB free of 512 GB (12%) · 2 updates · 3 pending changes" || rows[0].Tone != "warn" ||
+				rows[1].Meta != "Disk not reported · Counts not reported" || rows[2].Meta != "4 GB free of 100 GB (4%)" ||
+				!strings.HasPrefix(rows[2].Subtitle, "Last report ") || !slices.Contains(rows[2].Badges, badge("Stale", "warn")) {
 				t.Fatal(rows)
 			}
 		}},
 		{"host", "host-a", func(t *testing.T, v plugin.View) {
-			if v.Title != "host-a" || v.Blocks[0].Items[1].Value != "1234567" {
+			if v.Title != "host-a" || v.Blocks[0].Items[1].Value != "1234567890" {
 				t.Fatal(v.Title, v.Blocks[0])
 			}
 			assertText(t, v, "12 min ago", "Pending sync", "Disk low", "Needs attention", "+4 −1", "Refused", "Broken link", "fleet on the host", "fleet sync", "Force requests", "Queued")
@@ -242,7 +247,7 @@ func TestFirstReportGracePeriod(t *testing.T) {
 				t.Fatal(host)
 			}
 			assertText(t, host, tc.status)
-			if got := h.view(t, "hosts", nil).Blocks[1].Rows[1]["status"]; got != tc.status {
+			if got := h.view(t, "hosts", nil).Blocks[0].Items[1]; !reflect.DeepEqual(got, host) {
 				t.Fatal(got)
 			}
 			detail := h.view(t, "host", url.Values{"name": {"host-b"}}).Blocks[0]
@@ -260,6 +265,48 @@ func TestFirstReportGracePeriod(t *testing.T) {
 				t.Fatal(alerts)
 			}
 		})
+	}
+}
+
+func TestNotReportingViews(t *testing.T) {
+	const version = "7e1410a62596cbcc686b5ae481b1a76e3430776fa"
+	commit := strings.Repeat("abcdef01", 8)
+	h := newHub(t, false, func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/v1/"), "hosts/")
+		body := string(fixture(t, name))
+		body = strings.Replace(body, "2026-12-01T09:03:00Z", "2026-12-01T08:29:00Z", 1)
+		body = strings.Replace(body, `"0.7.0"`, fmt.Sprintf("%q", version), 1)
+		body = strings.Replace(body, `"1234567890"`, fmt.Sprintf("%q", commit), 1)
+		body = strings.Replace(body, `"pending": 3`, `"pending": 1`, 1)
+		w.Write([]byte(body))
+	})
+	row := h.view(t, "hosts", nil).Blocks[0].Items[0]
+	if row.Tone != "warn" || row.Subtitle != "Last report 46 min ago · fleet 7e1410a" || row.Meta != "61 GB free of 512 GB (12%) · 2 updates · 1 pending change" ||
+		!slices.Contains(row.Badges, badge("Not reporting", "warn")) || slices.Contains(row.Badges, badge("Pending sync", "info")) {
+		t.Fatal(row)
+	}
+	overview := h.view(t, "overview", nil)
+	if stats := overview.Blocks[0].Items; stats[0].Hint != "2 stale · 1 not reporting" || stats[0].Tone != "warn" || stats[1].Value != "4" {
+		t.Fatal(stats)
+	}
+	if got := overview.Blocks[1].Items[0]; !reflect.DeepEqual(got, row) {
+		t.Fatal(got)
+	}
+	stats := h.view(t, "host", url.Values{"name": {"host-a"}}).Blocks[0].Items
+	if got := stats[0]; got.Label != "Last report" || got.Value != "46 min ago" || got.Hint != "Not reporting" || got.Tone != "warn" {
+		t.Fatal(got)
+	}
+	if got := stats[1]; got.Label != "Synced" || got.Value != "abcdef0" || got.Hint != "Pending sync · "+commit {
+		t.Fatal(got)
+	}
+	if got := stats[4]; got.Label != "Fleet version" || got.Value != "7e1410a" || got.Hint != version {
+		t.Fatal(got)
+	}
+	alerts, err := h.Alerts(t.Context())
+	if err != nil || slices.ContainsFunc(alerts, func(a plugin.Alert) bool {
+		return a.Rule == "host_stale" && a.Subject == "host-a"
+	}) {
+		t.Fatal(alerts, err)
 	}
 }
 
@@ -445,11 +492,13 @@ func TestStatusPrecedence(t *testing.T) {
 	}{
 		{false, 0, 1, nil, nil, "Stale", "warn"},
 		{true, 4 * 24 * time.Hour, 1, &hostCounts{Refused: 1}, &older, "Stale", "warn"},
+		{true, 3 * 24 * time.Hour, 15, &hostCounts{}, &head, "Not reporting", "warn"},
+		{true, 30*time.Minute + time.Second, 1, &hostCounts{Refused: 1}, &older, "Not reporting", "warn"},
 		{true, time.Minute, 7, &hostCounts{Drift: 1}, &older, "Disk critical", "crit"},
 		{true, time.Minute, 8, nil, &older, "Attention", "warn"},
 		{true, time.Minute, 15, &hostCounts{Broken: 1}, &older, "Attention", "warn"},
 		{true, time.Minute, 15, &hostCounts{}, &older, "Pending sync", "info"},
-		{true, 3 * 24 * time.Hour, 15, &hostCounts{}, &head, "OK", "ok"},
+		{true, 30 * time.Minute, 15, &hostCounts{}, &head, "OK", "ok"},
 	} {
 		t.Run(tc.word, func(t *testing.T) {
 			h := hostSummary{Counts: tc.counts, Commit: tc.commit, Disk: &disk{Total: 100, Free: tc.free}}
