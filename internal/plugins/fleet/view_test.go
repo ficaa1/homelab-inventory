@@ -46,7 +46,7 @@ func TestManifestAndViews(t *testing.T) {
 	}{
 		{"overview", "", func(t *testing.T, v plugin.View) {
 			stats := v.Blocks[0].Items
-			if stats[0].Value != "3" || stats[0].Hint != "2 stale" || stats[1].Value != "4" || stats[1].Hint != "from 2 of 3 hosts" || stats[2].Value != "1" || stats[2].Hint != "1 past end date · 0 end within 7 days" || stats[2].Tone != "warn" || stats[3].Value != "1" {
+			if stats[0].Value != "3" || stats[0].Hint != "2 stale" || stats[1].Value != "4" || stats[1].Hint != "from 2 of 3 hosts" || stats[2].Value != "1" || stats[2].Hint != "1 past end date" || stats[2].Tone != "warn" || stats[3].Value != "1" {
 				t.Fatal(stats)
 			}
 			hosts := v.Blocks[1].Items

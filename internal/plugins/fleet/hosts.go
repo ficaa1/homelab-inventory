@@ -224,8 +224,13 @@ func (p *Fleet) overview(data overviewResponse) ([]plugin.Block, error) {
 	}
 	trials := plugin.Item{Label: "Trials", Value: strconv.Itoa(running), Hint: fmt.Sprintf("%d end within %s", soon, plural(*data.Policy.DueSoon, "day", "days"))}
 	if due > 0 {
-		trials.Hint = join(fmt.Sprintf("%d past end date", due), trials.Hint)
+		trials.Hint = fmt.Sprintf("%d past end date", due)
+		if soon > 0 {
+			trials.Hint = join(trials.Hint, fmt.Sprintf("%d end within %s", soon, plural(*data.Policy.DueSoon, "day", "days")))
+		}
 		trials.Tone = "warn"
+	} else if soon == 0 {
+		trials.Hint = "None end within " + plural(*data.Policy.DueSoon, "day", "days")
 	}
 	if data.Trials == nil {
 		trials.Value, trials.Hint = "Not reported", ""
