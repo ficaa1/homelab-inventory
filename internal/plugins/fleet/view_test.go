@@ -68,7 +68,17 @@ func TestManifestAndViews(t *testing.T) {
 			if v.Title != "host-a" || v.Blocks[0].Items[1].Value != "1234567" {
 				t.Fatal(v.Title, v.Blocks[0])
 			}
-			assertText(t, v, "12 min ago", "Pending sync", "Disk low", "Fine", "Needs attention", "+4 −1", "Refused", "Broken link", "fleet install --force", "Providers", "https://provider.example.lan", "fleet on the host", "fleet sync", "Force requests", "Queued")
+			assertText(t, v, "12 min ago", "Pending sync", "Disk low", "Needs attention", "+4 −1", "Refused", "Broken link", "fleet on the host", "fleet sync", "Force requests", "Queued")
+			if stat := v.Blocks[0].Items[3]; stat.Label != "Match fleet" || stat.Value != "12" || stat.Hint != "files" {
+				t.Fatal(stat)
+			}
+			if got := v.Blocks[1].Text; got != "1 file changed on the host and has a newer version waiting. Fleet won't overwrite it. Review the file on the host and keep the hand edit or restore the fleet version." {
+				t.Fatal(got)
+			}
+			providers := v.Blocks[5]
+			if providers.Title != "Providers" || len(providers.Rows) != 2 || providers.Rows[0]["endpoint"] != "https://provider.example.lan:8443/api%2Fv1" || providers.Rows[1]["endpoint"] != "Not a URL" {
+				t.Fatal(providers)
+			}
 		}},
 		{"host", "host-b", func(t *testing.T, v plugin.View) {
 			if len(v.Blocks) != 1 || v.Blocks[0].Text != "host-b hasn't reported yet. Run fleet sync on it." {
@@ -110,6 +120,22 @@ func TestManifestAndViews(t *testing.T) {
 				t.Fatal("view should read exactly once")
 			}
 		})
+	}
+}
+
+func TestHostDetailWithSeveralRefusedFilesAndUnknownMatchCount(t *testing.T) {
+	h := newHub(t, false, func(w http.ResponseWriter, r *http.Request) {
+		body := string(fixture(t, "host-a"))
+		body = strings.Replace(body, `"refused": 1`, `"refused": 2`, 1)
+		body = strings.Replace(body, `"ok_count": 12`, `"ok_count": null`, 1)
+		w.Write([]byte(body))
+	})
+	v := h.view(t, "host", url.Values{"name": {"host-a"}})
+	if stat := v.Blocks[0].Items[3]; stat.Label != "Match fleet" || stat.Value != "Not reported" {
+		t.Fatal(stat)
+	}
+	if got := v.Blocks[1].Text; got != "2 files changed on the host and have a newer version waiting. Fleet won't overwrite them. Review each file on the host and keep the hand edit or restore the fleet version." {
+		t.Fatal(got)
 	}
 }
 

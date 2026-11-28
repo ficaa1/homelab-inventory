@@ -83,7 +83,12 @@
       {
         "harness": "harness-a",
         "provider": "provider-a",
-        "endpoint": "https://provider.example.lan"
+        "endpoint": "https://fixture-user:fixture-password@provider.example.lan:8443/api%2Fv1?token=private-query-value#fixture-fragment"
+      },
+      {
+        "harness": "harness-b",
+        "provider": "provider-b",
+        "endpoint": "fixture-invalid-endpoint"
       }
     ],
     "updates": [

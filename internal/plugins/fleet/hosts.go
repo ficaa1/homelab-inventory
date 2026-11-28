@@ -2,6 +2,7 @@ package fleet
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -232,6 +233,15 @@ func (p *Fleet) label(raw string, words map[string]string) string {
 	}
 	return p.word(raw)
 }
+
+func (p *Fleet) providerEndpoint(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+		return "Not a URL"
+	}
+	return p.word(u.Scheme + "://" + u.Host + u.EscapedPath())
+}
+
 func (p *Fleet) hostDetail(data hostResponse) ([]plugin.Block, error) {
 	h, r := data.Host, data.Report
 	if r == nil {
@@ -264,10 +274,17 @@ func (p *Fleet) hostDetail(data hostResponse) ([]plugin.Block, error) {
 			free.Hint, free.Tone = join(b.Text, free.Hint), b.Tone
 		}
 	}
-	blocks := []plugin.Block{{Type: "stats", Items: []plugin.Item{last, synced, free, {Label: "Fine", Value: fmt.Sprint(displayCount(r.OK))}}}}
+	matches := plugin.Item{Label: "Match fleet", Value: "Not reported"}
+	if r.OK != nil {
+		matches.Value, matches.Hint = strconv.Itoa(*r.OK), "files"
+	}
+	blocks := []plugin.Block{{Type: "stats", Items: []plugin.Item{last, synced, free, matches}}}
 	if c := h.Counts; c != nil {
-		if c.Refused > 0 {
-			blocks = append(blocks, notice("warn", plural(c.Refused, "file changed on the host and has", "files changed on the host and have")+" a newer version waiting. Fleet won't overwrite them. Resolve on the host with fleet install --force, or keep the hand edit."))
+		switch {
+		case c.Refused == 1:
+			blocks = append(blocks, notice("warn", "1 file changed on the host and has a newer version waiting. Fleet won't overwrite it. Review the file on the host and keep the hand edit or restore the fleet version."))
+		case c.Refused > 1:
+			blocks = append(blocks, notice("warn", fmt.Sprintf("%d files changed on the host and have a newer version waiting. Fleet won't overwrite them. Review each file on the host and keep the hand edit or restore the fleet version.", c.Refused)))
 		}
 		if c.Drift > 0 {
 			blocks = append(blocks, notice("warn", plural(c.Drift, "file has", "files have")+" drifted from the fleet version. Review the changes on the host and decide which version to keep."))
@@ -292,7 +309,7 @@ func (p *Fleet) hostDetail(data hostResponse) ([]plugin.Block, error) {
 		providers.Empty = "Providers not reported"
 	}
 	for _, v := range r.Providers {
-		providers.Rows = append(providers.Rows, map[string]any{"harness": p.word(v.Harness), "provider": p.word(v.Provider), "endpoint": p.word(v.Endpoint)})
+		providers.Rows = append(providers.Rows, map[string]any{"harness": p.word(v.Harness), "provider": p.word(v.Provider), "endpoint": p.providerEndpoint(v.Endpoint)})
 	}
 	updates := table("Updates", "Everything is current", col("component", "Component"), col("installed", "Installed"), col("latest", "Latest"), col("apply", "Applied by"))
 	if r.Updates == nil {
