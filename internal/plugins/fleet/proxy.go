@@ -55,8 +55,8 @@ type proxyAccount struct {
 }
 type signInResponse struct {
 	envelope
-	Session, Account, State, Message string
-	Expires                          *time.Time `json:"expires_at"`
+	Session, Account, State string
+	Expires                 *time.Time `json:"expires_at"`
 }
 type reauthReceipt struct {
 	Session, URL string
@@ -131,14 +131,17 @@ func (p *Fleet) proxyView(ctx context.Context, v *plugin.View, name string, para
 	return nil
 }
 func (p *Fleet) proxyNotice(d proxyResponse) plugin.Block {
-	text := p.label(d.Proxy.State, proxyStates)
+	text, tone := p.label(d.Proxy.State, proxyStates), "muted"
+	if proxyStates[d.Proxy.State] != "" {
+		tone = "warn"
+	}
 	if text == "" {
 		text = "Proxy state not reported"
 	}
 	if msg := p.clean(d.Proxy.Message, 400); msg != "" {
 		text = join(text, msg)
 	}
-	return notice("warn", text)
+	return notice(tone, text)
 }
 func (a proxyAccount) needsSignIn() bool { return a.RequiresSignIn || a.Status == "needs_sign_in" }
 func countStat(label string, n int, known, warn bool) plugin.Item {
@@ -281,7 +284,11 @@ func (p *Fleet) accountView(v *plugin.View, d proxyResponse) {
 		}
 	}
 	ok, failed := a.totals()
-	v.Blocks = []plugin.Block{{Type: "stats", Items: []plugin.Item{{Label: "Status", Value: state.Text, Tone: state.Tone}, {Label: "Priority", Value: quantity(a.Priority)}, {Label: "Weight", Value: quantity(a.Weight)}, {Label: "Access expires", Value: expiry}, {Label: "Requests ok", Value: ok}, {Label: "Requests failed", Value: failed}}}}
+	renewal := map[string]plugin.Badge{"ok": badge("OK", "ok"), "renewing": badge("Renewing", "info"), "failed": badge("Failed", "warn")}[a.Renewal]
+	if renewal.Text == "" {
+		renewal = badge("Unknown", "muted")
+	}
+	v.Blocks = []plugin.Block{{Type: "stats", Items: []plugin.Item{{Label: "Status", Value: state.Text, Tone: state.Tone}, {Label: "Priority", Value: quantity(a.Priority)}, {Label: "Weight", Value: quantity(a.Weight)}, {Label: "Access expires", Value: expiry}, {Label: "Access renewal", Value: renewal.Text, Tone: renewal.Tone}, {Label: "Requests ok", Value: ok}, {Label: "Requests failed", Value: failed}}}}
 	if a.Quota == nil {
 		v.Blocks = append(v.Blocks, notice("info", "This provider doesn't report quota."))
 	} else {
@@ -345,26 +352,48 @@ func (p *Fleet) accountView(v *plugin.View, d proxyResponse) {
 	p.offer(v, "proxy_reauth_start", "", "Open a new sign-in session for "+label+"?", account, nil)
 }
 
+const redirectAddressHelp = "Paste the whole address the browser landed on, starting with http://localhost."
+
+func signInCopy(state string) (text, tone string) {
+	switch state {
+	case "waiting":
+		return "Waiting for the address from the sign-in page.", "info"
+	case "working":
+		return "Checking the sign-in.", "info"
+	case "ok":
+		return "Signed in. The account is usable again.", "ok"
+	case "error":
+		return "The sign-in failed. Start again with Sign in again.", "crit"
+	case "expired":
+		return "This sign-in expired after 5 minutes. Start again with Sign in again.", "warn"
+	default:
+		return "The sign-in state is unknown.", "muted"
+	}
+}
+
+func signInError(code string) string {
+	switch code {
+	case "not_found", "conflict":
+		return "This sign-in is no longer available. Start again with Sign in again."
+	case "forbidden":
+		return "The hub refused access to this sign-in. Check the Fleet plugin settings."
+	case "busy", "rate_limited", "upstream_failed":
+		return "The hub could not check the sign-in. Check the hub and try again."
+	}
+	text, _ := signInCopy("error")
+	return text
+}
+
 func (p *Fleet) signInView(v *plugin.View, d signInResponse) {
 	states := map[string]string{"waiting": "Waiting", "working": "Working", "ok": "Signed in", "error": "Sign-in failed", "expired": "Expired"}
-	word := p.label(d.State, states)
-	v.Blocks = []plugin.Block{{Type: "stats", Items: []plugin.Item{{Label: "State", Value: word}, {Label: "Expires", Value: timestamp(d.Expires)}}}}
-	text, tone := word, "info"
-	switch d.State {
-	case "waiting":
-		text = "After signing in, choose Finish sign-in and paste the whole redirect address."
-		p.offer(v, "proxy_reauth_finish", "", "Finish this sign-in session? The proxy uses the redirect address to renew access to the account.", plugin.Config{"session": d.Session}, nil)
-	case "working":
-		text = "The proxy is finishing sign-in."
-	case "ok":
-		text, tone = "Sign-in is complete.", "ok"
-	case "error":
-		text, tone = "Sign-in failed. Start a new session from the account.", "crit"
-	case "expired":
-		text, tone = "This session expired. Start a new sign-in from the account.", "warn"
+	word := states[d.State]
+	if word == "" {
+		word = "Unknown"
 	}
-	if d.Message != "" {
-		text = join(text, p.clean(d.Message, 400))
+	v.Blocks = []plugin.Block{{Type: "stats", Items: []plugin.Item{{Label: "State", Value: word}, {Label: "Expires", Value: timestamp(d.Expires)}}}}
+	text, tone := signInCopy(d.State)
+	if d.State == "waiting" {
+		p.offer(v, "proxy_reauth_finish", "", "Finish this sign-in session? The proxy uses the redirect address to renew access to the account.", plugin.Config{"session": d.Session}, nil)
 	}
 	if d.State == "waiting" || d.State == "working" {
 		v.RefreshSeconds = 5
@@ -386,5 +415,29 @@ func (p *Fleet) signInStarted(response receiptResponse, label string) (plugin.Vi
 }
 func (p *Fleet) safeLink(raw string) bool {
 	u, err := url.Parse(raw)
-	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Hostname() != "" && u.User == nil && raw == p.clean(raw, 8192) && !strings.ContainsAny(raw, "\r\n")
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || raw != p.clean(raw, 8192) {
+		return false
+	}
+	parts := []string{u.Path, u.Fragment}
+	for entry := range strings.SplitSeq(u.RawQuery, "&") {
+		key, value, _ := strings.Cut(entry, "=")
+		for _, encoded := range []string{key, value} {
+			decoded, err := url.QueryUnescape(encoded)
+			if err != nil {
+				return false
+			}
+			parts = append(parts, decoded)
+		}
+	}
+	for _, token := range []string{p.readToken, p.operatorToken} {
+		if token == "" {
+			continue
+		}
+		for _, part := range parts {
+			if strings.Contains(part, token) {
+				return false
+			}
+		}
+	}
+	return true
 }

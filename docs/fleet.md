@@ -43,10 +43,13 @@ the clear, so use it only on a network you control. **Test** reports which one i
 | `fleet.refused` | warning | A host refused a change because the file drifted |
 | `fleet.trial_due` | info | A trial passed its end date and is still a trial. The summary says how many skills are undecided |
 | `fleet.disk` | warning or critical | A host's free disk is below the hub's thresholds |
-| `fleet.proxy_unreachable` | warning | The hub can't reach the proxy, or the proxy rejected the hub's management key |
+| `fleet.proxy_unreachable` | warning | The hub can't report the proxy's account list |
 | `fleet.proxy_sign_in` | warning | An account needs to sign in again |
 | `fleet.proxy_cooling` | critical | Every enabled account of one provider is cooling down |
 | `fleet.proxy_renewal` | warning | An account's access expires within 24 hours and its last renewal failed |
+
+When the proxy reports an outage or the hub returns a null account list, the dashboard
+keeps the account alerts from the last complete list alongside `fleet.proxy_unreachable`.
 
 The subject is the host name, the source name for `fleet.trial_due`, the provider for
 `fleet.proxy_cooling`, the account ID for the other proxy rules, and `proxy` for
@@ -100,8 +103,8 @@ Any status other than 2xx has this body:
 {"error": {"code": "invalid_param", "field": "url", "message": "Use an https:// URL for the source."}}
 ```
 
-`message` is plain text that says how to fix the problem, and the plugin shows it as is. `field`
-is set when one request field caused the error.
+`message` is plain text that says how to fix the problem. For sign-in, the plugin uses fixed
+copy based on state and error code. `field` is set when one request field caused the error.
 
 | Status | `code` | Meaning |
 | --- | --- | --- |
@@ -518,7 +521,7 @@ Content-Type: application/json
     `"replayed": true`, and nothing is applied twice.
   - The same key with anything else returns `409 idempotency_mismatch`.
   - The plugin stores the key in a receipt before it sends, and reuses it only to reconcile an
-    attempt whose outcome it doesn't know.
+    attempt whose outcome it doesn't know, for up to 30 days and only for the same hub.
 - **Deadline.** The hub answers within 8 seconds. If the push isn't done by then, it answers
   `202` with `state: "working"`, and the receipt route reports the outcome.
 - **Locking.** Actions are serialized on the repository. A request that can't get the lock within

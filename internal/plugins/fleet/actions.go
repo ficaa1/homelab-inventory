@@ -185,7 +185,7 @@ func (p *Fleet) reserve(a plugin.ActionSpec, params plugin.Config) (path, key st
 	if err != nil {
 		return "", "", err
 	}
-	hash := sha256.Sum256(append([]byte(a.ID+"\x00"), canonical...))
+	hash := sha256.Sum256(append([]byte(p.base+"\x00"+a.ID+"\x00"), canonical...))
 	dir := filepath.Join(p.host.CacheDir(), "receipts")
 	if err = os.MkdirAll(dir, 0700); err != nil {
 		return "", "", err
@@ -198,7 +198,7 @@ func (p *Fleet) reserve(a plugin.ActionSpec, params plugin.Config) (path, key st
 		if json.Unmarshal(data, &saved) != nil || saved.Created.IsZero() || saved.Key == "" {
 			return "", "", errors.New("Cannot read the pending fleet receipt.")
 		}
-		if now.Sub(saved.Created) < 24*time.Hour {
+		if now.Sub(saved.Created) < 30*24*time.Hour {
 			return path, saved.Key, nil
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -217,12 +217,41 @@ func (p *Fleet) reserve(a plugin.ActionSpec, params plugin.Config) (path, key st
 type receiptResponse struct {
 	envelope
 	Receipt *struct {
-		Reauth                 *reauthReceipt
-		Summary, Commit, State string
-		Hosts                  []struct{ Host, State string }
-		Force                  *struct{ State string }
-		Error                  *struct{ Message string }
+		Reauth                             *reauthReceipt
+		ID, Action, Summary, Commit, State string
+		Hosts                              []struct{ Host, State string }
+		Force                              *struct{ State string }
+		Error                              *hubProblem
 	}
+}
+
+func definitiveActionError(code string) bool {
+	switch code {
+	case "bad_request", "unauthorized", "forbidden", "not_found", "conflict", "not_editable",
+		"idempotency_mismatch", "too_large", "invalid_param", "rate_limited", "busy":
+		return true
+	}
+	return false
+}
+
+func (r receiptResponse) valid(action string) bool {
+	if r.Receipt == nil || strings.TrimSpace(r.Receipt.ID) == "" || r.Receipt.Action != action {
+		return false
+	}
+	switch r.Receipt.State {
+	case "failed":
+		return r.Receipt.Error != nil && r.Receipt.Error.Code != ""
+	case "done", "working":
+		return strings.TrimSpace(r.Receipt.Summary) != ""
+	}
+	return false
+}
+
+func releaseReceipt(path string) error {
+	if err := os.Remove(path); err != nil {
+		return errors.New("The hub answered. Check the current state and the fleet plugin cache permissions.")
+	}
+	return nil
 }
 
 func (p *Fleet) Action(ctx context.Context, id string, in plugin.Config) (plugin.View, error) {
@@ -278,77 +307,93 @@ func (p *Fleet) Action(ctx context.Context, id string, in plugin.Config) (plugin
 		return v, errors.New("Fleet hub unavailable. Check the hub, then retry to reconcile this change.")
 	}
 	defer resp.Body.Close()
-	status := resp.StatusCode
-	if status/100 == 2 || status/100 == 4 {
-		// A timeout can arrive after the headers. Keep the key until the reply has arrived.
-		const maxReply = 4 << 20
-		body, err := io.ReadAll(io.LimitReader(resp.Body, maxReply+1))
-		if err != nil {
-			return v, errors.New("The hub reply was interrupted. Check the hub, then retry to reconcile this change.")
-		}
-		if err = os.Remove(path); err != nil {
-			return v, errors.New("The hub answered. Check the current state and the fleet plugin cache permissions.")
-		}
-		if len(body) > maxReply {
-			return v, errResponse
-		}
-		resp.Body = io.NopCloser(bytes.NewReader(body))
+	// A timeout can arrive after the headers. Keep the key until the full reply has arrived.
+	const maxReply = 4 << 20
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxReply+1))
+	if err != nil {
+		return v, errors.New("The hub reply was interrupted. Check the hub, then retry to reconcile this change.")
 	}
-	var response receiptResponse
-	scrub := func(text string) string { return text }
-	if secret, _ := params["redirect_url"].(string); secret != "" {
-		// Treat even a broken upstream echo as private, including the code in a callback query.
-		private := []string{secret}
-		if u, err := url.Parse(secret); err == nil {
-			for _, values := range u.Query() {
-				private = append(private, values...)
-			}
-			private = append(private, u.Fragment)
-		}
-		scrub = func(text string) string {
-			for _, s := range private {
-				if s != "" {
-					text = strings.ReplaceAll(text, s, "[redacted]")
-				}
-			}
-			return text
-		}
-	}
-	if err = p.decode(resp, p.operatorToken, &response, scrub); err != nil {
-		return v, err
-	}
-	r := response.Receipt
-	if r == nil {
+	if len(body) > maxReply {
 		return v, errResponse
 	}
+	reply := &http.Response{StatusCode: resp.StatusCode, Body: io.NopCloser(bytes.NewReader(body))}
+	var response receiptResponse
+	finish := id == "proxy_reauth_finish"
+	if err = p.decode(reply, p.operatorToken, &response, finish); err != nil {
+		var failure *hubError
+		if errors.As(err, &failure) {
+			if definitiveActionError(failure.code) {
+				if removeErr := releaseReceipt(path); removeErr != nil {
+					return v, removeErr
+				}
+			}
+			if finish {
+				if failure.status == http.StatusUnprocessableEntity && failure.field == "redirect_url" {
+					return v, badField("redirect_url", redirectAddressHelp)
+				}
+			} else if failure.status/100 == 4 && failure.field != "" {
+				return v, badField(failure.field, failure.message)
+			}
+		}
+		return v, err
+	}
+	if !response.valid(id) {
+		return v, errResponse
+	}
+	r := response.Receipt
+	if id == "proxy_reauth_start" && r.State != "failed" {
+		v, err = p.signInStarted(response, accountLabel)
+		if err != nil {
+			return v, err
+		}
+	}
+	if err = releaseReceipt(path); err != nil {
+		return plugin.View{}, err
+	}
 	if r.State == "failed" {
-		if r.Error != nil && r.Error.Message != "" {
-			return v, errors.New(p.clean(scrub(r.Error.Message), 400))
+		if finish {
+			if r.Error.Code == "invalid_param" && r.Error.Field == "redirect_url" {
+				return v, badField("redirect_url", redirectAddressHelp)
+			}
+			return v, errors.New(signInError(r.Error.Code))
+		}
+		if r.Error.Message != "" {
+			return v, errors.New(p.clean(r.Error.Message, 400))
 		}
 		return v, errors.New("The hub could not apply the change.")
 	}
-	if r.Summary == "" {
-		return v, errResponse
-	}
 	if id == "proxy_reauth_start" {
-		return p.signInStarted(response, accountLabel)
+		return v, nil
 	}
-	v = plugin.View{UpdatedAt: response.Generated, Title: p.clean(scrub(r.Summary), 400)}
-	if status == http.StatusAccepted {
+	v = plugin.View{UpdatedAt: response.Generated}
+	if finish {
+		v.Title, _ = signInCopy("ok")
+	} else {
+		v.Title = p.clean(r.Summary, 400)
+	}
+	if r.State == "working" {
+		if finish {
+			v.Title, _ = signInCopy("working")
+		}
 		v.Title = "Working: " + v.Title
+		v.Blocks = []plugin.Block{notice("info", "Still working. The result shows here when it lands.")}
+		return v, nil
+	}
+	if finish {
+		return v, nil
 	}
 	detail := "Applied"
 	var pending []string
 	for _, h := range r.Hosts {
 		if h.State == "pending" {
-			pending = append(pending, p.word(scrub(h.Host)))
+			pending = append(pending, p.word(h.Host))
 		}
 	}
 	if len(pending) > 0 {
 		detail = "Pending on " + strings.Join(pending, ", ")
 	}
 	if r.Commit != "" {
-		runes := []rune(p.word(scrub(r.Commit)))
+		runes := []rune(p.word(r.Commit))
 		detail = join(detail, "Commit "+string(runes[:min(7, len(runes))]))
 	}
 	if id == "force_file" && r.Force != nil {

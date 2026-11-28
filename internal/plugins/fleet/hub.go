@@ -21,6 +21,7 @@ import (
 type Fleet struct {
 	host                                     plugin.Host
 	base, readToken, operatorToken, panelURL string
+	proxyAlerts                              []plugin.Alert
 }
 
 func (*Fleet) Manifest() plugin.Manifest {
@@ -77,12 +78,16 @@ func (p *Fleet) Configure(c plugin.Config) error {
 			return badField("proxy_panel_url", "Enter an http:// or https:// panel URL without credentials.")
 		}
 	}
+	if p.base != base {
+		p.proxyAlerts = nil
+	}
 	p.panelURL = panel
 	p.base, p.readToken, p.operatorToken = base, read, operator
 	return nil
 }
 
 func (p *Fleet) Close() error {
+	p.proxyAlerts = nil
 	p.base, p.readToken, p.operatorToken, p.panelURL = "", "", "", ""
 	return nil
 }
@@ -120,8 +125,8 @@ type envelope struct {
 func (e envelope) header() envelope { return e }
 
 type hubError struct {
-	status  int
-	message string
+	status               int
+	code, field, message string
 }
 
 func (e *hubError) Error() string { return e.message }
@@ -143,36 +148,35 @@ func (p *Fleet) get(ctx context.Context, path, token string, out interface{ head
 		return errors.New("Fleet hub unavailable. Check hub_url and that the hub is running.")
 	}
 	defer resp.Body.Close()
-	return p.decode(resp, token, out, nil)
+	return p.decode(resp, token, out, strings.HasPrefix(path, "proxy/sign-in/"))
 }
 
-func (p *Fleet) decode(resp *http.Response, token string, out interface{ header() envelope }, scrub func(string) string) error {
+type hubProblem struct{ Code, Field, Message string }
+
+func (p *Fleet) decode(resp *http.Response, token string, out interface{ header() envelope }, private bool) error {
 	dec := json.NewDecoder(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		message := fmt.Sprintf("Fleet hub returned HTTP %d. Check the hub and try again.", resp.StatusCode)
-		if resp.StatusCode == http.StatusUnauthorized {
-			message = "The hub rejected the read token. Check it in Admin → Plugins."
-			if token == p.operatorToken && token != p.readToken {
-				message = "The hub rejected the operator token. Check it in Admin → Plugins."
-			}
-		} else {
-			var body struct {
-				Error struct{ Message, Field string }
-			}
-			if dec.Decode(&body) == nil {
-				if scrub != nil {
-					body.Error.Message = scrub(body.Error.Message)
-					body.Error.Field = p.clean(scrub(body.Error.Field), 40)
-				}
-				if s := strings.TrimSpace(p.clean(queryText.ReplaceAllString(body.Error.Message, ""), 400)); s != "" {
-					message = s
-					if resp.StatusCode/100 == 4 && token == p.operatorToken && scrub != nil && body.Error.Field != "" {
-						return badField(body.Error.Field, message)
-					}
+		failure := &hubError{status: resp.StatusCode, message: fmt.Sprintf("Fleet hub returned HTTP %d. Check the hub and try again.", resp.StatusCode)}
+		var body struct{ Error hubProblem }
+		if dec.Decode(&body) == nil && dec.Decode(new(any)) == io.EOF {
+			failure.code, failure.field = body.Error.Code, body.Error.Field
+			if !private {
+				failure.field = p.clean(failure.field, 40)
+				if message := strings.TrimSpace(p.clean(queryText.ReplaceAllString(body.Error.Message, ""), 400)); message != "" {
+					failure.message = message
 				}
 			}
 		}
-		return &hubError{resp.StatusCode, message}
+		if resp.StatusCode == http.StatusUnauthorized {
+			failure.field = ""
+			failure.message = "The hub rejected the read token. Check it in Admin → Plugins."
+			if token == p.operatorToken && token != p.readToken {
+				failure.message = "The hub rejected the operator token. Check it in Admin → Plugins."
+			}
+		} else if private {
+			failure.message = signInError(failure.code)
+		}
+		return failure
 	}
 	if dec.Decode(out) != nil || dec.Decode(new(any)) != io.EOF {
 		return errResponse

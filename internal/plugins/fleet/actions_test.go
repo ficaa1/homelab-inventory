@@ -54,7 +54,9 @@ func actionHub(t *testing.T, handler http.HandlerFunc) (*Fleet, *actionTestHost)
 	return p, h
 }
 
-const doneReceipt = `{"api_version":1,"generated_at":"2026-12-01T09:16:02Z","receipt":{"state":"done","summary":"<Saved>","commit":"0123456789","hosts":[{"host":"host-a","state":"pending"}],"force":{"state":"queued"}}}`
+const receiptFixture = `{"api_version":1,"generated_at":"2026-12-01T09:16:02Z","receipt":{"id":"rcp_fixture","action":%q,"state":"done","summary":"<Saved>","commit":"0123456789","hosts":[{"host":"host-a","state":"pending"}],"force":{"state":"queued"}}}`
+
+func doneReceipt(action string) string { return fmt.Sprintf(receiptFixture, action) }
 
 type requestCase struct {
 	id   string
@@ -74,7 +76,7 @@ func checkRequests(t *testing.T, cases []requestCase) {
 				if json.NewDecoder(r.Body).Decode(&got) != nil || json.Unmarshal([]byte(tc.want), &want) != nil || !reflect.DeepEqual(got, map[string]any{"params": want}) {
 					t.Error("wrong action body")
 				}
-				fmt.Fprint(w, doneReceipt)
+				fmt.Fprint(w, doneReceipt(strings.TrimPrefix(r.URL.Path, "/v1/actions/")))
 			})
 			v, err := p.Action(t.Context(), tc.id, tc.in)
 			if err != nil {
@@ -133,6 +135,40 @@ func TestFleetActionInstances(t *testing.T) {
 	}
 }
 
+func hostWithOverwrites(t *testing.T) []byte {
+	t.Helper()
+	var data map[string]any
+	if err := json.Unmarshal(fixture(t, "host-a"), &data); err != nil {
+		t.Fatal(err)
+	}
+	var items []any
+	for i := 1; i <= 20; i++ {
+		path := fmt.Sprintf("skills/demo-%02d/SKILL.md", i)
+		items = append(items, map[string]any{"id": "claude:" + path, "harness": "claude", "kind": "skill",
+			"path": path, "state": "refused", "live_sha256": "example-live-hash", "forceable": true})
+	}
+	data["report"].(map[string]any)["items"] = items
+	raw, err := json.Marshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func TestFleetHostOffersTwentyOverwrites(t *testing.T) {
+	data := hostWithOverwrites(t)
+	p, _ := actionHub(t, func(w http.ResponseWriter, r *http.Request) { w.Write(data) })
+	v := checkedView(t, p, "host", url.Values{"name": {"host-a"}})
+	if len(v.Actions) != 20 {
+		t.Fatal("wrong number of host actions", len(v.Actions))
+	}
+	for i, a := range v.Actions {
+		if a.ID != "force_file" || !a.Destructive || a.Label != fmt.Sprintf("Overwrite skills/demo-%02d/SKILL.md", i+1) {
+			t.Fatal("wrong overwrite action or order")
+		}
+	}
+}
+
 func TestActionReconcilesTimeout(t *testing.T) {
 	keys := make(chan string, 4)
 	release := make(chan struct{})
@@ -147,7 +183,7 @@ func TestActionReconcilesTimeout(t *testing.T) {
 			case <-time.After(time.Millisecond * 150):
 			}
 		}
-		fmt.Fprint(w, doneReceipt)
+		fmt.Fprint(w, doneReceipt(strings.TrimPrefix(r.URL.Path, "/v1/actions/")))
 	})
 	ctx, cancel := context.WithTimeout(t.Context(), 75*time.Millisecond)
 	defer cancel()
@@ -200,45 +236,127 @@ func TestActionLocalValidation(t *testing.T) {
 	}
 }
 
-func TestReceiptLifetimeAndDefinitiveErrors(t *testing.T) {
-	status := 503
-	keys := make(chan string, 4)
-	p, h := actionHub(t, func(w http.ResponseWriter, r *http.Request) {
-		keys <- r.Header.Get("Idempotency-Key")
-		w.WriteHeader(status)
-		fmt.Fprint(w, `{"error":{"message":"Check <source>","field":"source"}}`)
-	})
+func TestReceiptLifetimeAndHubScope(t *testing.T) {
+	p, h := actionHub(t, func(http.ResponseWriter, *http.Request) { t.Error("reservation made a hub request") })
+	spec := action("remove_source", "", false)
 	values := plugin.Config{"source": "example-skills"}
-	_, err := p.Action(t.Context(), "remove_source", values)
-	if err == nil || err.Error() != "Check source" {
-		t.Fatal("missing sanitized hub error")
+	reserve := func() (string, string) {
+		t.Helper()
+		path, key, err := p.reserve(spec, values)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return path, key
 	}
-	first := <-keys
-	dir := filepath.Join(h.dir, "receipts")
-	files, err := os.ReadDir(dir)
-	if err != nil || len(files) != 1 {
-		t.Fatal("missing receipt after 503")
+	configure := func(base string) {
+		t.Helper()
+		if err := p.Configure(plugin.Config{"hub_url": base, "read_token": readToken, "operator_token": operatorToken}); err != nil {
+			t.Fatal(err)
+		}
 	}
-	expired, err := json.Marshal(pendingReceipt{first, h.Now().Add(-24 * time.Hour)})
-	if err != nil {
-		t.Fatal(err)
+	base := p.base
+	path, key := reserve()
+	backdate := func(age time.Duration) {
+		t.Helper()
+		data, err := json.Marshal(pendingReceipt{key, h.Now().Add(-age)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err = os.WriteFile(filepath.Join(dir, files[0].Name()), expired, 0600); err != nil {
-		t.Fatal(err)
+	backdate(30*24*time.Hour - time.Second)
+	configure(base + "/")
+	if normalized, reused := reserve(); normalized != path || reused != key {
+		t.Fatal("expected reuse on the same hub within 30 days")
 	}
-	status = 422
-	_, err = p.Action(t.Context(), "remove_source", values)
-	var field *plugin.FieldError
-	if !errors.As(err, &field) || field.Key != "source" || <-keys == first {
-		t.Fatal("expected field error and fresh key after 24 hours")
+	configure("https://another-hub.example.com")
+	if other, otherKey := reserve(); other == path || otherKey == key {
+		t.Fatal("different hub reused the pending reservation")
 	}
-	files, err = os.ReadDir(dir)
-	if err != nil || len(files) != 0 {
-		t.Fatal("receipt retained after 422")
+	configure(base)
+	backdate(30 * 24 * time.Hour)
+	if same, fresh := reserve(); same != path || fresh == key {
+		t.Fatal("expired reservation was reused")
 	}
-	status = 401
-	_, err = p.Action(t.Context(), "remove_source", values)
-	if err == nil || err.Error() != "The hub rejected the operator token. Check it in Admin → Plugins." {
-		t.Fatal("wrong unauthorized message")
+}
+
+func TestActionKeepsReservationUntilDefinitiveReply(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		status   int
+		body     string
+		released bool
+	}{
+		{"valid receipt", 200, doneReceipt("remove_source"), true},
+		{"empty 2xx", 204, "", false},
+		{"garbage 2xx", 200, "broken", false},
+		{"interrupted 2xx", 200, doneReceipt("remove_source"), false},
+		{"trailing data", 200, doneReceipt("remove_source") + "{}", false},
+		{"oversized 2xx", 200, doneReceipt("remove_source") + strings.Repeat(" ", 4<<20), false},
+		{"wrong envelope", 200, strings.Replace(doneReceipt("remove_source"), "api_version", "version", 1), false},
+		{"no timestamp", 200, strings.Replace(doneReceipt("remove_source"), "generated_at", "time", 1), false},
+		{"missing receipt", 200, `{"api_version":1,"generated_at":"2026-12-01T09:16:02Z"}`, false},
+		{"missing identity", 200, strings.Replace(doneReceipt("remove_source"), "rcp_fixture", "", 1), false},
+		{"wrong action", 200, doneReceipt("force_file"), false},
+		{"unknown state", 200, strings.Replace(doneReceipt("remove_source"), "done", "unknown", 1), false},
+		{"missing summary", 200, strings.Replace(doneReceipt("remove_source"), "<Saved>", "", 1), false},
+		{"missing failure code", 200, strings.Replace(doneReceipt("remove_source"), "done", "failed", 1), false},
+		{"valid failure receipt", 200, strings.Replace(doneReceipt("remove_source"), `"state":"done"`, `"state":"failed","error":{"code":"conflict"}`, 1), true},
+		{"undocumented 422", 422, `{"error":{"message":"Check the source"}}`, false},
+		{"unusable 503", 503, "broken", false},
+		{"unknown 500", 500, `{"error":{"code":"unknown"}}`, false},
+		{"upstream failure", 502, `{"error":{"code":"upstream_failed"}}`, false},
+		{"bad_request", 400, `{"error":{"code":"bad_request"}}`, true},
+		{"unauthorized", 401, `{"error":{"code":"unauthorized"}}`, true},
+		{"forbidden", 403, `{"error":{"code":"forbidden"}}`, true},
+		{"not_found", 404, `{"error":{"code":"not_found"}}`, true},
+		{"conflict", 409, `{"error":{"code":"conflict"}}`, true},
+		{"not_editable", 409, `{"error":{"code":"not_editable"}}`, true},
+		{"idempotency_mismatch", 409, `{"error":{"code":"idempotency_mismatch"}}`, true},
+		{"too_large", 413, `{"error":{"code":"too_large"}}`, true},
+		{"invalid_param", 422, `{"error":{"code":"invalid_param","message":"Check <source>","field":"source"}}`, true},
+		{"rate_limited", 429, `{"error":{"code":"rate_limited"}}`, true},
+		{"busy", 503, `{"error":{"code":"busy"}}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, h := actionHub(t, func(w http.ResponseWriter, r *http.Request) {
+				if tc.name == "interrupted 2xx" {
+					w.Header().Set("Content-Length", fmt.Sprint(len(tc.body)+1))
+				}
+				w.WriteHeader(tc.status)
+				fmt.Fprint(w, tc.body)
+			})
+			_, err := p.Action(t.Context(), "remove_source", plugin.Config{"source": "example-skills"})
+			if tc.name == "invalid_param" {
+				var field *plugin.FieldError
+				if !errors.As(err, &field) || field.Key != "source" || field.Message != "Check source" {
+					t.Fatal("expected a sanitized field error")
+				}
+			}
+			if tc.name == "unauthorized" && (err == nil || err.Error() != "The hub rejected the operator token. Check it in Admin → Plugins.") {
+				t.Fatal("wrong unauthorized message")
+			}
+			files, readErr := os.ReadDir(filepath.Join(h.dir, "receipts"))
+			if readErr != nil || (len(files) == 0) != tc.released {
+				t.Fatal("wrong reservation state after reply", len(files), readErr)
+			}
+		})
+	}
+}
+
+func TestActionWorkingReceiptOnAcceptedAndReplay(t *testing.T) {
+	for _, status := range []int{http.StatusAccepted, http.StatusOK} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			p, _ := actionHub(t, func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(status)
+				fmt.Fprint(w, strings.Replace(doneReceipt("proxy_refresh_account"), "done", "working", 1))
+			})
+			v, err := p.Action(t.Context(), "proxy_refresh_account", plugin.Config{"account": "acc_a"})
+			if err != nil || v.Title != "Working: Saved" || len(v.Blocks) != 1 || v.Blocks[0].Text != "Still working. The result shows here when it lands." {
+				t.Fatal("working receipt was not shown as pending")
+			}
+		})
 	}
 }

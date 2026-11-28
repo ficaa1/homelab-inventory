@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -97,6 +99,7 @@ func TestProxyViews(t *testing.T) {
 		t.Fatal("unknown status tone")
 	}
 	assertText(t, v, "another_strategy", "another_state")
+	accounts := data["accounts"].([]any)
 	data["accounts"] = nil
 	data["routing"] = nil
 	v = checkedView(t, p, "proxy", nil)
@@ -104,10 +107,31 @@ func TestProxyViews(t *testing.T) {
 	for state, word := range map[string]string{"not_configured": "Proxy not set up", "unreachable": "Proxy unreachable", "key_rejected": "Management key rejected", "another_state": "another_state"} {
 		data["proxy"] = map[string]any{"state": state, "message": "Check <connection>"}
 		v = checkedView(t, p, "proxy", nil)
-		if v.Blocks[0].Tone != "warn" || v.Blocks[0].Text != word+" · Check connection" {
+		tone := "warn"
+		if state == "another_state" {
+			tone = "muted"
+		}
+		if v.Blocks[0].Tone != tone || v.Blocks[0].Text != word+" · Check connection" {
 			t.Fatal("incorrect proxy notice", state)
 		}
 	}
+	account := accounts[0].(map[string]any)
+	data["accounts"] = accounts
+	data["proxy"] = map[string]any{"state": "ok"}
+	for renewal, word := range map[string]string{"ok": "OK", "renewing": "Renewing", "failed": "Failed", "unknown": "Unknown", "future": "Unknown"} {
+		account["renewal"] = renewal
+		v = checkedView(t, p, "account", url.Values{"id": {"acc_a"}})
+		found := false
+		for _, item := range v.Blocks[0].Items {
+			if item.Label == "Access renewal" && item.Value == word {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatal("missing renewal state", renewal)
+		}
+	}
+
 }
 
 func TestProxyRequests(t *testing.T) {
@@ -129,10 +153,12 @@ func TestProxyRequests(t *testing.T) {
 func TestProxySignInFlow(t *testing.T) {
 	const callback = "http://localhost:1455/complete?code=private-fixture-code"
 	const session = "ras_a"
-	var key, signURL string
-	signURL = "https://signin.example.com/start?session=public-fixture"
-	status := http.StatusServiceUnavailable
-	state := "waiting"
+	const encodedCode = "%70rivate-fixture-code"
+	echo := strings.Join([]string{callback, url.QueryEscape(callback), encodedCode}, " ")
+	var key string
+	signURL := "https://signin.example.com/start?session=public-fixture&state=kept%2Bvalue"
+	status, viewStatus := http.StatusServiceUnavailable, http.StatusOK
+	state, code, receiptState := "waiting", "upstream_failed", "working"
 	p, h := actionHub(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/proxy/accounts/acc_a":
@@ -142,9 +168,14 @@ func TestProxySignInFlow(t *testing.T) {
 			if json.NewDecoder(r.Body).Decode(&body) != nil || len(body.Params) != 1 || body.Params["account"] != "acc_a" {
 				t.Error("wrong start body")
 			}
-			fmt.Fprintf(w, `{"api_version":1,"generated_at":"2026-12-01T09:15:00Z","receipt":{"summary":"Session started","reauth":{"session":"ras_a","url":%q,"redirect_hint":"localhost:1455","expires_at":"2026-12-01T09:20:00Z"}}}`, signURL)
+			fmt.Fprintf(w, `{"api_version":1,"generated_at":"2026-12-01T09:15:00Z","receipt":{"id":"rcp_start","action":"proxy_reauth_start","state":"done","summary":"Session started","reauth":{"session":"ras_a","url":%q,"redirect_hint":"localhost:1455","expires_at":"2026-12-01T09:20:00Z"}}}`, signURL)
 		case "/v1/proxy/sign-in/ras_a":
-			fmt.Fprintf(w, `{"api_version":1,"generated_at":"2026-12-01T09:15:00Z","session":"ras_a","account":"acc_a","state":%q,"expires_at":"2026-12-01T09:20:00Z"}`, state)
+			w.WriteHeader(viewStatus)
+			if viewStatus != http.StatusOK {
+				fmt.Fprintf(w, `{"error":{"code":"not_found","message":%q}}`, echo)
+				return
+			}
+			fmt.Fprintf(w, `{"api_version":1,"generated_at":"2026-12-01T09:15:00Z","session":"ras_a","account":"acc_a","state":%q,"message":%q,"expires_at":"2026-12-01T09:20:00Z"}`, state, echo)
 		case "/v1/actions/proxy_reauth_finish":
 			var body struct{ Params map[string]string }
 			if json.NewDecoder(r.Body).Decode(&body) != nil || len(body.Params) != 2 || body.Params["redirect_url"] != callback || body.Params["session"] != session {
@@ -155,19 +186,21 @@ func TestProxySignInFlow(t *testing.T) {
 			}
 			key = r.Header.Get("Idempotency-Key")
 			w.WriteHeader(status)
-			if status != 202 {
-				fmt.Fprintf(w, `{"error":{"field":"redirect_url","message":%q}}`, "Retry "+callback)
+			if status >= 400 {
+				fmt.Fprintf(w, `{"error":{"code":%q,"field":"redirect_url","message":%q}}`, code, echo)
 				return
 			}
-			fmt.Fprintf(w, `{"api_version":1,"generated_at":"2026-12-01T09:16:00Z","receipt":{"summary":%q,"state":"working","hosts":[]}}`, "Finishing "+callback)
+			fmt.Fprintf(w, `{"api_version":1,"generated_at":"2026-12-01T09:16:00Z","receipt":{"id":"rcp_finish","action":"proxy_reauth_finish","summary":%q,"state":%q,"error":{"code":"conflict","message":%q},"commit":%q,"hosts":[{"host":%q,"state":"pending"}]}}`, echo, receiptState, echo, echo, echo)
 		default:
 			t.Error("unknown sign-in route")
 		}
 	})
 	private := func(raw []byte) {
 		t.Helper()
-		if bytes.Contains(raw, []byte(callback)) || bytes.Contains(raw, []byte("private-fixture-code")) {
-			t.Fatal("sign-in credential disclosed")
+		for _, fragment := range []string{callback, url.QueryEscape(callback), "private-fixture-code", encodedCode} {
+			if bytes.Contains(raw, []byte(fragment)) {
+				t.Fatal("sign-in credential disclosed")
+			}
 		}
 	}
 	check := func(v plugin.View) {
@@ -187,10 +220,17 @@ func TestProxySignInFlow(t *testing.T) {
 		t.Fatal("missing sign-in links")
 	}
 	assertText(t, v, "localhost:1455", "2026-12-01T09:20:00Z")
-	for _, s := range []string{"waiting", "working", "ok", "error", "expired", "future"} {
+	for s, text := range map[string]string{
+		"waiting": "Waiting for the address from the sign-in page.", "working": "Checking the sign-in.",
+		"ok": "Signed in. The account is usable again.", "error": "The sign-in failed. Start again with Sign in again.",
+		"expired": "This sign-in expired after 5 minutes. Start again with Sign in again.", "future": "The sign-in state is unknown.",
+	} {
 		state = s
 		v = checkedView(t, p, "sign-in", url.Values{"session": {session}})
 		check(v)
+		if v.Blocks[1].Text != text {
+			t.Fatal("wrong sign-in status copy", s)
+		}
 		if (v.RefreshSeconds == 5) != (s == "waiting" || s == "working") || (len(v.Actions) > 0) != (s == "waiting") || v.Blocks[2].Items[0].Link.Params["id"] != "acc_a" {
 			t.Fatal("wrong session controls", s)
 		}
@@ -198,6 +238,12 @@ func TestProxySignInFlow(t *testing.T) {
 			t.Fatal("wrong finish form")
 		}
 	}
+	viewStatus = http.StatusNotFound
+	_, err = p.View(t.Context(), "sign-in", url.Values{"session": {session}})
+	if err == nil {
+		t.Fatal("missing sign-in view error")
+	}
+	private([]byte(err.Error()))
 	values := plugin.Config{"session": session, "redirect_url": callback}
 	_, err = p.Action(t.Context(), "proxy_reauth_finish", values)
 	if err == nil {
@@ -205,7 +251,7 @@ func TestProxySignInFlow(t *testing.T) {
 	}
 	private([]byte(err.Error()))
 	files, err := os.ReadDir(filepath.Join(h.dir, "receipts"))
-	want := sha256.Sum256([]byte("proxy_reauth_finish\x00" + `{"session":"ras_a"}`))
+	want := sha256.Sum256([]byte(p.base + "\x00proxy_reauth_finish\x00" + `{"session":"ras_a"}`))
 	if err != nil || len(files) != 1 || files[0].Name() != fmt.Sprintf("%x", want) {
 		t.Fatal("unexpected pending receipt")
 	}
@@ -220,30 +266,78 @@ func TestProxySignInFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	status = 202
+	status, code = 422, "invalid_param"
+	_, err = p.Action(t.Context(), "proxy_reauth_finish", values)
+	var field *plugin.FieldError
+	if !errors.As(err, &field) || field.Key != "redirect_url" || field.Message != redirectAddressHelp {
+		t.Fatal("missing fixed redirect address help")
+	}
+	private([]byte(err.Error()))
+	for _, status = range []int{202, 200} {
+		key = ""
+		v, err = p.Action(t.Context(), "proxy_reauth_finish", values)
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(v)
+		if v.Title != "Working: Checking the sign-in." || v.Blocks[0].Text != "Still working. The result shows here when it lands." {
+			t.Fatal("missing pending copy")
+		}
+	}
+	receiptState, key = "done", ""
 	v, err = p.Action(t.Context(), "proxy_reauth_finish", values)
-	if err != nil {
-		t.Fatal(err)
+	if err != nil || v.Title != "Signed in. The account is usable again." {
+		t.Fatal("missing success copy")
 	}
 	check(v)
-	if !strings.HasPrefix(v.Title, "Working: ") {
-		t.Fatal("missing pending title")
+	receiptState, key = "failed", ""
+	_, err = p.Action(t.Context(), "proxy_reauth_finish", values)
+	if err == nil {
+		t.Fatal("missing failed receipt error")
 	}
+	private([]byte(err.Error()))
 	files, err = os.ReadDir(filepath.Join(h.dir, "receipts"))
 	if err != nil || len(files) != 0 {
-		t.Fatal("completed receipt retained")
+		t.Fatal("validated receipt retained")
 	}
 	private(h.logs.Bytes())
-	signURL = "javascript:alert(1)"
-	if _, err = p.Action(t.Context(), "proxy_reauth_start", plugin.Config{"account": "acc_a"}); err == nil {
-		t.Fatal("unsafe sign-in link")
+	for _, unsafe := range unsafeFleetLinks() {
+		signURL = unsafe
+		if _, err = p.Action(t.Context(), "proxy_reauth_start", plugin.Config{"account": "acc_a"}); err == nil {
+			t.Fatal("unsafe sign-in link")
+		}
 	}
+	viewStatus = http.StatusOK
 	p.operatorToken = ""
 	state = "waiting"
 	if len(checkedView(t, p, "sign-in", url.Values{"session": {session}}).Actions) > 0 {
 		t.Fatal("read-only session offers writes")
 	}
 }
+func unsafeFleetLinks() []string {
+	encoded := func(token string) string { return fmt.Sprintf("%%%02X%s", token[0], token[1:]) }
+	return []string{
+		"javascript:alert(1)", "https://user:password@example.com/", "https://example.com/" + encoded(readToken),
+		"https://example.com/?" + encoded(operatorToken) + "=fixture",
+		"https://example.com/?fixture=" + encoded(readToken), "https://example.com/#" + encoded(operatorToken),
+	}
+}
+
+func TestProxyPanelURLChecksDecodedTokens(t *testing.T) {
+	p := &Fleet{}
+	for _, unsafe := range unsafeFleetLinks() {
+		var field *plugin.FieldError
+		err := p.Configure(plugin.Config{"read_token": readToken, "operator_token": operatorToken, "proxy_panel_url": unsafe})
+		if !errors.As(err, &field) || field.Key != "proxy_panel_url" {
+			t.Fatal("unsafe panel link")
+		}
+	}
+	const good = "https://example.com/p%61nel?q=public%2Btest#test"
+	if err := p.Configure(plugin.Config{"read_token": readToken, "operator_token": operatorToken, "proxy_panel_url": good}); err != nil || p.panelURL != good {
+		t.Fatal("valid panel URL changed")
+	}
+}
+
 func TestProxyAlerts(t *testing.T) {
 	data := proxyData(t)
 	overview := fixture(t, "overview")
@@ -281,28 +375,56 @@ func TestProxyAlerts(t *testing.T) {
 			t.Fatal("wrong proxy alert count", count)
 		}
 	}
-	check(map[string]string{"proxy_renewal/acc_a": "warning", "proxy_sign_in/acc_c": "warning", "proxy_cooling/provider-a": "critical"})
-	a := data["accounts"].([]any)[1].(map[string]any)
-	a["disabled"] = false
-	a["status"] = "active"
-	data["accounts"].([]any)[0].(map[string]any)["access_expires_at"] = "2026-12-02T09:15:01Z"
-	check(map[string]string{"proxy_sign_in/acc_c": "warning"})
-	data["truncated"] = true
-	if _, err := p.Alerts(t.Context()); err == nil {
-		t.Fatal("truncated account list resolved alerts")
-	}
-	for _, state := range []string{"unreachable", "key_rejected", "not_configured"} {
+	complete := map[string]string{"proxy_renewal/acc_a": "warning", "proxy_sign_in/acc_c": "warning", "proxy_cooling/provider-a": "critical"}
+	check(complete)
+	outage := maps.Clone(complete)
+	outage["proxy_unreachable/proxy"] = "warning"
+	accounts := data["accounts"]
+	data["accounts"] = nil
+	check(outage)
+	for _, state := range []string{"unreachable", "key_rejected", "not_configured", "future", ""} {
 		data["proxy"] = map[string]any{"state": state}
-		if state == "not_configured" {
-			check(nil)
-		} else {
-			check(map[string]string{"proxy_unreachable/proxy": "warning"})
-		}
+		check(outage)
 	}
 	status = 404
-	check(nil)
+	check(complete)
 	status = 503
 	if _, err := p.Alerts(t.Context()); err == nil {
 		t.Fatal("upstream failure silently resolved alerts")
 	}
+	status = 200
+	data["proxy"] = map[string]any{"state": "ok"}
+	data["accounts"], data["truncated"] = accounts, true
+	if _, err := p.Alerts(t.Context()); err == nil {
+		t.Fatal("truncated account list resolved alerts")
+	}
+	data["truncated"] = false
+	data["accounts"] = []any{}
+	check(nil)
+	data["accounts"] = accounts
+	check(complete)
+	base := p.base
+	configure := func(base string) {
+		t.Helper()
+		if err := p.Configure(plugin.Config{"hub_url": base, "read_token": readToken, "operator_token": operatorToken}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data["accounts"] = nil
+	configure(base + "/")
+	check(outage)
+	configure(base + "/other-hub")
+	if len(p.proxyAlerts) != 0 {
+		t.Fatal("different hub retained account alerts")
+	}
+	configure(base)
+	check(map[string]string{"proxy_unreachable/proxy": "warning"})
+	data["accounts"] = accounts
+	check(complete)
+	if err := p.Close(); err != nil {
+		t.Fatal(err)
+	}
+	configure(base)
+	data["accounts"] = nil
+	check(map[string]string{"proxy_unreachable/proxy": "warning"})
 }

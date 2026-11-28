@@ -73,23 +73,23 @@ func (p *Fleet) Alerts(ctx context.Context) ([]plugin.Alert, error) {
 	err := p.get(ctx, "proxy", p.readToken, &proxy)
 	var hub *hubError
 	if errors.As(err, &hub) && hub.status == http.StatusNotFound {
-		return alerts, nil
+		return append(alerts, p.proxyAlerts...), nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	if proxy.Proxy.State != "ok" {
-		switch proxy.Proxy.State {
-		case "unreachable", "key_rejected":
-			add("proxy_unreachable", "proxy", "warning", p.proxyNotice(proxy).Text)
-		case "":
-			return nil, errResponse
+	if proxy.Proxy.State != "ok" || proxy.Accounts == nil {
+		text := "Proxy accounts not reported"
+		if proxy.Proxy.State != "ok" {
+			text = p.proxyNotice(proxy).Text
 		}
-		return alerts, nil
+		add("proxy_unreachable", "proxy", "warning", text)
+		return append(alerts, p.proxyAlerts...), nil
 	}
-	if proxy.Truncated || proxy.Accounts == nil {
+	if proxy.Truncated {
 		return nil, errors.New("Proxy alerts need the full account list.")
 	}
+	firstProxyAlert := len(alerts)
 	type group struct{ enabled, cooling int }
 	providers := map[string]group{}
 	for _, a := range proxy.Accounts {
@@ -120,5 +120,6 @@ func (p *Fleet) Alerts(ctx context.Context) ([]plugin.Alert, error) {
 	for _, provider := range cooling {
 		add("proxy_cooling", provider, "critical", "Every enabled "+provider+" account is cooling down")
 	}
+	p.proxyAlerts = append([]plugin.Alert(nil), alerts[firstProxyAlert:]...)
 	return alerts, nil
 }
