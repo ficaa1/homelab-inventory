@@ -50,9 +50,13 @@ func newHub(t *testing.T, tls bool, answer func(http.ResponseWriter, *http.Reque
 		f.calls.Add(1)
 		token := r.Header.Get("Authorization")
 		operator := r.URL.Path == "/v1/meta" && token == "Bearer "+operatorToken
-		if !slices.Contains([]string{"/v1/meta", "/v1/overview", "/v1/hosts", "/v1/hosts/host-a", "/v1/hosts/host-b", "/v1/hosts/host-missing", "/v1/skills", "/v1/trials"}, r.URL.Path) || r.Method != "GET" || (r.URL.Path != "/v1/skills" && r.URL.RawQuery != "") || (!operator && token != "Bearer "+readToken) {
+		if !slices.Contains([]string{"/v1/proxy", "/v1/meta", "/v1/overview", "/v1/hosts", "/v1/hosts/host-a", "/v1/hosts/host-b", "/v1/hosts/host-missing", "/v1/skills", "/v1/trials"}, r.URL.Path) || r.Method != "GET" || (r.URL.Path != "/v1/skills" && r.URL.RawQuery != "") || (!operator && token != "Bearer "+readToken) {
 			t.Error("unexpected hub method, route, query or credential")
 			w.WriteHeader(400)
+			return
+		}
+		if r.URL.Path == "/v1/proxy" {
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		answer(w, r)
@@ -210,7 +214,7 @@ func TestBadParametersStayLocal(t *testing.T) {
 			t.Fatal(v)
 		}
 	}
-	for _, name := range []string{"usage", "proxy", "actions"} {
+	for _, name := range []string{"usage", "actions"} {
 		_, err := h.View(t.Context(), name, nil)
 		if !errors.Is(err, plugin.ErrNotFound) {
 			t.Fatalf("unexpected view %s", name)

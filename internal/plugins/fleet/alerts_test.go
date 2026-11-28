@@ -36,7 +36,7 @@ func TestAlertsFromOverviewPolicy(t *testing.T) {
 				json.NewEncoder(w).Encode(data)
 			})
 			alerts, err := h.Alerts(t.Context())
-			if err != nil || h.calls.Load() != 1 {
+			if err != nil || h.calls.Load() != 2 {
 				t.Fatal("poll failed", err)
 			}
 			assertPrivate(t, alerts)
@@ -124,7 +124,11 @@ func TestPollFailureAndSilence(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newHub(t, false, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(tc.status); w.Write([]byte(tc.body)) })
 			a, err := h.Alerts(t.Context())
-			if (err != nil) != tc.fail || len(a) > 0 || h.calls.Load() != 1 {
+			wantCalls := int32(2)
+			if tc.fail {
+				wantCalls = 1
+			}
+			if (err != nil) != tc.fail || len(a) > 0 || h.calls.Load() != wantCalls {
 				t.Fatal(a, err)
 			}
 			if err != nil {

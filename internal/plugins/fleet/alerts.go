@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/ficaa1/homelab-inventory/internal/plugin"
 )
@@ -65,6 +68,57 @@ func (p *Fleet) Alerts(ctx context.Context) ([]plugin.Alert, error) {
 			}
 			add("trial_due", source, "info", join(source+" trial ended on "+shortDate(t.Ends), decisions))
 		}
+	}
+	var proxy proxyResponse
+	err := p.get(ctx, "proxy", p.readToken, &proxy)
+	var hub *hubError
+	if errors.As(err, &hub) && hub.status == http.StatusNotFound {
+		return alerts, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if proxy.Proxy.State != "ok" {
+		switch proxy.Proxy.State {
+		case "unreachable", "key_rejected":
+			add("proxy_unreachable", "proxy", "warning", p.proxyNotice(proxy).Text)
+		case "":
+			return nil, errResponse
+		}
+		return alerts, nil
+	}
+	if proxy.Truncated || proxy.Accounts == nil {
+		return nil, errors.New("Proxy alerts need the full account list.")
+	}
+	type group struct{ enabled, cooling int }
+	providers := map[string]group{}
+	for _, a := range proxy.Accounts {
+		provider, id := p.word(a.Provider), p.word(a.ID)
+		label := join(p.word(a.Label), provider)
+		if a.needsSignIn() {
+			add("proxy_sign_in", id, "warning", label+" needs sign-in")
+		}
+		if a.Expires != nil && a.Renewal == "failed" && !a.Expires.Before(proxy.Generated) && a.Expires.Sub(proxy.Generated) <= 24*time.Hour {
+			add("proxy_renewal", id, "warning", label+" access expires within 24 hours and renewal failed")
+		}
+		if !a.Disabled && a.Status != "disabled" {
+			g := providers[provider]
+			g.enabled++
+			if a.Status == "cooling_down" {
+				g.cooling++
+			}
+			providers[provider] = g
+		}
+	}
+	var cooling []string
+	for provider, g := range providers {
+		if g.cooling == g.enabled {
+			cooling = append(cooling, provider)
+		}
+	}
+	sort.Strings(cooling)
+	for _, provider := range cooling {
+		add("proxy_cooling", provider, "critical", "Every enabled "+provider+" account is cooling down")
 	}
 	return alerts, nil
 }

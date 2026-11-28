@@ -30,14 +30,14 @@ func assertText(t *testing.T, v any, parts ...string) {
 func TestManifestAndViews(t *testing.T) {
 	h := fixtureHub(t)
 	m := h.Manifest()
-	if m.ID != "fleet" || m.Version != "1" || m.Name != "Fleet" || m.Tab.Icon != "grid" || len(m.Actions) != 5 {
+	if m.ID != "fleet" || m.Version != "1" || m.Name != "Fleet" || m.Tab.Icon != "grid" || len(m.Actions) != 12 {
 		t.Fatal(m)
 	}
 	var names []string
 	for _, v := range m.Tab.Views {
 		names = append(names, v.Name)
 	}
-	if !slices.Equal(names, []string{"overview", "hosts", "skills", "trials", "host", "skill"}) {
+	if !slices.Equal(names, []string{"overview", "hosts", "skills", "trials", "proxy", "host", "skill", "account", "sign-in"}) {
 		t.Fatal(names)
 	}
 	for _, tc := range []struct {

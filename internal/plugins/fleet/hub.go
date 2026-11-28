@@ -25,8 +25,8 @@ type Fleet struct {
 
 func (*Fleet) Manifest() plugin.Manifest {
 	return plugin.Manifest{
-		ID: "fleet", Name: "Fleet", Version: "1", Description: "Hosts, drift, skills and trials from a fleet hub.",
-		Actions: fleetActions(),
+		ID: "fleet", Name: "Fleet", Version: "1", Description: "Hosts, drift, skills, trials and proxy accounts from a fleet hub.",
+		Actions: append(fleetActions(), proxyActions()...),
 		Settings: []plugin.Field{
 			{Key: "hub_url", Label: "Hub URL", Type: plugin.URL, Required: true, Placeholder: "https://hub.example.lan:8790", Help: "The hub's base URL, without /v1."},
 			{Key: "proxy_panel_url", Label: "Proxy panel URL", Type: plugin.URL, Help: "Optional. A link to the proxy's own management panel. The plugin never calls it."},
@@ -34,7 +34,7 @@ func (*Fleet) Manifest() plugin.Manifest {
 			{Key: "operator_token", Label: "Operator token", Type: plugin.Secret, Help: "Optional. Lets this dashboard change fleet through the hub. Leave it empty to keep it read-only."},
 		},
 		Tab: &plugin.Tab{Title: "Fleet", Icon: "grid", Views: []plugin.ViewRef{
-			{Name: "overview", Title: "Overview"}, {Name: "hosts", Title: "Hosts"}, {Name: "skills", Title: "Skills"}, {Name: "trials", Title: "Trials"}, {Name: "host", Title: "Host"}, {Name: "skill", Title: "Skill"},
+			{Name: "overview", Title: "Overview"}, {Name: "hosts", Title: "Hosts"}, {Name: "skills", Title: "Skills"}, {Name: "trials", Title: "Trials"}, {Name: "proxy", Title: "Proxy"}, {Name: "host", Title: "Host"}, {Name: "skill", Title: "Skill"}, {Name: "account", Title: "Account"}, {Name: "sign-in", Title: "Sign-in"},
 		}},
 	}
 }
@@ -70,7 +70,14 @@ func (p *Fleet) Configure(c plugin.Config) error {
 	if operator != "" && subtle.ConstantTimeCompare([]byte(operator), []byte(read)) == 1 {
 		return &plugin.FieldError{Key: "operator_token", Message: "Use a different token from the read token."}
 	}
-	p.panelURL, _ = c["proxy_panel_url"].(string)
+	panel, _ := c["proxy_panel_url"].(string)
+	if panel != "" {
+		linkPolicy := Fleet{readToken: read, operatorToken: operator}
+		if !linkPolicy.safeLink(panel) {
+			return badField("proxy_panel_url", "Enter an http:// or https:// panel URL without credentials.")
+		}
+	}
+	p.panelURL = panel
 	p.base, p.readToken, p.operatorToken = base, read, operator
 	return nil
 }
@@ -149,13 +156,19 @@ func (p *Fleet) decode(resp *http.Response, token string, out interface{ header(
 				message = "The hub rejected the operator token. Check it in Admin → Plugins."
 			}
 		} else {
-			var body struct{ Error struct{ Message string } }
+			var body struct {
+				Error struct{ Message, Field string }
+			}
 			if dec.Decode(&body) == nil {
 				if scrub != nil {
 					body.Error.Message = scrub(body.Error.Message)
+					body.Error.Field = p.clean(scrub(body.Error.Field), 40)
 				}
 				if s := strings.TrimSpace(p.clean(queryText.ReplaceAllString(body.Error.Message, ""), 400)); s != "" {
 					message = s
+					if resp.StatusCode/100 == 4 && token == p.operatorToken && scrub != nil && body.Error.Field != "" {
+						return badField(body.Error.Field, message)
+					}
 				}
 			}
 		}

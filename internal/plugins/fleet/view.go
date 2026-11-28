@@ -19,6 +19,8 @@ func (p *Fleet) View(ctx context.Context, name string, params url.Values) (plugi
 	v := plugin.View{UpdatedAt: p.host.Now(), RefreshSeconds: 60}
 	var err error
 	switch name {
+	case "proxy", "account", "sign-in":
+		err = p.proxyView(ctx, &v, name, params)
 	case "overview":
 		v.Title = "Overview"
 		var data overviewResponse

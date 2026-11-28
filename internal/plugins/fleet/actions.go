@@ -8,8 +8,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-
+	"io"
 	"maps"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -142,6 +143,26 @@ func actionParams(id string, in plugin.Config) (plugin.Config, error) {
 		if len([]rune(get("item"))) > 512 || get("item") == "" {
 			return nil, badField("item", "Choose a file from the host's attention list.")
 		}
+	case "proxy_set_strategy":
+		// The registry checks the strategy option and requires the opaque etag.
+	case "proxy_set_account_routing", "proxy_set_account_enabled", "proxy_refresh_account", "proxy_reset_cooldown", "proxy_reauth_start":
+		if !proxyID.MatchString(get("account")) {
+			return nil, badField("account", "Choose an account from Proxy.")
+		}
+		if id == "proxy_set_account_routing" {
+			priority, ok := params["priority"].(float64)
+			if !ok || priority != math.Trunc(priority) {
+				return nil, badField("priority", "Enter a whole number for priority.")
+			}
+			weight, ok := params["weight"].(float64)
+			if !ok || weight < 0 || weight > 1000000 {
+				return nil, badField("weight", "Enter a weight from 0 to 1000000.")
+			}
+		}
+	case "proxy_reauth_finish":
+		if !proxyID.MatchString(get("session")) {
+			return nil, badField("session", "Open the sign-in session from your account.")
+		}
 	default:
 		return nil, plugin.ErrNotFound
 	}
@@ -196,6 +217,7 @@ func (p *Fleet) reserve(a plugin.ActionSpec, params plugin.Config) (path, key st
 type receiptResponse struct {
 	envelope
 	Receipt *struct {
+		Reauth                 *reauthReceipt
 		Summary, Commit, State string
 		Hosts                  []struct{ Host, State string }
 		Force                  *struct{ State string }
@@ -222,6 +244,18 @@ func (p *Fleet) Action(ctx context.Context, id string, in plugin.Config) (plugin
 	if err != nil {
 		return v, err
 	}
+	var accountLabel string
+	if id == "proxy_reauth_start" {
+		account := params["account"].(string)
+		var d proxyResponse
+		if err := p.get(ctx, "proxy/accounts/"+account, p.readToken, &d); err != nil {
+			return v, err
+		}
+		if d.Account == nil || d.Account.ID != account {
+			return v, errResponse
+		}
+		accountLabel = p.word(d.Account.Label)
+	}
 	payload, err := json.Marshal(map[string]any{"params": params})
 	if err != nil {
 		return v, errResponse
@@ -246,25 +280,60 @@ func (p *Fleet) Action(ctx context.Context, id string, in plugin.Config) (plugin
 	defer resp.Body.Close()
 	status := resp.StatusCode
 	if status/100 == 2 || status/100 == 4 {
+		// A timeout can arrive after the headers. Keep the key until the reply has arrived.
+		const maxReply = 4 << 20
+		body, err := io.ReadAll(io.LimitReader(resp.Body, maxReply+1))
+		if err != nil {
+			return v, errors.New("The hub reply was interrupted. Check the hub, then retry to reconcile this change.")
+		}
 		if err = os.Remove(path); err != nil {
 			return v, errors.New("The hub answered. Check the current state and the fleet plugin cache permissions.")
 		}
+		if len(body) > maxReply {
+			return v, errResponse
+		}
+		resp.Body = io.NopCloser(bytes.NewReader(body))
 	}
 	var response receiptResponse
-	if err = p.decode(resp, p.operatorToken, &response, nil); err != nil {
+	scrub := func(text string) string { return text }
+	if secret, _ := params["redirect_url"].(string); secret != "" {
+		// Treat even a broken upstream echo as private, including the code in a callback query.
+		private := []string{secret}
+		if u, err := url.Parse(secret); err == nil {
+			for _, values := range u.Query() {
+				private = append(private, values...)
+			}
+			private = append(private, u.Fragment)
+		}
+		scrub = func(text string) string {
+			for _, s := range private {
+				if s != "" {
+					text = strings.ReplaceAll(text, s, "[redacted]")
+				}
+			}
+			return text
+		}
+	}
+	if err = p.decode(resp, p.operatorToken, &response, scrub); err != nil {
 		return v, err
 	}
 	r := response.Receipt
-	if r == nil || r.Summary == "" {
+	if r == nil {
 		return v, errResponse
 	}
 	if r.State == "failed" {
 		if r.Error != nil && r.Error.Message != "" {
-			return v, errors.New(p.clean(r.Error.Message, 400))
+			return v, errors.New(p.clean(scrub(r.Error.Message), 400))
 		}
 		return v, errors.New("The hub could not apply the change.")
 	}
-	v = plugin.View{UpdatedAt: response.Generated, Title: p.clean(r.Summary, 400)}
+	if r.Summary == "" {
+		return v, errResponse
+	}
+	if id == "proxy_reauth_start" {
+		return p.signInStarted(response, accountLabel)
+	}
+	v = plugin.View{UpdatedAt: response.Generated, Title: p.clean(scrub(r.Summary), 400)}
 	if status == http.StatusAccepted {
 		v.Title = "Working: " + v.Title
 	}
@@ -272,14 +341,14 @@ func (p *Fleet) Action(ctx context.Context, id string, in plugin.Config) (plugin
 	var pending []string
 	for _, h := range r.Hosts {
 		if h.State == "pending" {
-			pending = append(pending, p.word(h.Host))
+			pending = append(pending, p.word(scrub(h.Host)))
 		}
 	}
 	if len(pending) > 0 {
 		detail = "Pending on " + strings.Join(pending, ", ")
 	}
 	if r.Commit != "" {
-		runes := []rune(p.word(r.Commit))
+		runes := []rune(p.word(scrub(r.Commit)))
 		detail = join(detail, "Commit "+string(runes[:min(7, len(runes))]))
 	}
 	if id == "force_file" && r.Force != nil {

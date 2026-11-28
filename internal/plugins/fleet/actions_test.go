@@ -199,3 +199,46 @@ func TestActionLocalValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestReceiptLifetimeAndDefinitiveErrors(t *testing.T) {
+	status := 503
+	keys := make(chan string, 4)
+	p, h := actionHub(t, func(w http.ResponseWriter, r *http.Request) {
+		keys <- r.Header.Get("Idempotency-Key")
+		w.WriteHeader(status)
+		fmt.Fprint(w, `{"error":{"message":"Check <source>","field":"source"}}`)
+	})
+	values := plugin.Config{"source": "example-skills"}
+	_, err := p.Action(t.Context(), "remove_source", values)
+	if err == nil || err.Error() != "Check source" {
+		t.Fatal("missing sanitized hub error")
+	}
+	first := <-keys
+	dir := filepath.Join(h.dir, "receipts")
+	files, err := os.ReadDir(dir)
+	if err != nil || len(files) != 1 {
+		t.Fatal("missing receipt after 503")
+	}
+	expired, err := json.Marshal(pendingReceipt{first, h.Now().Add(-24 * time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(dir, files[0].Name()), expired, 0600); err != nil {
+		t.Fatal(err)
+	}
+	status = 422
+	_, err = p.Action(t.Context(), "remove_source", values)
+	var field *plugin.FieldError
+	if !errors.As(err, &field) || field.Key != "source" || <-keys == first {
+		t.Fatal("expected field error and fresh key after 24 hours")
+	}
+	files, err = os.ReadDir(dir)
+	if err != nil || len(files) != 0 {
+		t.Fatal("receipt retained after 422")
+	}
+	status = 401
+	_, err = p.Action(t.Context(), "remove_source", values)
+	if err == nil || err.Error() != "The hub rejected the operator token. Check it in Admin → Plugins." {
+		t.Fatal("wrong unauthorized message")
+	}
+}

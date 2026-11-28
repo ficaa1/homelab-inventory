@@ -31,6 +31,7 @@ the clear, so use it only on a network you control. **Test** reports which one i
 | Skill | One skill: mode, source, hosts and usage. Actions: set its mode |
 | Proxy | The model proxy behind the hub: routing strategy and one row per account with status, cooldowns and quota |
 | Account | One proxy account: quota, cooldowns, recent requests. Actions: routing, enable, refresh, sign in again, reset cooldown |
+| Sign-in | The state and expiry of a proxy sign-in session. Finish a waiting session by pasting the full redirect address |
 | Usage | Planned. Tokens and cost per day and model, quota, and usage per host |
 
 ## Alerts
@@ -42,7 +43,6 @@ the clear, so use it only on a network you control. **Test** reports which one i
 | `fleet.refused` | warning | A host refused a change because the file drifted |
 | `fleet.trial_due` | info | A trial passed its end date and is still a trial. The summary says how many skills are undecided |
 | `fleet.disk` | warning or critical | A host's free disk is below the hub's thresholds |
-
 | `fleet.proxy_unreachable` | warning | The hub can't reach the proxy, or the proxy rejected the hub's management key |
 | `fleet.proxy_sign_in` | warning | An account needs to sign in again |
 | `fleet.proxy_cooling` | critical | Every enabled account of one provider is cooling down |
