@@ -3,6 +3,7 @@ package fleet
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"slices"
@@ -92,10 +93,10 @@ func TestManifestAndViews(t *testing.T) {
 		}},
 		{"skills", "", func(t *testing.T, v plugin.View) {
 			show, sources, rows := v.Blocks[0], v.Blocks[1], v.Blocks[2]
-			if len(show.Items) != 4 || len(show.Items[0].Badges) != 1 || sources.Items[2].Link != nil {
+			if len(show.Items) != 4 || len(show.Items[0].Badges) != 1 || !maps.Equal(sources.Items[2].Link.Params, map[string]string{"origin": "own"}) {
 				t.Fatal(show, sources)
 			}
-			assertText(t, sources, "2 skills · 1 model-invoked", "Hand-written", "On trial until 10 Dec", "Own skills")
+			assertText(t, sources, "12 skills · 5 model-invoked", "Counts not reported", "Hand-written", "On trial until 10 Dec", "Own skills", "20 skills · 14 model-invoked")
 			assertText(t, rows, "Threads (30 days)", "Source lists", "Decision, 20 Nov", "SKILL.md", "Until 10 Dec")
 			if rows.Rows[0]["hosts"] != "host-a 5" || rows.Rows[1]["threads"] != 0 || rows.Rows[1]["hosts"] != "—" || rows.Rows[2]["threads"] != "No data" || rows.Rows[2]["source"] != "Own" {
 				t.Fatal(rows.Rows)
@@ -231,41 +232,95 @@ func TestOverviewStatsWithPartialCountsAndPolicyWindow(t *testing.T) {
 	}
 }
 
-func TestSkillsFiltersUseOneUnfilteredResponse(t *testing.T) {
-	h := fixtureHub(t)
-	v := h.view(t, "skills", url.Values{"source": {"example-skills"}, "mode": {"user"}})
-	if h.calls.Load() != 1 {
-		t.Fatal("extra reads")
-	}
-	if v.Blocks[1].Items[0].Meta != "2 skills · 1 model-invoked" || v.Blocks[1].Items[0].Badges[0].Text != "Showing" || v.Blocks[0].Items[2].Badges[0].Text != "Showing" {
-		t.Fatal(v)
-	}
-	for _, i := range v.Blocks[0].Items {
-		if i.Link.Params["source"] != "example-skills" {
-			t.Fatal(i)
-		}
-	}
-	if v.Blocks[1].Items[1].Link.Params["mode"] != "user" || len(v.Blocks[2].Rows) != 1 || v.Blocks[2].Rows[0]["skill"] != "sort-notes" {
-		t.Fatal(v)
-	}
-	empty := h.view(t, "skills", url.Values{"source": {"another-source"}})
-	if len(empty.Blocks[2].Rows) != 0 || empty.Blocks[2].Empty != "No skills match this filter" {
-		t.Fatal(empty)
+func TestSkillsFiltersUseHubQueryAndCounts(t *testing.T) {
+	for _, tc := range []struct {
+		query, row string
+		params     url.Values
+	}{
+		{"mode=user&origin=third_party&source=example-skills", "sort-notes", url.Values{"source": {"example-skills"}, "mode": {"user"}, "origin": {"third_party"}, "ignored": {"value"}}},
+		{"mode=user&origin=own", "read-notes", url.Values{"mode": {"user"}, "origin": {"own"}}},
+		{"source=another-source", "", url.Values{"source": {"another-source"}}},
+	} {
+		t.Run(tc.query, func(t *testing.T) {
+			h := newHub(t, false, func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/v1/skills" || r.URL.RawQuery != tc.query {
+					t.Error("expected the hub to receive only the validated filters")
+				}
+				var data map[string]any
+				if err := json.Unmarshal(fixture(t, "skills"), &data); err != nil {
+					t.Error(err)
+					return
+				}
+				data["skills"] = slices.DeleteFunc(data["skills"].([]any), func(s any) bool {
+					return s.(map[string]any)["name"] != tc.row
+				})
+				if tc.row == "" {
+					data["own_counts"] = nil
+				}
+				json.NewEncoder(w).Encode(data)
+			})
+			v := h.view(t, "skills", tc.params)
+			if h.calls.Load() != 1 {
+				t.Fatal("expected one hub read")
+			}
+			show, sources, rows := v.Blocks[0].Items, v.Blocks[1].Items, v.Blocks[2]
+			if sources[0].Meta != "12 skills · 5 model-invoked" || sources[1].Meta != "Counts not reported" {
+				t.Fatal(sources)
+			}
+			if tc.row == "" {
+				if len(rows.Rows) != 0 || rows.Empty != "No skills match this filter" || sources[2].Meta != "Counts not reported" {
+					t.Fatal(v)
+				}
+				return
+			}
+			if len(rows.Rows) != 1 || rows.Rows[0]["skill"] != tc.row || sources[2].Meta != "20 skills · 14 model-invoked" || show[2].Badges[0].Text != "Showing" {
+				t.Fatal(v)
+			}
+			for _, item := range show {
+				if item.Link.Params["source"] != tc.params.Get("source") || item.Link.Params["origin"] != tc.params.Get("origin") {
+					t.Fatal(item)
+				}
+			}
+			if !maps.Equal(sources[2].Link.Params, map[string]string{"mode": "user", "origin": "own"}) {
+				t.Fatal(sources[2])
+			}
+			if tc.params.Get("origin") == "own" {
+				if sources[2].Badges[0].Text != "Showing" || !maps.Equal(sources[0].Link.Params, map[string]string{"mode": "user", "source": "example-skills"}) {
+					t.Fatal(sources)
+				}
+			} else if sources[0].Badges[0].Text != "Showing" || !maps.Equal(sources[1].Link.Params, map[string]string{"mode": "user", "origin": "third_party", "source": "sample-skills"}) {
+				t.Fatal(sources)
+			}
+		})
 	}
 }
-func TestCompactHostUsage(t *testing.T) {
-	for _, tc := range []struct{ name, body, want string }{
-		{"rank and limit", `{"usage":{"by_host":[{"host":"host-d","threads":2},{"host":"host-c","threads":2},{"host":"host-b","threads":5},{"host":"host-a","threads":3},{"host":"host-e","threads":0}]},"hosts":[{"host":"host-f","installed":false}]}`, "host-b 5 · host-a 3 · host-c 2 · +1 more"},
-		{"all absent", `{"hosts":[{"host":"host-b","installed":false}],"usage":null}`, "Not installed on host-b"},
-		{"zero", `{"hosts":[{"host":"host-b","installed":false},{"host":"host-a","installed":true}],"usage":{"threads":0,"by_host":[]}}`, "—"},
-		{"missing", `{"usage":null}`, "No data"},
+
+func TestByHostUsageInSkillsAndTrials(t *testing.T) {
+	for _, tc := range []struct{ name, usage, hosts, want, wantTrial string }{
+		{"rank all positive", `[{"host":"host-d","threads":2},{"host":"host-c","threads":2},{"host":"host-b","threads":5},{"host":"host-a","threads":3},{"host":"host-e","threads":0}]`, "null", "host-b 5 · host-a 3 · host-c 2 · host-d 2", "host-b 5 · host-a 3 · host-c 2 · host-d 2"},
+		{"all absent", "null", `[{"host":"host-b","installed":false}]`, "Not installed on host-b", "No data"},
+		{"empty", "[]", "null", "—", "—"},
+		{"unknown by host", "null", "null", "No data", "No data"},
+		{"unknown usage", "", "null", "No data", "No data"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			var s skill
-			if err := json.Unmarshal([]byte(tc.body), &s); err != nil {
-				t.Fatal(err)
+			usage, trialUsage := "null", tc.usage
+			if tc.usage != "" {
+				usage = fmt.Sprintf(`{"by_host":%s}`, tc.usage)
+			} else {
+				trialUsage = "null"
 			}
-			if got := new(Fleet).skillHosts(s); got != tc.want {
+			h := newHub(t, false, func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/v1/skills" {
+					fmt.Fprintf(w, `{"api_version":1,"generated_at":"2026-12-01T09:15:00Z","skills":[{"name":"example-skill","usage":%s,"hosts":%s}]}`, usage, tc.hosts)
+				} else {
+					fmt.Fprintf(w, `{"api_version":1,"generated_at":"2026-12-01T09:15:00Z","trials":[{"source":"example-skills","state":"running","skills":[{"name":"example-skill","by_host":%s}]}]}`, trialUsage)
+				}
+			})
+			if got := h.view(t, "skills", nil).Blocks[2].Rows[0]["hosts"]; got != tc.want {
+				t.Fatal(got)
+			}
+			if got := h.view(t, "trials", nil).Blocks[0].Blocks[1].Rows[0]["hosts"]; got != tc.wantTrial {
 				t.Fatal(got)
 			}
 		})

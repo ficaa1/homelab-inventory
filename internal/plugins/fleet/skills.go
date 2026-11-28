@@ -3,6 +3,7 @@ package fleet
 import (
 	"cmp"
 	"fmt"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -13,13 +14,28 @@ import (
 var modes = map[string]string{"model": "Model-invoked", "user": "User-only", "exclude": "Excluded"}
 var suggestions = map[string]string{"model": "Keep model-invoked", "user": "Keep user-only", "exclude": "Drop"}
 
-func skillLink(src, mode string) *plugin.Link {
-	params := map[string]string{}
-	if src != "" {
-		params["source"] = src
+type skillFilters struct{ source, mode, origin string }
+
+func (f skillFilters) valid(params url.Values) bool {
+	return (!params.Has("source") || (len(params["source"]) == 1 && sourceID.MatchString(f.source))) &&
+		(!params.Has("mode") || (len(params["mode"]) == 1 && modes[f.mode] != "")) &&
+		(!params.Has("origin") || (len(params["origin"]) == 1 && (f.origin == "own" || f.origin == "third_party")))
+}
+
+func (f skillFilters) values() url.Values {
+	params := url.Values{}
+	for key, value := range map[string]string{"source": f.source, "mode": f.mode, "origin": f.origin} {
+		if value != "" {
+			params.Set(key, value)
+		}
 	}
-	if mode != "" {
-		params["mode"] = mode
+	return params
+}
+
+func (f skillFilters) link() *plugin.Link {
+	params := map[string]string{}
+	for key, values := range f.values() {
+		params[key] = values[0]
 	}
 	return &plugin.Link{View: "skills", Params: params}
 }
@@ -42,13 +58,11 @@ func (p *Fleet) trialLabel(t *trialDates, source bool) string {
 		return p.word(t.State)
 	}
 }
-func (p *Fleet) skillHosts(s skill) string {
+func (p *Fleet) byHost(usage []hostUsage, hosts []installation) string {
 	var positive []hostUsage
-	if s.Usage != nil {
-		for _, h := range s.Usage.ByHost {
-			if h.Threads > 0 {
-				positive = append(positive, h)
-			}
+	for _, h := range usage {
+		if h.Threads > 0 {
+			positive = append(positive, h)
 		}
 	}
 	if len(positive) > 0 {
@@ -59,81 +73,68 @@ func (p *Fleet) skillHosts(s skill) string {
 			return strings.Compare(a.Host, b.Host)
 		})
 		var parts []string
-		for _, h := range positive[:min(3, len(positive))] {
+		for _, h := range positive {
 			parts = append(parts, fmt.Sprintf("%s %d", p.word(h.Host), h.Threads))
-		}
-		if len(positive) > 3 {
-			parts = append(parts, fmt.Sprintf("+%d more", len(positive)-3))
 		}
 		return join(parts...)
 	}
 	var absent []string
-	for _, h := range s.Hosts {
+	for _, h := range hosts {
 		if h.Installed {
 			break
 		}
 		absent = append(absent, p.word(h.Host))
 	}
-	if len(absent) > 0 && len(absent) == len(s.Hosts) {
-		hosts := strings.Join(absent[:min(3, len(absent))], ", ")
-		if len(absent) > 3 {
-			hosts += fmt.Sprintf(" +%d more", len(absent)-3)
-		}
-		return "Not installed on " + hosts
+	if len(absent) > 0 && len(absent) == len(hosts) {
+		return "Not installed on " + strings.Join(absent, ", ")
 	}
-	if s.Usage == nil {
+	if usage == nil {
 		return "No data"
 	}
 	return "—"
 }
-func (p *Fleet) skills(data skillsResponse, src, mode string) []plugin.Block {
+
+func (c *skillCounts) label() string {
+	if c == nil {
+		return "Counts not reported"
+	}
+	return join(plural(c.Skills, "skill", "skills"), fmt.Sprintf("%d model-invoked", c.Model))
+}
+
+func (p *Fleet) skills(data skillsResponse, filters skillFilters) []plugin.Block {
 	show := plugin.Block{Type: "list", Title: "Show"}
+	sourceFilter := filters.source
+	if p.word(sourceFilter) != sourceFilter {
+		sourceFilter = ""
+	}
 	for _, key := range []string{"", "model", "user", "exclude"} {
 		title := modes[key]
 		if key == "" {
 			title = "All skills"
 		}
-		it := plugin.Item{Title: title, Link: skillLink(p.word(src), key)}
-		if key == mode {
+		link := skillFilters{source: sourceFilter, mode: key, origin: filters.origin}.link()
+		it := plugin.Item{Title: title, Link: link}
+		if key == filters.mode {
 			it.Badges = []plugin.Badge{badge("Showing", "info")}
 		}
 		show.Items = append(show.Items, it)
 	}
-	type count struct{ total, model int }
-	counts := map[string]count{}
-	for _, s := range data.Skills {
-		key := ""
-		if s.Source != nil {
-			key = *s.Source
-		}
-		c := counts[key]
-		c.total++
-		if s.Mode == "model" {
-			c.model++
-		}
-		counts[key] = c
-	}
-	sources := plugin.Block{Type: "list", Title: "Sources", Empty: "No skill sources"}
-	if data.Sources == nil {
-		sources.Empty = "Sources not reported"
-	}
+	sources := plugin.Block{Type: "list", Title: "Sources"}
 	trials := map[string]*trialDates{}
-	own := counts[""].total > 0
 	for _, s := range data.Sources {
 		if s.Origin == "own" {
-			own = true
 			continue
 		}
 		trials[s.Name] = s.Trial
-		c := counts[s.Name]
-		it := plugin.Item{Title: p.word(s.Name), Meta: join(plural(c.total, "skill", "skills"), fmt.Sprintf("%d model-invoked", c.model))}
-		if data.Skills == nil {
-			it.Meta = "Skills not reported"
-		}
+		it := plugin.Item{Title: p.word(s.Name), Meta: s.Counts.label()}
 		if sourceID.MatchString(s.Name) && it.Title == s.Name {
-			it.Link = skillLink(s.Name, mode)
+			origin := filters.origin
+			if origin == "own" {
+				origin = ""
+			}
+			it.Link = skillFilters{source: s.Name, mode: filters.mode, origin: origin}.link()
 		}
-		if src == s.Name {
+		if filters.source == s.Name {
 			it.Badges = []plugin.Badge{badge("Showing", "info")}
 		}
 		switch {
@@ -151,21 +152,16 @@ func (p *Fleet) skills(data skillsResponse, src, mode string) []plugin.Block {
 		}
 		sources.Items = append(sources.Items, it)
 	}
-	if own {
-		meta := plural(counts[""].total, "skill", "skills")
-		if data.Skills == nil {
-			meta = "Skills not reported"
-		}
-		sources.Items = append(sources.Items, plugin.Item{Title: "Own skills", Meta: meta})
+	own := plugin.Item{Title: "Own skills", Meta: data.OwnCounts.label(), Link: skillFilters{mode: filters.mode, origin: "own"}.link()}
+	if filters.origin == "own" {
+		own.Badges = []plugin.Badge{badge("Showing", "info")}
 	}
+	sources.Items = append(sources.Items, own)
 	rows := table("Skills", "No skills match this filter", col("skill", "Skill"), number("threads", fmt.Sprintf("Threads (%d days)", data.Window)), col("source", "Source"), col("mode", "Mode"), col("set", "Set by"), col("trial", "Trial"), col("hosts", "By host"))
 	if data.Skills == nil {
 		rows.Empty = "Skills not reported"
 	}
 	for _, s := range data.Skills {
-		if (src != "" && (s.Source == nil || *s.Source != src)) || (mode != "" && mode != s.Mode) {
-			continue
-		}
 		source, trial := "Own", "—"
 		if s.Source != nil {
 			source = p.word(*s.Source)
@@ -181,10 +177,12 @@ func (p *Fleet) skills(data skillsResponse, src, mode string) []plugin.Block {
 			set = "SKILL.md"
 		}
 		var threads any = "No data"
+		var byHost []hostUsage
 		if s.Usage != nil {
 			threads = displayCount(s.Usage.Threads)
+			byHost = s.Usage.ByHost
 		}
-		rows.Rows = append(rows.Rows, map[string]any{"skill": p.word(s.Name), "threads": threads, "source": source, "mode": p.label(s.Mode, modes), "set": set, "trial": trial, "hosts": p.skillHosts(s)})
+		rows.Rows = append(rows.Rows, map[string]any{"skill": p.word(s.Name), "threads": threads, "source": source, "mode": p.label(s.Mode, modes), "set": set, "trial": trial, "hosts": p.byHost(byHost, s.Hosts)})
 	}
 	blocks := []plugin.Block{show, sources}
 	if data.Truncated {
@@ -237,18 +235,7 @@ func (p *Fleet) trials(data trialsResponse) []plugin.Block {
 				undecided++
 				decided = "No"
 			}
-			var byHost []string
-			for _, h := range s.ByHost {
-				byHost = append(byHost, fmt.Sprintf("%s %d", p.word(h.Host), h.Threads))
-			}
-			by := join(byHost...)
-			if by == "" {
-				by = "—"
-			}
-			if s.ByHost == nil {
-				by = "No data"
-			}
-			rows.Rows = append(rows.Rows, map[string]any{"skill": p.word(s.Name), "threads": displayCount(s.Threads), "suggestion": p.label(s.Suggestion, suggestions), "mode": p.label(s.Mode, modes), "decided": decided, "hosts": by})
+			rows.Rows = append(rows.Rows, map[string]any{"skill": p.word(s.Name), "threads": displayCount(s.Threads), "suggestion": p.label(s.Suggestion, suggestions), "mode": p.label(s.Mode, modes), "decided": decided, "hosts": p.byHost(s.ByHost, nil)})
 		}
 		count := strconv.Itoa(undecided)
 		if t.Skills == nil {

@@ -50,15 +50,19 @@ func (p *Fleet) View(ctx context.Context, name string, params url.Values) (plugi
 		}
 	case "skills":
 		v.Title = "Skills"
-		src, mode := params.Get("source"), params.Get("mode")
-		if (params.Has("source") && (len(params["source"]) != 1 || !sourceID.MatchString(src))) || (params.Has("mode") && (len(params["mode"]) != 1 || modes[mode] == "")) {
-			v.Blocks = []plugin.Block{notice("info", "Choose a source and mode from the Skills filters.")}
+		filters := skillFilters{source: params.Get("source"), mode: params.Get("mode"), origin: params.Get("origin")}
+		if !filters.valid(params) {
+			v.Blocks = []plugin.Block{notice("info", "Choose a filter from the Skills view.")}
 			break
 		}
+		path := "skills"
+		if query := filters.values().Encode(); query != "" {
+			path += "?" + query
+		}
 		var data skillsResponse
-		err = p.get(ctx, "skills", p.readToken, &data)
+		err = p.get(ctx, path, p.readToken, &data)
 		if err == nil {
-			v.Blocks = p.skills(data, src, mode)
+			v.Blocks = p.skills(data, filters)
 		}
 	case "trials":
 		v.Title = "Trials"

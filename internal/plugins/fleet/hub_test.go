@@ -50,7 +50,7 @@ func newHub(t *testing.T, tls bool, answer func(http.ResponseWriter, *http.Reque
 		f.calls.Add(1)
 		token := r.Header.Get("Authorization")
 		operator := r.URL.Path == "/v1/meta" && token == "Bearer "+operatorToken
-		if !slices.Contains([]string{"/v1/meta", "/v1/overview", "/v1/hosts", "/v1/hosts/host-a", "/v1/hosts/host-b", "/v1/hosts/host-missing", "/v1/skills", "/v1/trials"}, r.URL.Path) || r.Method != "GET" || r.URL.RawQuery != "" || (!operator && token != "Bearer "+readToken) {
+		if !slices.Contains([]string{"/v1/meta", "/v1/overview", "/v1/hosts", "/v1/hosts/host-a", "/v1/hosts/host-b", "/v1/hosts/host-missing", "/v1/skills", "/v1/trials"}, r.URL.Path) || r.Method != "GET" || (r.URL.Path != "/v1/skills" && r.URL.RawQuery != "") || (!operator && token != "Bearer "+readToken) {
 			t.Error("unexpected hub method, route, query or credential")
 			w.WriteHeader(400)
 			return
@@ -203,6 +203,7 @@ func TestBadParametersStayLocal(t *testing.T) {
 	}{
 		{"host", nil}, {"host", url.Values{"name": {"../meta"}}}, {"host", url.Values{"name": {"host-a", "../meta"}}}, {"host", url.Values{"name": {"HOST-A"}}},
 		{"skills", url.Values{"source": {""}}}, {"skills", url.Values{"mode": {""}}}, {"skills", url.Values{"source": {"../other"}}}, {"skills", url.Values{"source": {"example-skills", "/bad"}}}, {"skills", url.Values{"mode": {"unknown"}}}, {"skills", url.Values{"mode": {"model", "/bad"}}},
+		{"skills", url.Values{"origin": {""}}}, {"skills", url.Values{"origin": {"unknown"}}}, {"skills", url.Values{"origin": {"own", "third_party"}}},
 	} {
 		v := h.view(t, tc.view, tc.params)
 		if len(v.Blocks) != 1 || v.Blocks[0].Type != "notice" {

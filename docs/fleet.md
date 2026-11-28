@@ -25,7 +25,7 @@ the clear, so use it only on a network you control. **Test** reports which one i
 | Overview | Host count, attention items, trials past their end date or ending within the hub's policy window, the model-invoked context cost per host, and a list of hosts with their status |
 | Hosts | One row per host: last report, drift, broken links, refused changes, updates, free disk |
 | Host | One host's items that need attention, its provider mapping, its updates and its force requests |
-| Skills | Every skill with its source, mode, trial and per-host usage. Filter by source or mode |
+| Skills | Every skill with its source, mode, trial and per-host usage. Filter by source, origin or mode |
 | Trials | One section per trial source with its decision table and end date |
 | Usage | Planned. Tokens and cost per day and model, quota, and usage per host |
 

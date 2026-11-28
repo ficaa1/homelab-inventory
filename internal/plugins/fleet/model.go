@@ -88,7 +88,9 @@ type source struct {
 	Name, Origin string
 	Defined      string `json:"defined_in"`
 	Trial        *trialDates
+	Counts       *skillCounts
 }
+type skillCounts struct{ Skills, Model int }
 type hostUsage struct {
 	Host    string
 	Threads int
@@ -112,6 +114,7 @@ type skillsResponse struct {
 	envelope
 	Window    int `json:"usage_window_days"`
 	Sources   []source
+	OwnCounts *skillCounts `json:"own_counts"`
 	Skills    []skill
 	Truncated bool
 }

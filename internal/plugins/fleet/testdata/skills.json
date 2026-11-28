@@ -12,16 +12,19 @@
         "ends": "2026-12-10",
         "state": "running"
       },
-      "hosts": null
+      "hosts": null,
+      "counts": {"skills": 12, "model": 5, "user": 4, "exclude": 3}
     },
     {
       "name": "sample-skills",
       "origin": "third_party",
       "defined_in": "config",
       "trial": null,
-      "hosts": null
+      "hosts": null,
+      "counts": null
     }
   ],
+  "own_counts": {"skills": 20, "model": 14, "user": 6, "exclude": 0},
   "skills": [
     {
       "id": "example-skills/lint-docs",
