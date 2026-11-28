@@ -1,0 +1,39 @@
+{
+  "api_version": 1,
+  "generated_at": "2026-12-01T09:15:00Z",
+  "proxy": {"state": "ok"},
+  "routing": {"strategy": "round-robin", "etag": "\"r-41\""},
+  "accounts": [
+    {
+      "id": "acc_a",
+      "provider": "provider-a",
+      "label": "…@example.com",
+      "status": "cooling_down",
+      "disabled": false,
+      "requires_sign_in": false,
+      "renewal": "failed",
+      "access_expires_at": "2026-12-02T09:15:00Z",
+      "priority": 0,
+      "weight": 1,
+      "cooldowns": [{"model": null, "until": "2026-12-01T09:40:00Z", "reason": "rate_limited"}],
+      "requests": {
+        "success": 1204, "failed": 31,
+        "recent": [{"at": "2026-12-01T09:00:00Z", "success": 12, "failed": 0}]
+      },
+      "quota": [
+        {"window": "primary", "used_ratio": 0.42, "resets_at": "2026-12-01T12:00:00Z", "observed_at": "2026-12-01T09:10:00Z"},
+        {"window": "weekly", "used_ratio": 0.8, "resets_at": null, "observed_at": null}
+      ]
+    },
+    {
+      "id": "acc_b", "provider": "provider-a", "label": "…@example.com", "status": "disabled",
+      "disabled": true, "renewal": "unknown", "access_expires_at": null, "priority": 2, "weight": 0,
+      "cooldowns": [], "quota": null, "requests": null
+    },
+    {
+      "id": "acc_c", "provider": "provider-b", "label": "…@example.com", "status": "needs_sign_in",
+      "requires_sign_in": true, "disabled": false
+    }
+  ],
+  "truncated": false
+}

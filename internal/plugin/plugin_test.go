@@ -410,3 +410,41 @@ func TestOpenRejectsBadManifestWithoutPanic(t *testing.T) {
 		t.Fatal("duplicate registration accepted")
 	}
 }
+
+type pluginWithDetail struct {
+	fakePlugin
+	hideDefault bool
+}
+
+func (p *pluginWithDetail) Manifest() Manifest {
+	m := p.fakePlugin.Manifest()
+	m.Tab.Views[0].Hidden = p.hideDefault
+	m.Tab.Views = append(m.Tab.Views, ViewRef{Name: "detail", Title: "Detail", Hidden: true})
+	return m
+}
+
+func TestHiddenViewRegistrationAndRouting(t *testing.T) {
+	builtins := func(hideDefault bool) []Builtin {
+		return []Builtin{{ID: "sample", New: func(Host) Plugin { return &pluginWithDetail{hideDefault: hideDefault} }}}
+	}
+	if r, err := Open(t.TempDir(), builtins(true), nil); err == nil {
+		r.Close()
+		t.Fatal("registered a hidden default view")
+	}
+	r, err := Open(t.TempDir(), builtins(false), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if _, err = r.Update("sample", enabledUpdate()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.View(t.Context(), "sample", "detail", nil); err != nil {
+		t.Fatal(err)
+	}
+	m := (&pluginWithDetail{}).Manifest()
+	v := View{Blocks: []Block{{Type: "list", Items: []Item{{Title: "Detail", Link: &Link{View: "detail"}}}}}}
+	if _, err = ValidateView(v, m); err != nil {
+		t.Fatal(err)
+	}
+}

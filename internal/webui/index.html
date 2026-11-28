@@ -628,6 +628,7 @@ td.num, th.num { text-align: right; }
     position: absolute; inset: 0 0 0 auto; display: grid; place-items: center; width: 44px;
     border: 0; border-radius: var(--r); background: none; color: var(--text-3); cursor: pointer;
   }
+  [data-list] tr.c-tap .c-list-open { inset: 0; width: auto; justify-items: end; padding-right: 15px; }
   [data-list] .c-list-open:focus-visible { outline-offset: -3px; }
   [data-list] .c-list-open .ic { width: 14px; height: 14px; transform: rotate(-90deg); }
   [data-list] .c-list-open[aria-expanded] { bottom: auto; min-height: 52px; }
@@ -925,6 +926,12 @@ pre.code {
   .drawer.is-confirm .close { display: none; }
   .drawer.is-confirm .actions { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; margin-top: 16px; }
   .drawer.is-confirm .actions .btn { min-height: 48px; justify-content: center; }
+  #drawer-body:has(> .pv-action) { display: flex; overflow: hidden; }
+  .pv-action { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+  .pv-action .pv-action-fields {
+    min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 2px;
+  }
+  .pv-action > .actions { flex: none; padding: 2px; }
 }
 
 /* ------------------------------------------------------------------ toast */
@@ -1506,6 +1513,13 @@ button.ops-tile { cursor:pointer; }
 .pv-blocks { align-items: start; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
 .pv-blocks > * { grid-column: 1 / -1; min-width: 0; }
 .pv-blocks > .pv-half { grid-column: auto; }
+.pv-actions .btn, .pv-action .btn, .pv-action-list .btn { white-space: normal; overflow-wrap: anywhere; min-width: 0; max-width: 100%; }
+.pv-action { overflow-wrap: anywhere; }
+.pv-action-list { display: grid; gap: 8px; margin-top: 14px; }
+.pv-action-list .btn { justify-content: flex-start; text-align: left; }
+.pv-action input[type=checkbox] { width: auto; }
+.pv-action textarea { box-sizing: border-box; width: 100%; min-height: 5rem; font: inherit; }
+.pv-action [role=alert]:empty { display: none; }
 .pv-blocks .kpis, .pv-blocks .banner { margin-bottom: 0; }
 .tile .value.info { color: var(--info); }
 .tile .value.muted { color: var(--text-3); }
@@ -1582,7 +1596,7 @@ button.ops-tile { cursor:pointer; }
 @media (max-width: 640px) {
   .pv-head { gap: 8px 12px; }
   .pv-line { flex-wrap: wrap; }
-  .pv-head .seg { order: 3; width: 100%; }
+  .pv-head .seg { order: 3; width: 100%; min-width: 0; overflow-x: auto; }
   .pv-head .seg .btn { flex: 1; min-height: 40px; }
   .pv-blocks { gap: var(--s3); }
   .pv-item { padding: 10px 12px; }
@@ -3150,6 +3164,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
         var open = h("button", { class: "c-list-open", type: "button", "aria-label": "View details for " + title },
           [iconNode("chevron", "sm")]);
         if (!tr.classList.contains("clickable")) {
+          // With nothing else to press in the row, the whole row opens it.
+          if (!tr.querySelector("a[href], button, input, select, textarea, summary")) tr.classList.add("c-tap");
           if (drawer.contains(table)) open.setAttribute("aria-expanded", "false");
           open.addEventListener("click", function () {
             var fields = '<dl class="dl">' +
@@ -4992,25 +5008,11 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
 
   function confirmDrawer(title, consequence, label, pending, run, destructive) {
-    var previous, focus = document.activeElement;
-    var previousLabel = drawer.getAttribute("aria-label");
-    if (drawerOpen) {
-      previous = document.createDocumentFragment();
-      while (drawerBody.firstChild) previous.appendChild(drawerBody.firstChild);
-    }
     var html = '<h3>' + esc(title) + '</h3><p>' + esc(consequence) + '</p><div class="actions">' +
       '<button class="btn" id="confirm-cancel" type="button">Cancel</button>' +
       '<button class="btn primary' + (destructive ? ' destructive' : '') + '" id="confirm-run" type="button">' + esc(label) + '</button></div>' +
       '<div id="confirm-status" class="sub" role="status"></div>';
-    var id = openDrawer(html);
-    // Cancel is the dismissal here, and the safe place for focus to start.
-    drawer.classList.add("is-confirm");
-    $("confirm-cancel").focus({ preventScroll: true });
-    $("confirm-cancel").onclick = function () {
-      if (!previous) { closeDrawer(); return; }
-      openDrawer(previous, previousLabel);
-      if (focus && focus.isConnected) focus.focus({ preventScroll: true });
-    };
+    var id = openConfirmation(html, null, null, "#confirm-cancel");
     $("confirm-run").onclick = function () {
       var button = this, status = $("confirm-status");
       button.disabled = true;
@@ -5494,7 +5496,9 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     toastEl.inert = !!topModal();
     toastHovered = matchMedia("(hover: hover) and (pointer: fine)").matches && toastEl.matches(":hover");
     toastFocused = toastEl.contains(document.activeElement);
-    $("toast-status").textContent = title + (opts.sub ? ". " + opts.sub : "");
+    if (opts.announcement !== "") {
+      $("toast-status").textContent = opts.announcement || title + (opts.sub ? ". " + opts.sub : "");
+    }
     timeToast();
   }
 
@@ -5508,7 +5512,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   // ------------------------------------------------------------ drawer
 
   var drawer = $("drawer"), scrim = $("scrim"), drawerBody = $("drawer-body"), drawerHead = $("drawer-head");
-  var drawerOpen = false, drawerReturnFocus = null, drawerPopping = false, drawerNextRoute = "";
+  var drawerParent = null, drawerOpen = false, drawerReturnFocus = null, drawerPopping = false, drawerNextRoute = "";
   var drawerDrag = null, drawerDragged = false, drawerID = 0, drawerSkippingHistory = false, drawerReturnRow = null;
   var sheet = { y: 0, v: 0, height: 0, frame: null, damping: 1 };
   var drawerPhone = matchMedia("(max-width: 640px)");
@@ -5547,7 +5551,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       if (drawerOpen && phone()) markDrawerHistory();
       if (next) go(next);
     } else if (phone() && !drawer.classList.contains("hidden") && !(history.state && history.state.hiDrawer)) {
-      closeDrawer(true);
+      dismissDrawer(true);
     } else if (!drawerOpen && history.state && history.state.hiDrawer) {
       if (skipping) clearDrawerMarker();
       else {
@@ -5679,11 +5683,12 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     else $("drawer-close").focus({ preventScroll: true });
   }
 
-  function openDrawer(html, label, opener) {
-    drawer.classList.remove("is-confirm");
+  function openDrawer(html, label, opener, confirmation) {
+    drawerParent = null;
+    drawer.classList.toggle("is-confirm", !!confirmation);
     var opening = !drawerOpen, hidden = drawer.classList.contains("hidden"), dragging = !!drawerDrag;
     if (hidden || (opening && !phone())) {
-      drawerReturnFocus = document.activeElement;
+      drawerReturnFocus = opener || document.activeElement;
       drawerReturnRow = phone() ? listOpener(opener) : null;
     }
     var opacity = hidden ? 0 : Number(getComputedStyle(drawer).opacity);
@@ -5697,17 +5702,58 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       drawerBody.scrollTop = 0;
       sizeDrawer();
       markDrawerHistory();
-      if (hidden) { sheet.y = sheet.height; sheet.v = 0; }
-      if (opening || dragging) moveSheet(1, false, opacity);
+      if (opening && confirmation) {
+        settleSheet();
+        animateIn(drawer, [{opacity: 0, transform: "translateY(24px)"}, {opacity: 1, transform: "none"}], motion.d1);
+        animateIn(scrim, FADE_IN, motion.d1);
+      } else {
+        if (hidden) { sheet.y = sheet.height; sheet.v = 0; }
+        if (opening || dragging) moveSheet(1, false, opacity);
+      }
       if (!reducedMotion.matches && sheet.frame !== null) paintSheet();
     } else {
-      reveal(drawer, opening && [{ opacity: 0, transform: "translateX(28px)" }, { opacity: 1, transform: "none" }], motion.d3);
-      reveal(scrim, opening && FADE_IN, motion.d2);
+      reveal(drawer, opening && [{ opacity: 0, transform: "translateX(28px)" }, { opacity: 1, transform: "none" }], confirmation ? motion.d1 : motion.d3);
+      reveal(scrim, opening && FADE_IN, confirmation ? motion.d1 : motion.d2);
     }
     setModal("drawer", true);
     syncScrollLock();
-    $("drawer-close").focus({ preventScroll: true });
+    if (!confirmation) $("drawer-close").focus({ preventScroll: true });
     return id;
+  }
+
+  function openConfirmation(content, label, opener, cancelSelector) {
+    var parent = null;
+    if (drawerOpen) {
+      parent = { content: document.createDocumentFragment(), label: drawer.getAttribute("aria-label"),
+        focus: opener || document.activeElement, scroll: drawerBody.scrollTop };
+      while (drawerBody.firstChild) parent.content.appendChild(drawerBody.firstChild);
+    }
+    var id = openDrawer(content, label, opener, true);
+    drawerParent = parent;
+    var cancel = drawerBody.querySelector(cancelSelector);
+    cancel.addEventListener("click", function () { dismissDrawer(); });
+    cancel.focus({ preventScroll: true });
+    return id;
+  }
+
+  function dismissDrawer(fromHistory, released) {
+    var parent = drawerParent;
+    if (!drawerOpen || !parent) { closeDrawer(fromHistory, released); return; }
+    var offset = sheet.y, opacity = scrim.style.opacity;
+    if (released) resetDrawerDrag();
+    clearActionSecrets();
+    openDrawer(parent.content, parent.label);
+    if (released) {
+      settleSheet();
+      animateIn(drawer, [{transform: "translateY(" + offset + "px)"}, {transform: "none"}], motion.d1);
+      animateIn(scrim, [{opacity: opacity}, {opacity: 1}], motion.d1);
+    }
+    drawerBody.scrollTop = parent.scroll;
+    if (parent.focus && parent.focus.isConnected && !parent.focus.disabled) parent.focus.focus({ preventScroll: true });
+  }
+
+  function clearActionSecrets() {
+    drawerBody.querySelectorAll(".pv-action input[type=password]").forEach(function (input) { input.value = ""; });
   }
 
   function closeDrawer(fromHistory, released) {
@@ -5718,7 +5764,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     resetDrawerDrag();
     drawerOpen = false;
     if (phone()) {
-      if (drawerNextRoute) settleSheet();
+      if (drawerNextRoute || (reducedMotion.matches && drawer.classList.contains("is-confirm"))) settleSheet();
       else moveSheet(1, released, Number(getComputedStyle(drawer).opacity));
     } else {
       var opacity = getComputedStyle(scrim).opacity;
@@ -5737,6 +5783,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       conceal(scrim);
       syncScrollLock();
     }
+    clearActionSecrets();
+    drawerParent = null;
     setModal("drawer", false);
     restartSession++; stopRestartHealth();
     if (enrollSession && enrollSession.fromAdmin) {
@@ -5776,8 +5824,16 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   drawer.addEventListener("pointerdown", function (e) {
     if (!phone() || !e.isPrimary || e.button !== 0 || !drawerDragAllowed(e.target)) return;
     var header = drawerHead.contains(e.target);
-    if (!header && drawerBody.scrollTop > 0) return;
+    var fields = e.target.closest(".pv-action-fields");
+    if (!header && (drawerBody.scrollTop > 0 || fields && fields.scrollTop > 0)) return;
     stopSheet();
+    if (drawer.motionIn) {
+      var transform = getComputedStyle(drawer).transform;
+      sheet.y = transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m42;
+      stopEntrance(drawer);
+      stopEntrance(scrim);
+      paintSheet();
+    }
     // Invert the rubber band so grabbing a sheet above its rest position
     // preserves the point under the finger.
     var offset = reducedMotion.matches ? 0 : sheet.y;
@@ -5838,18 +5894,19 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   function endDrawerDrag(e, cancelled) {
     var d = drawerDrag;
     if (!d || d.id !== e.pointerId) return;
-    resetDrawerDrag();
     if (!d.active) {
+      resetDrawerDrag();
       moveSheet(sheet.damping, false, Number(getComputedStyle(drawer).opacity));
       return;
     }
     if (cancelled) sheet.v = 0;
     else sheet.v = dragVelocity(d.samples, e.clientY, e.timeStamp, sheet.v);
     if (!cancelled && sheet.y + 0.499 * sheet.v > sheet.height / 2) {
-      if (drawerOpen) closeDrawer(false, true);
-      else moveSheet(1, true);
+      if (drawerOpen) dismissDrawer(false, true);
+      else { resetDrawerDrag(); moveSheet(1, true); }
       return;
     }
+    resetDrawerDrag();
     drawerOpen = true;
     markDrawerHistory();
     moveSheet(0.82, true);
@@ -6581,15 +6638,18 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       { key: "archive-seeding", title: "Seeding", plugin: "archive", view: "seeding", icon: "upload" },
       { key: "taste", title: "Taste", plugin: "taste", view: "picks", icon: "film" }
     ];
-    var out = defs.filter(function (d) { return !!pluginInfo(d.plugin); }).map(function (d) {
-      var info = pluginInfo(d.plugin), views = pluginViews(info), v = views.filter(function (x) { return x.name === d.view; })[0];
-      if (!v && views.length) d = Object.assign({}, d, { view: views[0].name });
-      return d;
+    var out = [];
+    defs.forEach(function (d) {
+      var info = pluginInfo(d.plugin);
+      if (!info) return;
+      var views = pluginViews(info), v = views.find(function (x) { return x.name === d.view; });
+      if (v && v.hidden) return;
+      out.push(!v && views.length ? Object.assign({}, d, { view: views[0].name }) : d);
     });
     // The read-only media plugin's views join the switcher only when none of
     // the five sections exist; otherwise they stay reachable from search.
     var media = pluginInfo("media");
-    if (media && !out.length) pluginViews(media).forEach(function (v) {
+    if (media && !out.length) pluginViews(media).filter(function (v) { return !v.hidden; }).forEach(function (v) {
       out.push({ key: "media-" + v.name, title: v.name === "library" ? "Services" : str(v.title) || v.name, plugin: "media", view: v.name, icon: "film", extra: true });
     });
     return out;
@@ -6621,8 +6681,9 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   }
   // The page header for a plugin: media's flat section row, then a plugin's
   // own sub-views only when it has more than one.
-  function pluginHead(id, current, trailing, attrs) {
-    var info = pluginInfo(id), views = pluginViews(info), g = groupOf(id);
+  function pluginHead(id, current, trailing, attrs, title) {
+    var info = pluginInfo(id), views = pluginViews(info).filter(function (v) { return !v.hidden; }), g = groupOf(id);
+    var detail = pluginViews(info).find(function (v) { return v.name === current && v.hidden; });
     var name = info ? str(info.tab.title) || str(info.name) : id;
     var seg = function (label, list, on, pick) {
       return h("div", { class: "seg", role: "group", "aria-label": label }, list.map(function (x) {
@@ -6636,17 +6697,17 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       // switcher, then the section's own buttons (CSS orders the page's tools).
       var sections = mediaSections(), here = sections.filter(function (x) { return x.plugin === id && x.view === current; })[0] || sections.filter(function (x) { return x.plugin === id; })[0];
       var nav = seg("Media views", sections.map(function (x) { return { key: x.key, section: x, title: x.title }; }),
-        function (x) { return x === here || x.section === here; }, function (x) { go(mediaHash(x.section)); });
+        function (x) { return !detail && x.section === here; }, function (x) { go(mediaHash(x.section)); });
       nav.className = "library-nav";
       Array.prototype.forEach.call(nav.children, function (btn, i) { btn.setAttribute("data-library-view", sections[i].key); });
-      var mbar = [h("h1", { text: here ? here.title : "Media" }), h("span", { class: "spacer" }), nav];
+      var mbar = [h("h1", { text: detail ? title || detail.title : here ? here.title : "Media" }), h("span", { class: "spacer" }), nav];
       if (trailing) { var tools = trailing.tagName === "DIV" ? trailing : h("div", {}, [trailing]); tools.classList.add("media-tools"); mbar.push(tools); }
       var mhead = h("div", attrs || { class: "pv-head media-head" }, mbar);
       if (!viewSeg) return [mhead];
       viewSeg.classList.add("pv-sub");
       return [mhead, viewSeg];
     }
-    var bar = [h("h1", { text: name })];
+    var bar = [h("h1", { text: title || name })];
     if (viewSeg) bar.push(viewSeg);
     if (trailing) bar.push(trailing);
     var head = h("div", attrs || { class: "pv-head" }, bar);
@@ -6786,6 +6847,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   function leavePluginView() {
     hidePage();
     if (!pv.key) return;
+    setRefreshError("", "plugin");
     if (pv.ctrl) pv.ctrl.abort();
     clearTimeout(pv.timer);
     pv = { key: "", plugin: "", view: "", data: null, err: null, at: 0, ctrl: null, timer: 0 };
@@ -6799,8 +6861,10 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
   function openPluginView() {
     var g = groupOf(route.plugin);
     if (g) {
-      var info = pluginInfo(route.plugin), views = pluginViews(info);
-      groupLast[g] = route.plugin + "/" + (route.pview || (views[0] && views[0].name) || "");
+      var groupViews = pluginViews(pluginInfo(route.plugin));
+      if (groupViews[0] && !groupViews.some(function (v) { return v.name === route.pview && v.hidden; })) {
+        groupLast[g] = route.plugin + "/" + (route.pview || groupViews[0].name);
+      }
     }
     if (Object.prototype.hasOwnProperty.call(PAGES, route.plugin)) {
       if (pv.key) { var keep = activePage; activePage = null; leavePluginView(); activePage = keep; }
@@ -6812,11 +6876,12 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     var view = route.pview || (views[0] && views[0].name) || "";
     var key = route.plugin + "/" + view + "?" + route.params;
     if (key === pv.key) { if (!pv.data && !pv.err && !pv.ctrl) fetchPluginView(); return; }
+    setRefreshError("", "plugin");
     if (pv.plugin !== route.plugin) releaseImages();
     if (pv.ctrl) pv.ctrl.abort();
     clearTimeout(pv.timer);
     pv = { key: key, plugin: route.plugin, view: view, params: route.params, data: null, err: null, at: 0, ctrl: null, timer: 0 };
-    if (views.some(function (v) { return v.name === view; })) pluginLastView[route.plugin] = view === views[0].name ? "" : view;
+    if (views.some(function (v) { return v.name === view && !v.hidden; })) pluginLastView[route.plugin] = view === views[0].name ? "" : view;
     renderPluginView();
     if (!PLUGIN_ID.test(route.plugin) || !VIEW_NAME.test(view)) {
       pv.err = { status: 404, message: "not found" };
@@ -6826,20 +6891,26 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     fetchPluginView();
   }
 
-  function fetchPluginView() {
+  function fetchPluginView(actionTitle) {
     if (!pv.key || !VIEW_NAME.test(pv.view) || !PLUGIN_ID.test(pv.plugin)) return;
     clearTimeout(pv.timer);
     if (pv.ctrl) pv.ctrl.abort();
     var ctrl = pv.ctrl = new AbortController();
+    if (typeof actionTitle === "string") pv.refreshActionTitle = actionTitle;
     var q = pv.params ? "?" + pv.params : "";
     api("/plugins/" + encodeURIComponent(pv.plugin) + "/views/" + encodeURIComponent(pv.view) + q, ctrl.signal).then(function (v) {
       if (pv.ctrl !== ctrl) return;
       pv.data = v && typeof v === "object" ? v : { blocks: [] };
-      pv.err = null; pv.at = Date.now();
+      pv.err = null; pv.actionResult = false; pv.at = Date.now();
+      pv.refreshActionTitle = "";
+      refreshPluginActionList();
+      setRefreshError("", "plugin");
     }, function (err) {
       if (pv.ctrl !== ctrl || err.name === "AbortError") return;
       if (err.unauthorized) { showGate(true); return; }
       pv.err = err;
+      if (pv.data) setRefreshError(refreshFailure(err), "plugin", pv.refreshActionTitle);
+      pv.refreshActionTitle = "";
     }).then(function () {
       if (pv.ctrl !== ctrl) return;
       pv.ctrl = null;
@@ -6868,25 +6939,209 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     if (every && Date.now() - pv.at >= every) fetchPluginView(); else schedulePluginRefresh();
   });
 
+  var pluginActionsPending = new Set();
+
+  function pluginActionKey(plugin, action) {
+    return JSON.stringify([plugin, action.id, action.values || {}]);
+  }
+
+  function syncPluginActionButtons(key) {
+    var pending = pluginActionsPending.has(key);
+    [$("plugin-body"), drawerBody, drawerParent && drawerParent.content].forEach(function (root) {
+      if (!root) return;
+      root.querySelectorAll("[data-action-key]").forEach(function (button) {
+        if (button.getAttribute("data-action-key") !== key) return;
+        button.disabled = pending;
+        button.textContent = pending ? "Working…" : button.getAttribute("data-action-label");
+      });
+    });
+  }
+
+  function pluginActionButton(page, action, focusKey, listStatus) {
+    var key = pluginActionKey(page.plugin, action), pending = pluginActionsPending.has(key);
+    var button = h("button", {class: "btn", type: "button", "data-fk": focusKey,
+      "data-action-key": key, "data-action-label": action.label, disabled: pending,
+      onclick: function () {
+        if (pv !== page) return;
+        if (listStatus) {
+          var current = currentPluginActions(page).find(function (offer) { return pluginActionKey(page.plugin, offer) === key; });
+          listStatus.textContent = current ? "" : "This action changed. Pick again.";
+          if (!current) return;
+          openPluginAction(page, current, button);
+        } else {
+          openPluginAction(page, action, button);
+        }
+      }}, [pending ? "Working…" : action.label]);
+    return button;
+  }
+
+  function currentPluginActions(page) {
+    return page.data && Array.isArray(page.data.actions) ? page.data.actions : [];
+  }
+
+  function fillPluginActionList(page, list, status) {
+    var buttons = currentPluginActions(page).map(function (action) { return pluginActionButton(page, action, null, status); });
+    list.replaceChildren.apply(list, buttons);
+    if (!buttons.length) list.appendChild(h("p", {class: "sub", text: "No actions available."}));
+    return buttons;
+  }
+
+  function refreshPluginActionList() {
+    if (!drawerOpen) return;
+    var parent = drawerParent;
+    var root = parent ? parent.content : drawerBody;
+    var list = root.querySelector(".pv-action-list");
+    if (!list) return;
+    var active = parent ? parent.focus : document.activeElement;
+    var key = active && list.contains(active) && active.getAttribute("data-action-key");
+    var buttons = fillPluginActionList(pv, list, root.querySelector(".pv-action-list-status"));
+    if (!parent) sizeDrawer();
+    if (!key) return;
+    var focus = buttons.find(function (button) { return !button.disabled && button.getAttribute("data-action-key") === key; })
+      || buttons.find(function (button) { return !button.disabled; });
+    if (parent) parent.focus = focus;
+    else (focus || $("drawer-close")).focus({ preventScroll: true });
+  }
+
+  function pluginActionBar(page, actions) {
+    var bar = h("div", {class: "actions pv-actions"});
+    var counts = Object.create(null);
+    actions.forEach(function (a) { counts[a.id] = (counts[a.id] || 0) + 1; });
+    function addToBar(action) {
+      var focusKey = counts[action.id] === 1 ? "action-" + action.id : pluginActionKey(page.plugin, action);
+      bar.appendChild(pluginActionButton(page, action, focusKey));
+    }
+    if (actions.length <= 3) {
+      actions.forEach(addToBar);
+      return bar;
+    }
+    var first = actions.find(function (action) { return !action.destructive; });
+    if (first) addToBar(first);
+    var more = h("button", {class: "btn", type: "button", "data-fk": "all-actions", onclick: function () {
+      if (pv !== page) return;
+      var status = h("div", {class: "sub pv-action-list-status", role: "status"});
+      var list = h("div", {class: "pv-action-list"});
+      fillPluginActionList(page, list, status);
+      openDrawer(h("div", {}, [h("h3", {text: "All actions"}), status, list]), null, more);
+    }}, ["All actions (" + actions.length + ")"]);
+    bar.appendChild(more);
+    return bar;
+  }
+
+  function openPluginAction(page, a, opener) {
+    var key = pluginActionKey(page.plugin, a);
+    if (pv !== page || pluginActionsPending.has(key)) return;
+    var presets = a.values || {}, controls = [], errors = Object.create(null);
+    var fields = h("div", {class: "form pv-action-fields"}, [h("h3", {text: a.label})]);
+    var form = h("form", {class: "pv-action"}, [fields]);
+    var consequence = a.confirm || (a.operator ? "This changes an external service." : "");
+    if (consequence) fields.appendChild(h("p", {text: consequence}));
+    (a.fields || []).forEach(function (f) {
+      var id = "action-field-" + f.key;
+      var error = errors[f.key] = h("div", {class: "t-crit sub", id: id + "-error"});
+      if (Object.prototype.hasOwnProperty.call(presets, f.key)) {
+        var value = presets[f.key];
+        var option = (f.options || []).find(function (o) { return o.value === value; });
+        var display = f.type === "bool" ? (value ? "Yes" : "No") : option ? option.label : String(value);
+        fields.appendChild(h("div", {}, [h("strong", {text: f.label + ": "}), display, error]));
+        return;
+      }
+      var type = {bool: "checkbox", number: "number", secret: "password", url: "url"}[f.type] || "text";
+      var tag = f.type === "select" ? "select" : f.type === "text" && (f.key === "items" || f.key === "selections") ? "textarea" : "input";
+      var input = h(tag, {id: id, type: tag === "input" ? type : null, required: f.required && f.type !== "bool",
+        autocomplete: f.type === "secret" ? "off" : null, step: type === "number" ? "any" : null,
+        placeholder: f.placeholder, "aria-describedby": (f.help ? id + "-help " : "") + id + "-error"});
+      (f.options || []).forEach(function (o) { input.appendChild(h("option", {value: o.value}, [o.label])); });
+      if (f.default != null) {
+        if (f.type === "bool") input.checked = f.default;
+        else input.value = f.default;
+      }
+      controls.push({field: f, input: input});
+      fields.appendChild(h("div", {}, [h("label", {for: id, text: f.label + (f.required ? " (required)" : "")}),
+        input, f.help ? h("div", {id: id + "-help", class: "sub", text: f.help}) : null, error]));
+    });
+    var cancel = h("button", {class: "btn", type: "button", id: "action-cancel"}, ["Cancel"]);
+    var submit = h("button", {class: "btn primary" + (a.destructive ? " destructive" : ""), type: "submit"}, [a.label]);
+    var status = h("div", {role: "alert", class: "t-crit"});
+    fields.appendChild(status);
+    form.appendChild(h("div", {class: "actions"}, [cancel, submit]));
+    var sheetID = openConfirmation(form, a.label, opener, "#action-cancel");
+    form.onsubmit = function (event) {
+      event.preventDefault();
+      if (submit.disabled || !drawerExists(sheetID) || pluginActionsPending.has(key)) return;
+      var values = Object.assign({}, presets);
+      Object.keys(errors).forEach(function (key) { errors[key].textContent = ""; });
+      controls.forEach(function (c) {
+        var f = c.field, input = c.input;
+        input.removeAttribute("aria-invalid");
+        if (f.type === "bool") values[f.key] = input.checked;
+        else if (input.value === "") values[f.key] = null;
+        else values[f.key] = f.type === "number" ? Number(input.value) : input.value;
+        if (f.type === "secret") input.value = "";
+      });
+      status.textContent = "";
+      pluginActionsPending.add(key);
+      syncPluginActionButtons(key);
+      submit.disabled = true;
+      submit.textContent = "Working…";
+      (a.operator ? operatorWrite : write)("/plugins/" + encodeURIComponent(page.plugin) + "/actions/" + encodeURIComponent(a.id),
+        "POST", {confirmed: true, values: values}).finally(function () {
+        pluginActionsPending.delete(key);
+        syncPluginActionButtons(key);
+      }).then(function (result) {
+        if (drawerExists(sheetID) && drawerIsOpen()) closeDrawer();
+        if (pv !== page) return;
+        if (a.result === "toast") {
+          var first = (result.blocks || []).find(function (b) { return b.type === "notice"; });
+          if (toastPersistent) announce(result.title);
+          else toast(result.title, {kind: "ok", sub: first && first.text});
+          fetchPluginView(result.title);
+        } else {
+          if (pv.ctrl) pv.ctrl.abort();
+          pv.ctrl = null;
+          clearTimeout(pv.timer);
+          pv.data = result;
+          pv.err = null;
+          pv.actionResult = true;
+          pv.at = Date.now();
+          renderPluginView();
+          schedulePluginRefresh();
+        }
+      }, function (err) {
+        if (!drawerExists(sheetID) || !drawerIsOpen()) return;
+        submit.disabled = false;
+        submit.textContent = a.label;
+        status.textContent = err.message;
+        Object.keys(err.fields || {}).forEach(function (key) {
+          if (errors[key]) errors[key].textContent = err.fields[key];
+        });
+        controls.forEach(function (c) {
+          if (err.fields && err.fields[c.field.key]) c.input.setAttribute("aria-invalid", "true");
+        });
+      });
+    };
+  }
+
   function renderPluginView() {
     if (chartGesture && chartGesture.view === pv) { chartGesture.redraw = true; return; }
     chartGesture = null;
     var root = $("plugin-body"), info = pluginInfo(pv.plugin), views = pluginViews(info);
     if (chartRO) chartRO.disconnect();   // the charts being replaced; new ones observe themselves
     var name = info ? str(info.tab.title) || str(info.name) : pv.plugin;
-    var inTab = views.some(function (v) { return v.name === pv.view; });
+    var currentTab = views.find(function (v) { return v.name === pv.view; });
+    var inTab = !!currentTab && !currentTab.hidden;
     var v = pv.data, err = pv.err;
     // Keep keyboard focus across a refresh: links carry a stable key.
     var focusKey = document.activeElement && root.contains(document.activeElement) ? document.activeElement.getAttribute("data-fk") : null;
 
     var head = [];
-    if (!inTab && views.length) {
+    if (!currentTab && views.length) {
       var back = pluginLastView[pv.plugin] || views[0].name;
       var backTitle = (views.filter(function (x) { return x.name === back; })[0] || views[0]).title || name;
       head.push(h("button", { class: "back", type: "button", "data-fk": "back", onclick: function () { go(pluginHash(pv.plugin, back === views[0].name ? "" : back, "")); } },
         [iconNode("back", "sm"), str(backTitle) || name]));
     }
-    var title = inTab || !v ? name : str(v.title) || name;
+    var title = inTab ? name : str(v && v.title) || str(currentTab && currentTab.title) || name;
     var stampNode = null;
     if (v) {
       var when = Date.parse(v.updated_at) || pv.at, every = refreshEvery();
@@ -6894,7 +7149,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       if (err) stamp = "Refresh failed · showing " + new Date(when).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       stampNode = h("span", { class: "pv-stamp" + (err ? " stale" : ""), title: new Date(when).toLocaleString() + (every ? " · refreshes every " + Math.round(every / 1000) + " s" : "") }, [stamp]);
     }
-    if (inTab) head = head.concat(pluginHead(pv.plugin, pv.view, stampNode));
+    if (currentTab) head = head.concat(pluginHead(pv.plugin, pv.view, stampNode, null, title));
     else head.push(h("div", { class: "pv-head" }, [h("h1", { text: title }), stampNode]));
 
     var body;
@@ -6909,30 +7164,20 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     } else {
       var blocks = Array.isArray(v.blocks) ? v.blocks : [];
       body = h("div", { class: "pv-blocks" });
-      (v.actions || []).forEach(function (a) {
-        var values = {}, controls = [], message = h("span", {role:"status"});
-        (a.fields || []).forEach(function(f) {
-          var input = (f.key === "items" || f.key === "selections") ? h("textarea") : f.type === "select" ? h("select") : h("input", {type:f.type === "bool" ? "checkbox" : f.type === "number" ? "number" : "text"});
-          (f.options || []).forEach(function(o) {input.appendChild(h("option",{value:o.value},[o.label]));});
-          controls.push(h("label",{},[f.label," ",input])); values[f.key] = function(){if (!f.required && f.type !== "bool" && input.value === "") return undefined; return f.type === "bool" ? input.checked : f.type === "number" ? Number(input.value) : input.value;};
-        });
-        var button = h("button",{class:"btn",type:"button",onclick:function(){
-          if (!confirm(a.label + "?" + (a.operator ? " This changes the external service." : ""))) return;
-          var fields = {}; Object.keys(values).forEach(function(k){fields[k]=values[k]();});
-          button.disabled=true; message.textContent="Working…";
-          (a.operator ? operatorWrite : write)("/plugins/"+encodeURIComponent(pv.plugin)+"/actions/"+encodeURIComponent(a.id),"POST",{confirmed:true,values:fields}).then(function(result){pv.data=result;renderPluginView();},function(e){button.disabled=false;message.textContent=e.message;});
-        }},[a.label]);
-        body.appendChild(h("details",{class:"card"},[h("summary",{},[a.label]),h("div",{class:"plug-group"},controls.concat([button,message]))]));
-      });
+      if (v.title && inTab && (pv.actionResult || (pv.params && currentTab.title !== v.title))) body.appendChild(h("h2", {text: v.title}));
+      if (v.actions && v.actions.length) body.appendChild(pluginActionBar(pv, v.actions));
 
       if (err) body.appendChild(notice("warn", "Could not refresh: " + err.message + ". Showing the last view that loaded."));
       if (!blocks.length) body.appendChild(stateBox("Nothing to show yet", name + " returned an empty view."));
       appendBlocks(body, blocks, 1, "b");
     }
+    var openerKey = drawerReturnFocus && root.contains(drawerReturnFocus) && drawerReturnFocus.getAttribute("data-fk");
     root.replaceChildren.apply(root, head.concat([body]));
+    if (openerKey) drawerReturnFocus = root.querySelector('[data-fk="' + CSS.escape(openerKey) + '"]') || root.querySelector(".pv-actions button, [data-fk]");
     hydratePluginImages(root);
     if (focusKey) {
       var again = root.querySelector('[data-fk="' + CSS.escape(focusKey) + '"]');
+      if (!again) again = root.querySelector(".pv-actions button, [data-fk]");
       if (again) again.focus({ preventScroll: true });
     }
   }
@@ -9328,18 +9573,27 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   // ------------------------------------------------------------ loading
 
-  var loading = null, refreshTimer = null, refreshError = "";
-  function setRefreshError(reason) {
-    if (reason === refreshError || reason && refreshError) return;
+  var loading = null, refreshTimer = null, refreshError = "", refreshErrors = {}, actionRefreshToast = false;
+  function setRefreshError(reason, source, actionTitle) {
+    var clearActionToast = actionRefreshToast && source === "plugin" && !reason;
+    refreshErrors[source || "dashboard"] = reason;
+    reason = refreshErrors.dashboard || refreshErrors.plugin || "";
+    if (!actionTitle && !clearActionToast && (reason === refreshError || reason && refreshError)) return;
+    var continuing = !!refreshError;
+    actionRefreshToast = !!actionTitle;
     refreshError = reason;
     var button = $("refresh"), label = reason ? "Refresh failed · Retry" : "Refresh";
     button.classList.toggle("refresh-error", !!reason);
     button.setAttribute("aria-label", label);
     button.title = label;
     if (reason) {
-      toast("Couldn't refresh · " + reason, {
-        kind: "error", persistent: true, action: { label: "Retry", fn: refreshDashboard }
+      var title = actionTitle ? actionTitle + (/[.!?]$/.test(actionTitle) ? "" : ".") + " Couldn't refresh the view."
+        : "Couldn't refresh · " + reason;
+      toast(title, {
+        kind: "error", persistent: true, action: { label: "Retry", fn: refreshDashboard },
+        announcement: continuing || actionTitle ? "" : title
       });
+      if (actionTitle && !continuing) announce("Couldn't refresh the view.");
     } else if (toastPersistent) {
       var retryFocused = document.activeElement === toastAction;
       dismissToast();
@@ -9425,6 +9679,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
 
   function showGate(failed, note, checkingToken) {
     setRefreshError("");
+    setRefreshError("", "plugin");
     if (!note && !checkingToken && (failed || appShown())) note = "Your session has ended. Sign in again.";
     failed = !!checkingToken;
     closePalette(true);
@@ -10253,7 +10508,7 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
       return;
     }
 
-    if (e.key === "Escape") { closeDrawer(); hideTip(); return; }
+    if (e.key === "Escape") { dismissDrawer(); hideTip(); return; }
     var cell = document.activeElement;
     if (!cell || !cell.classList || !cell.classList.contains("cell")) return;
     var wrap = cell.closest(".gridwrap"), cols = Number(wrap.dataset.cols);
@@ -10278,8 +10533,8 @@ tbody tr.clickable:active, summary:active { background: var(--surface-3); }
     if (e.target === tipAnchor) hideTip();
   });
 
-  $("drawer-close").addEventListener("click", closeDrawer);
-  $("scrim").addEventListener("click", closeDrawer);
+  $("drawer-close").addEventListener("click", function () { dismissDrawer(); });
+  $("scrim").addEventListener("click", function () { dismissDrawer(); });
 
   $("why-exposed").title = DEFS.exposed;
   $("why-exposed").addEventListener("click", function () { openDefDrawer("exposed"); });

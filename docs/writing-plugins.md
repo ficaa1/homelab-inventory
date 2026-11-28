@@ -24,9 +24,11 @@ Close() error
 
 The method signatures above describe the interface; implement them as methods on
 your own type. Manifest contains ID, Name, Description, Version, Settings and an
-optional Tab. A Tab has Title, Icon and Views (`Name`, `Title`); the first view is
-the default. View names match `[a-z][a-z0-9-]{0,31}`. Unknown icon names fall back
-to the dashboard's generic icon.
+optional Tab. A Tab has Title, Icon and Views (`Name`, `Title`, optional `Hidden`).
+The first view is the default and cannot be hidden. Set `Hidden: true` for detail
+views that stay accessible by link or URL. The dashboard uses the detail view's
+title as the page heading and leaves every tab unselected. View names match
+`[a-z][a-z0-9-]{0,31}`. Unknown icon names fall back to the dashboard's generic icon.
 
 Settings use `plugin.Field`: Key, Label, Help, Type, Required, Default,
 Placeholder, Options and Group. Keys match `[a-z][a-z0-9_]{0,39}`. Types are
@@ -170,17 +172,32 @@ core durably reserves each profile-scoped operation before invoking it.
 
 A plugin can declare `Manifest.Actions []ActionSpec` and implement
 `Action(context.Context, string, Config) (View, error)`. An action specification
-has a fixed `ID`, plain `Label`, typed `Fields`, and `Operator`. A returned
-`View.Actions` contains exact copies of selected manifest specifications; core
-rejects invented or modified actions. Core renders forms and dispatches only
-registered IDs through `POST /plugins/{id}/actions/{action}` with
-`{"confirmed":true,"values":{...}}`. Unknown fields and missing/invalid values
+has an `ID`, plain `Label`, typed `Fields` and an `Operator` flag. Set `Destructive`
+for actions that discard data. Give `Confirm` a plain-text consequence that names the
+object being changed (up to 300 Unicode characters, without angle brackets).
+
+A view can offer up to 50 actions. Each must match a manifest ID, fields, operator
+flag, timeout, destructive flag and result mode. The label, consequence, fixed
+`Values` and editable field defaults may vary per instance. Repeat an ID to offer
+the same operation for several objects. Presets and defaults must pass field
+validation. Secret fields accept neither. The shared confirmation sheet shows
+fixed values as text and editable defaults in inputs. It sends all supplied
+values, including presets, to `POST /plugins/{id}/actions/{action}` with
+`{"confirmed":true,"values":{...}}`. Presets describe the UI. Validate object
+permissions and preconditions again in the plugin or upstream service.
+
+Leave `Result` empty or use `"view"` to display the returned view, including any
+review required before a second action. Use `"toast"` for a short acknowledgement.
+The dashboard shows its title and first notice, then refreshes the original view.
+Unknown fields and missing/invalid values
 are refused before dispatch. Action fields never inherit environment settings.
 
 Use `Operator: true` for infrastructure or external service changes. These calls
-require the separate operator credential. Local profile feedback may use normal
-administrator authentication and CSRF instead. Core serializes each action with
-plugin lifecycle operations, validates the returned view and never retries.
+require the operator credential or a signed-in browser session with CSRF (see
+`agentSession` in `cmd/api/agent.go`). The API bearer token alone never suffices.
+Local profile feedback may use normal administrator authentication and CSRF. Core
+serializes each action with plugin lifecycle operations, validates the returned view
+and never retries.
 Most actions have a ten-second deadline. A compiled `TimeoutSeconds` may extend
 that to at most 360 seconds for the guarded shrink sidecar.
 

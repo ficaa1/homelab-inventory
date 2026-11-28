@@ -83,17 +83,23 @@ func toneOK(t string) bool {
 
 // ValidateView returns the exact compact JSON to send, bounded before serving.
 func ValidateView(v View, manifest Manifest) ([]byte, error) {
+	if len(v.Actions) > 50 {
+		return nil, errors.New("view exceeds 50 actions")
+	}
 	for _, a := range v.Actions {
+		if err := a.validatePresentation(); err != nil {
+			return nil, err
+		}
 		found := false
 		for _, registered := range manifest.Actions {
-			if a.ID == registered.ID {
-				found = true
-				left, _ := json.Marshal(a)
-				right, _ := json.Marshal(registered)
-				if string(left) != string(right) {
-					return nil, errors.New("action specification differs from manifest")
-				}
+			if registered.ID != a.ID {
+				continue
 			}
+			if !a.matches(registered) {
+				return nil, errors.New("action specification differs from manifest")
+			}
+			found = true
+			break
 		}
 		if !found {
 			return nil, errors.New("unknown view action")

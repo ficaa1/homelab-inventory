@@ -36,8 +36,9 @@ type Option struct {
 	Label string `json:"label"`
 }
 type ViewRef struct {
-	Name  string `json:"name"`
-	Title string `json:"title"`
+	Name   string `json:"name"`
+	Title  string `json:"title"`
+	Hidden bool   `json:"hidden,omitempty"`
 }
 type Tab struct {
 	Title string    `json:"title"`

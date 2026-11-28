@@ -3,18 +3,69 @@ package plugin
 import (
 	"context"
 	"errors"
+	"reflect"
+	"slices"
+	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // ActionSpec is compiled into a plugin; callers cannot select an upstream path.
-// Operator actions require the separate operator credential before dispatch.
+// Operator actions require the operator credential or a signed-in browser session with CSRF.
 type ActionSpec struct {
-	TimeoutSeconds int     `json:"timeout_seconds,omitempty"`
-	ID             string  `json:"id"`
-	Label          string  `json:"label"`
-	Fields         []Field `json:"fields,omitempty"`
-	Operator       bool    `json:"operator,omitempty"`
+	Destructive    bool           `json:"destructive,omitempty"`
+	Confirm        string         `json:"confirm,omitempty"`
+	Values         map[string]any `json:"values,omitempty"`
+	Result         string         `json:"result,omitempty"`
+	TimeoutSeconds int            `json:"timeout_seconds,omitempty"`
+	ID             string         `json:"id"`
+	Label          string         `json:"label"`
+	Fields         []Field        `json:"fields,omitempty"`
+	Operator       bool           `json:"operator,omitempty"`
 }
+
+func (a ActionSpec) validatePresentation() error {
+	if strings.TrimSpace(a.Label) == "" || strings.ContainsAny(a.Label+a.Confirm, "<>") || utf8.RuneCountInString(a.Confirm) > 300 {
+		return errors.New("invalid action label or confirmation")
+	}
+	if a.Result != "" && a.Result != "view" && a.Result != "toast" {
+		return errors.New("invalid action result")
+	}
+	presets := 0
+	for _, f := range a.Fields {
+		if f.Default != nil && !validActionValue(f, f.Default) {
+			return errors.New("invalid action default")
+		}
+		if value, ok := a.Values[f.Key]; ok {
+			presets++
+			if !validActionValue(f, value) {
+				return errors.New("invalid action preset")
+			}
+		}
+	}
+	if presets != len(a.Values) {
+		return errors.New("unknown action preset")
+	}
+	return nil
+}
+
+func validActionValue(f Field, v any) bool {
+	if f.Type == Secret || (f.Required && isString(v) && strings.TrimSpace(v.(string)) == "") {
+		return false
+	}
+	_, msg := fieldValue(f, v)
+	return msg == ""
+}
+
+func (a ActionSpec) matches(registered ActionSpec) bool {
+	return a.Operator == registered.Operator && a.Destructive == registered.Destructive &&
+		a.TimeoutSeconds == registered.TimeoutSeconds && a.Result == registered.Result &&
+		slices.EqualFunc(a.Fields, registered.Fields, func(a, b Field) bool {
+			a.Default, b.Default = nil, nil
+			return reflect.DeepEqual(a, b)
+		})
+}
+
 type ActionSource interface {
 	Action(context.Context, string, Config) (View, error)
 }
@@ -70,7 +121,18 @@ func (r *Registry) Action(ctx context.Context, id, action string, confirmed bool
 	defer cancel()
 	v, err := src.Action(ctx, action, clean)
 	if err != nil {
-		return nil, errors.New(e.host.safe(err.Error()))
+		message := err.Error()
+		for _, f := range spec.Fields {
+			if value, _ := clean[f.Key].(string); f.Type == Secret && value != "" {
+				message = strings.ReplaceAll(message, value, "[redacted]")
+			}
+		}
+		message = e.host.safe(message)
+		var field *FieldError
+		if errors.As(err, &field) && slices.ContainsFunc(spec.Fields, func(f Field) bool { return f.Key == field.Key }) {
+			return nil, &ValidationError{Message: message, Fields: map[string]string{field.Key: message}}
+		}
+		return nil, errors.New(message)
 	}
 	return ValidateView(v, e.manifest)
 }

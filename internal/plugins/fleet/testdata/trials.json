@@ -1,0 +1,54 @@
+{
+  "api_version": 1,
+  "generated_at": "2026-12-01T09:15:00Z",
+  "rules": {
+    "trial_days": 30,
+    "keep_model_min_threads": 3,
+    "keep_user_min_threads": 1
+  },
+  "trials": [
+    {
+      "source": "example-skills",
+      "since": "2026-11-10",
+      "ends": "2026-12-10",
+      "state": "running",
+      "hosts": null,
+      "skills": [
+        {
+          "id": "example-skills/lint-docs",
+          "name": "lint-docs",
+          "mode": "model",
+          "decided": true,
+          "threads": 5,
+          "by_host": [
+            {
+              "host": "host-a",
+              "threads": 5
+            }
+          ],
+          "suggestion": "model"
+        }
+      ]
+    },
+    {
+      "source": "sample-skills",
+      "since": "2026-10-28",
+      "ends": "2026-11-28",
+      "state": "due",
+      "hosts": [
+        "host-a"
+      ],
+      "skills": [
+        {
+          "id": "sample-skills/sort-notes",
+          "name": "sort-notes",
+          "mode": "user",
+          "decided": false,
+          "threads": 0,
+          "by_host": [],
+          "suggestion": "exclude"
+        }
+      ]
+    }
+  ]
+}

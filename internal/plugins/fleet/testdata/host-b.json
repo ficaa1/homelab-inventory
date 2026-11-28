@@ -1,0 +1,22 @@
+{
+  "api_version": 1,
+  "generated_at": "2026-12-01T09:15:00Z",
+  "repo_head": "f123abc",
+  "policy": {
+    "stale_after_seconds": 259200,
+    "disk_warn_free_ratio": 0.15,
+    "disk_crit_free_ratio": 0.08,
+    "trial_days": 30,
+    "trial_due_soon_days": 7
+  },
+  "host": {
+    "name": "host-b",
+    "fleet_version": null,
+    "last_seen_at": null,
+    "synced_commit": null,
+    "counts": null,
+    "disk": null,
+    "context_cost": null
+  },
+  "report": null
+}
