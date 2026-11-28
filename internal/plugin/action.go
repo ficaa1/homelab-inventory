@@ -11,7 +11,7 @@ import (
 )
 
 // ActionSpec is compiled into a plugin; callers cannot select an upstream path.
-// Operator actions require the separate operator credential before dispatch.
+// Operator actions require the operator credential or a signed-in browser session with CSRF.
 type ActionSpec struct {
 	Destructive    bool           `json:"destructive,omitempty"`
 	Confirm        string         `json:"confirm,omitempty"`

@@ -193,9 +193,11 @@ Unknown fields and missing/invalid values
 are refused before dispatch. Action fields never inherit environment settings.
 
 Use `Operator: true` for infrastructure or external service changes. These calls
-require the separate operator credential. Local profile feedback may use normal
-administrator authentication and CSRF instead. Core serializes each action with
-plugin lifecycle operations, validates the returned view and never retries.
+require the operator credential or a signed-in browser session with CSRF (see
+`agentSession` in `cmd/api/agent.go`). The API bearer token alone never suffices.
+Local profile feedback may use normal administrator authentication and CSRF. Core
+serializes each action with plugin lifecycle operations, validates the returned view
+and never retries.
 Most actions have a ten-second deadline. A compiled `TimeoutSeconds` may extend
 that to at most 360 seconds for the guarded shrink sidecar.
 
