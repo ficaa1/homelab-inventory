@@ -144,7 +144,9 @@ func (p *Fleet) hosts(data hostsResponse) ([]plugin.Block, error) {
 }
 
 var receiptStates = map[string]plugin.Badge{"done": badge("Done", "ok"), "working": badge("Working", "info"), "failed": badge("Failed", "crit")}
-var actionWords = map[string]string{"add_trial_source": "Add trial source", "set_skill_mode": "Set skill mode", "end_trial": "End trial", "remove_source": "Remove source", "force_file": "Force file"}
+var actionWords = map[string]string{"add_trial_source": "Add trial source", "set_skill_mode": "Set skill mode", "end_trial": "End trial", "remove_source": "Remove source", "force_file": "Force file",
+	"proxy_set_strategy": "Change routing strategy", "proxy_set_account_routing": "Change account routing", "proxy_set_account_enabled": "Enable or disable account",
+	"proxy_refresh_account": "Renew access", "proxy_reset_cooldown": "Reset cooldown"}
 var reauthChanges = map[string]string{"proxy_reauth_start": "Sign-in started for ", "proxy_reauth_finish": "Sign-in finished for "}
 
 func (p *Fleet) overview(ctx context.Context, data overviewResponse) ([]plugin.Block, error) {

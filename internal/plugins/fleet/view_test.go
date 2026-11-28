@@ -588,3 +588,11 @@ func TestSectionKeepsLeadingTableWithinBlockLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRecentChangesNameEveryAction(t *testing.T) {
+	for _, a := range New(testHost{}).Manifest().Actions {
+		if actionWords[a.ID] == "" && reauthChanges[a.ID] == "" {
+			t.Errorf("recent changes show the raw action ID %q", a.ID)
+		}
+	}
+}
