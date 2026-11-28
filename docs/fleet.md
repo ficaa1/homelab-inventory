@@ -14,6 +14,7 @@ of it.
 | `hub_url` | URL | yes | The hub's base URL, without `/v1`. Example: `https://hub.example.lan:8790` |
 | `read_token` | secret | yes | Bearer token for views and alerts |
 | `operator_token` | secret | no | Bearer token for actions. Without it, the actions are hidden |
+| `proxy_panel_url` | URL | no | A link to the proxy's own management panel, shown on the Proxy view. The plugin never calls it |
 
 Use HTTPS where the hub has a certificate the dashboard trusts. Plain HTTP sends the tokens in
 the clear, so use it only on a network you control. **Test** reports which one is in use.
@@ -27,6 +28,9 @@ the clear, so use it only on a network you control. **Test** reports which one i
 | Host | One host's items that need attention, its provider mapping, its updates and its force requests |
 | Skills | Every skill with its source, mode, trial and per-host usage. Filter by source, origin or mode |
 | Trials | One section per trial source with its decision table and end date |
+| Skill | One skill: mode, source, hosts and usage. Actions: set its mode |
+| Proxy | The model proxy behind the hub: routing strategy and one row per account with status, cooldowns and quota |
+| Account | One proxy account: quota, cooldowns, recent requests. Actions: routing, enable, refresh, sign in again, reset cooldown |
 | Usage | Planned. Tokens and cost per day and model, quota, and usage per host |
 
 ## Alerts
@@ -39,7 +43,14 @@ the clear, so use it only on a network you control. **Test** reports which one i
 | `fleet.trial_due` | info | A trial passed its end date and is still a trial. The summary says how many skills are undecided |
 | `fleet.disk` | warning or critical | A host's free disk is below the hub's thresholds |
 
-The subject is the host name, or the source name for `fleet.trial_due`. If the hub can't be
+| `fleet.proxy_unreachable` | warning | The hub can't reach the proxy, or the proxy rejected the hub's management key |
+| `fleet.proxy_sign_in` | warning | An account needs to sign in again |
+| `fleet.proxy_cooling` | critical | Every enabled account of one provider is cooling down |
+| `fleet.proxy_renewal` | warning | An account's access expires within 24 hours and its last renewal failed |
+
+The subject is the host name, the source name for `fleet.trial_due`, the provider for
+`fleet.proxy_cooling`, the account ID for the other proxy rules, and `proxy` for
+`fleet.proxy_unreachable`. If the hub can't be
 reached, the dashboard raises `plugin.unreachable` after three failed polls.
 
 ---
@@ -403,9 +414,87 @@ be computed later. Any field is `null` when its source doesn't report it.
 `expiries_after_idle` counts requests that wrote a cache prefix again after an idle gap longer
 than that prefix's TTL.
 
-### `/v1/proxy/…` (reserved)
+### Proxy
 
-Reserved for a later proxy section. Not part of version 1 yet.
+The hub fronts one model proxy (a CLIProxyAPI-compatible server) through its management API.
+The plugin never talks to the proxy, and the hub keeps the proxy's management key to itself.
+The hub re-shapes every answer: account names, emails and tokens never pass through.
+
+#### `GET /v1/proxy`
+
+```json
+{
+  "api_version": 1,
+  "generated_at": "2026-12-01T09:15:00Z",
+  "proxy": {"state": "ok", "message": null, "version": "1.4.0"},
+  "routing": {"strategy": "round-robin", "etag": "\"r-41\""},
+  "accounts": [ Account, … ],
+  "truncated": false
+}
+```
+
+- `proxy.state`:
+  - `ok`;
+  - `unreachable`: the hub can't connect;
+  - `key_rejected`: the proxy refused the management key once, and the hub stopped calling it
+    until the key changes;
+  - `not_configured`.
+
+  When the state isn't `ok`, `routing` and `accounts` are `null` and `message` says what to fix.
+- `routing.strategy`: `round-robin`, `fill-first` or `weighted-round-robin`. `etag` is opaque.
+  `proxy_set_strategy` sends it back, so a change made meanwhile elsewhere returns `409`.
+- Caps: 200 accounts.
+
+**Account**
+
+```json
+{
+  "id": "acc_3f9a1c",
+  "provider": "provider-a",
+  "label": "…@example.com",
+  "status": "cooling_down",
+  "disabled": false,
+  "requires_sign_in": false,
+  "renewal": "ok",
+  "access_expires_at": "2026-12-01T21:00:00Z",
+  "priority": 0,
+  "weight": 1,
+  "cooldowns": [{"model": "model-a", "until": "2026-12-01T09:40:00Z", "reason": "rate_limited"}],
+  "requests": {
+    "success": 1204, "failed": 31,
+    "recent": [{"at": "2026-12-01T06:00:00Z", "success": 12, "failed": 0}]
+  },
+  "quota": [
+    {"window": "primary", "used_ratio": 0.42, "resets_at": "2026-12-01T12:00:00Z", "observed_at": "2026-12-01T09:10:00Z"}
+  ]
+}
+```
+
+- `id` is opaque and stable for the account. Actions take it. It never contains an email or
+  file name.
+- `label` is masked: at most the email's domain.
+- `status`: `active`, `cooling_down`, `needs_sign_in`, `disabled` or `error`.
+- `renewal`: `ok`, `renewing`, `failed` or `unknown`. `access_expires_at` may be `null`.
+- `cooldowns` is empty when there are none. `model` is `null` for a cooldown on the whole account.
+- `requests.recent` has one entry per 10 minutes over the last 200 minutes, oldest first.
+- `quota` is `null` when the provider doesn't report quota. Each entry has `observed_at`,
+  because quota is only learned from responses.
+
+#### `GET /v1/proxy/accounts/{id}`
+
+`{"api_version": 1, "generated_at": "…", "proxy": {…}, "routing": {…}, "account": Account}`.
+Returns `404` for an unknown ID.
+
+#### `GET /v1/proxy/sign-in/{session}`
+
+The state of a sign-in that `proxy_reauth_start` began.
+
+```json
+{"api_version": 1, "generated_at": "…", "session": "ras_7b2e", "account": "acc_3f9a1c", "state": "waiting", "message": null, "expires_at": "2026-12-01T09:20:00Z"}
+```
+
+`state`: `waiting` (for `proxy_reauth_finish`), `working`, `ok`, `error` (with `message`) or
+`expired`. Sessions expire 5 minutes after they start.
 
 ### Actions
 
@@ -446,6 +535,13 @@ Content-Type: application/json
 | `end_trial` | `source`, `undecided` (`user`, `exclude` or `suggestion`) | the source isn't on trial |
 | `remove_source` | `source` | `not_editable` when `removable` is false |
 | `force_file` | `host`, `item` (item ID), `live_sha256` (the hash the dashboard showed) | the item isn't `forceable`, or its live hash changed |
+| `proxy_set_strategy` | `strategy`, `etag` | the routing changed since `etag` |
+| `proxy_set_account_routing` | `account`, `priority` (integer), `weight` (0 to 1000000; 0 leaves the account out under weighted routing) | |
+| `proxy_set_account_enabled` | `account`, `enabled` (bool) | |
+| `proxy_refresh_account` | `account` | |
+| `proxy_reset_cooldown` | `account` | the account has no cooldown |
+| `proxy_reauth_start` | `account` | the account's provider can't sign in again from here |
+| `proxy_reauth_finish` | `session`, `redirect_url` | the session isn't `waiting` or has expired |
 
 - `end_trial` keeps every per-skill decision. Skills without one get `undecided`. With
   `suggestion`, each gets its row's suggestion from `GET /v1/trials`.
@@ -489,7 +585,16 @@ Content-Type: application/json
   then `applied`.
 - For `force_file`, `commit` is `null`, `hosts` names only the target host, and `force` is
   `{"id": "frc_01", "state": "queued"}`. Its state then moves as in `force_requests`.
-- Params never hold secrets, so receipts can be stored and shown as they are.
+- Proxy actions have `commit: null` and `hosts: []`. They apply to the proxy at once, except
+  `proxy_refresh_account` and `proxy_reauth_finish`, which answer `202` with `working`. Their
+  outcome shows on the account.
+- `proxy_reauth_start` returns `reauth` in the receipt:
+  `{"session": "ras_7b2e", "url": "https://…", "redirect_hint": "localhost:1455", "expires_at": "…"}`.
+  Open `url` on any device and sign in. The browser then lands on an address on
+  `redirect_hint` that fails to load. Copy that whole address into `proxy_reauth_finish`.
+- `proxy_reset_cooldown` clears only the proxy's own cooldown, not the provider's limit.
+- `redirect_url` is the one secret parameter. The hub never stores, logs or returns it, and
+  receipts show it as `null`. Every other parameter is safe to store and show.
 
 `ReceiptSummary`, used in `recent`, has `id`, `action`, `state`, `summary`, `created_at` and
 `pending_hosts` (a count).
