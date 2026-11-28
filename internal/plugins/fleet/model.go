@@ -29,13 +29,14 @@ type contextCost struct {
 	Tokens  int `json:"tokens_estimate"`
 }
 type hostSummary struct {
-	Name    string
-	Version *string    `json:"fleet_version"`
-	Seen    *time.Time `json:"last_seen_at"`
-	Commit  *string    `json:"synced_commit"`
-	Counts  *hostCounts
-	Disk    *disk
-	Cost    []contextCost `json:"context_cost"`
+	Name         string
+	ProfileSince *time.Time `json:"profile_since"`
+	Version      *string    `json:"fleet_version"`
+	Seen         *time.Time `json:"last_seen_at"`
+	Commit       *string    `json:"synced_commit"`
+	Counts       *hostCounts
+	Disk         *disk
+	Cost         []contextCost `json:"context_cost"`
 }
 type hostEnvelope struct {
 	envelope
@@ -44,14 +45,16 @@ type hostEnvelope struct {
 }
 type hostsResponse struct {
 	hostEnvelope
-	Hosts []hostSummary
+	Hosts     []hostSummary
+	Truncated bool
 }
 type trialDates struct{ Since, Ends, State string }
 type overviewResponse struct {
 	hostsResponse
 	Trials []struct {
 		trialDates
-		Source string
+		Source    string
+		Undecided int
 	}
 	Recent []struct {
 		Action, State, Summary string

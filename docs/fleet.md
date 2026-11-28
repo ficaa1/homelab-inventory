@@ -22,7 +22,7 @@ the clear, so use it only on a network you control. **Test** reports which one i
 
 | View | Shows |
 | --- | --- |
-| Overview | Host count, attention items, trials ending this week, the model-invoked context cost per host, and a list of hosts with their status |
+| Overview | Host count, attention items, trials past their end date or ending within the hub's policy window, the model-invoked context cost per host, and a list of hosts with their status |
 | Hosts | One row per host: last report, drift, broken links, refused changes, updates, free disk |
 | Host | One host's items that need attention, its provider mapping, its updates and its force requests |
 | Skills | Every skill with its source, mode, trial and per-host usage. Filter by source or mode |
@@ -33,7 +33,7 @@ the clear, so use it only on a network you control. **Test** reports which one i
 
 | Rule | Severity | When |
 | --- | --- | --- |
-| `fleet.host_stale` | warning | A host hasn't reported for longer than the hub's `stale_after_seconds`, or never reported and its profile is older than that |
+| `fleet.host_stale` | warning | A host hasn't reported for longer than the hub's `stale_after_seconds`, or never reported and its profile is older than that or has an unknown age |
 | `fleet.drift` | warning | A host has drift or broken links |
 | `fleet.refused` | warning | A host refused a change because the file drifted |
 | `fleet.trial_due` | info | A trial passed its end date and is still a trial. The summary says how many skills are undecided |

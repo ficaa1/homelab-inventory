@@ -3,6 +3,7 @@ package fleet
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -68,6 +69,9 @@ func TestAlertsFromOverviewPolicy(t *testing.T) {
 			if got[key{"drift", "host-a"}].Summary != "host-a: 2 drifted files, 1 broken link" || got[key{"host_stale", "host-b"}].Summary != "host-b has never reported" {
 				t.Fatal(alerts)
 			}
+			if got[key{"trial_due", "sample-skills"}].Summary != "sample-skills trial ended on 28 Nov · 1 undecided" {
+				t.Fatal(alerts)
+			}
 			if tc.staleC && got[key{"host_stale", "host-c"}].Summary != "host-c last reported 4 days ago" {
 				t.Fatal(alerts)
 			}
@@ -77,6 +81,33 @@ func TestAlertsFromOverviewPolicy(t *testing.T) {
 		})
 	}
 }
+
+func TestTrialDueAlertsIncludeDecisionCount(t *testing.T) {
+	h := newHub(t, false, func(w http.ResponseWriter, r *http.Request) {
+		const body = `{
+			"api_version": 1, "generated_at": "2026-12-11T09:15:00Z",
+			"policy": {"stale_after_seconds": 60, "disk_warn_free_ratio": 0.2, "disk_crit_free_ratio": 0.1, "trial_due_soon_days": 7},
+			"hosts": [],
+			"trials": [
+				{"source": "example-skills", "ends": "2026-12-10", "state": "due", "undecided": 4},
+				{"source": "sample-skills", "ends": "2026-12-10", "state": "due", "undecided": 0}
+			]
+		}`
+		w.Write([]byte(body))
+	})
+	alerts, err := h.Alerts(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []plugin.Alert{
+		{Rule: "trial_due", Subject: "example-skills", Severity: "info", Summary: "example-skills trial ended on 10 Dec · 4 undecided"},
+		{Rule: "trial_due", Subject: "sample-skills", Severity: "info", Summary: "sample-skills trial ended on 10 Dec · all decided, end the trial"},
+	}
+	if !slices.Equal(alerts, want) {
+		t.Fatal(alerts)
+	}
+}
+
 func TestPollFailureAndSilence(t *testing.T) {
 	for _, tc := range []struct {
 		name, body string
@@ -104,7 +135,11 @@ func TestPollFailureAndSilence(t *testing.T) {
 }
 func TestAlertTextIsSafe(t *testing.T) {
 	data := string(fixture(t, "overview"))
-	data = strings.ReplaceAll(data, "host-a", `host-<>\u0001a-read-fixture-only`)
+	host, err := json.Marshal("host-<>\u0001a-" + readToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = strings.ReplaceAll(data, `"host-a"`, string(host))
 	data = strings.ReplaceAll(data, "sample-skills", "<sample>-operator-fixture-only")
 	h := newHub(t, false, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(data)) })
 	alerts, err := h.Alerts(t.Context())

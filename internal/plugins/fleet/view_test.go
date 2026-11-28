@@ -45,7 +45,7 @@ func TestManifestAndViews(t *testing.T) {
 	}{
 		{"overview", "", func(t *testing.T, v plugin.View) {
 			stats := v.Blocks[0].Items
-			if stats[0].Value != "3" || stats[0].Hint != "2 stale" || stats[1].Value != "4" || stats[1].Hint != "on 1 host" || stats[2].Value != "1" || stats[2].Hint != "1 past end date" || stats[3].Value != "1" {
+			if stats[0].Value != "3" || stats[0].Hint != "2 stale" || stats[1].Value != "4" || stats[1].Hint != "from 2 of 3 hosts" || stats[2].Value != "1" || stats[2].Hint != "1 past end date · 0 end within 7 days" || stats[2].Tone != "warn" || stats[3].Value != "1" {
 				t.Fatal(stats)
 			}
 			hosts := v.Blocks[1].Items
@@ -60,7 +60,7 @@ func TestManifestAndViews(t *testing.T) {
 		{"hosts", "", func(t *testing.T, v plugin.View) {
 			assertText(t, v.Blocks[0], "2 updates · 3 pending", "Disk not reported", "Counts not reported")
 			rows := v.Blocks[1].Rows
-			if rows[0]["status"] != "Attention" || rows[0]["free"] != 61.0/512 || rows[1]["status"] != "Never reported" || rows[1]["drift"] != "—" || rows[2]["status"] != "Stale" || rows[2]["updates"] != 0 {
+			if rows[0]["status"] != "Attention" || rows[0]["free"] != 61.0/512 || rows[1]["status"] != "Stale" || rows[1]["drift"] != "—" || rows[2]["status"] != "Stale" || rows[2]["updates"] != 0 {
 				t.Fatal(rows)
 			}
 		}},
@@ -81,7 +81,7 @@ func TestManifestAndViews(t *testing.T) {
 			}
 		}},
 		{"host", "host-b", func(t *testing.T, v plugin.View) {
-			if len(v.Blocks) != 1 || v.Blocks[0].Text != "host-b hasn't reported yet. Run fleet sync on it." {
+			if len(v.Blocks) != 1 || v.Blocks[0].Tone != "warn" || v.Blocks[0].Text != "Stale · host-b hasn't reported yet. Run fleet sync on it." {
 				t.Fatal(v)
 			}
 		}},
@@ -136,6 +136,98 @@ func TestHostDetailWithSeveralRefusedFilesAndUnknownMatchCount(t *testing.T) {
 	}
 	if got := v.Blocks[1].Text; got != "2 files changed on the host and have a newer version waiting. Fleet won't overwrite them. Review each file on the host and keep the hand edit or restore the fleet version." {
 		t.Fatal(got)
+	}
+}
+
+func TestTruncatedHostLists(t *testing.T) {
+	h := newHub(t, false, func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(r.URL.Path, "/v1/")
+		body := strings.Replace(string(fixture(t, name)), `"hosts": [`, `"truncated": true, "hosts": [`, 1)
+		w.Write([]byte(body))
+	})
+	for _, name := range []string{"overview", "hosts"} {
+		v := h.view(t, name, nil)
+		if b := v.Blocks[0]; b.Type != "notice" || b.Tone != "info" || b.Text != "The hub sent only the first 3 hosts." {
+			t.Fatal(b)
+		}
+	}
+	alerts, err := h.Alerts(t.Context())
+	if err == nil || err.Error() != "The hub's host list was cut short; alerts need the full list." || alerts != nil {
+		t.Fatal(alerts, err)
+	}
+}
+
+func TestFirstReportGracePeriod(t *testing.T) {
+	for _, tc := range []struct {
+		name, profileSince, hint, status, tone string
+		stale                                  bool
+	}{
+		{"within grace", "2026-11-30T09:15:00Z", "1 stale · 1 waiting for first report", "Waiting for first report", "muted", false},
+		{"at threshold", "2026-11-28T09:15:00Z", "1 stale · 1 waiting for first report", "Waiting for first report", "muted", false},
+		{"past threshold", "2026-11-28T09:14:59Z", "2 stale", "Stale", "warn", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHub(t, false, func(w http.ResponseWriter, r *http.Request) {
+				name := strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/v1/"), "hosts/")
+				body := strings.Replace(string(fixture(t, name)), `"name": "host-b",`, fmt.Sprintf(`"name": "host-b", "profile_since": %q,`, tc.profileSince), 1)
+				w.Write([]byte(body))
+			})
+			overview := h.view(t, "overview", nil)
+			if got := overview.Blocks[0].Items[0].Hint; got != tc.hint {
+				t.Fatal(got)
+			}
+			host := overview.Blocks[1].Items[1]
+			if host.Tone != tc.tone {
+				t.Fatal(host)
+			}
+			assertText(t, host, tc.status)
+			if got := h.view(t, "hosts", nil).Blocks[1].Rows[1]["status"]; got != tc.status {
+				t.Fatal(got)
+			}
+			detail := h.view(t, "host", url.Values{"name": {"host-b"}}).Blocks[0]
+			if detail.Tone != tc.tone || !strings.HasPrefix(detail.Text, tc.status) {
+				t.Fatal(detail)
+			}
+			alerts, err := h.Alerts(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			staleAlert := slices.ContainsFunc(alerts, func(a plugin.Alert) bool {
+				return a.Rule == "host_stale" && a.Subject == "host-b"
+			})
+			if staleAlert != tc.stale {
+				t.Fatal(alerts)
+			}
+		})
+	}
+}
+
+func TestOverviewStatsWithPartialCountsAndPolicyWindow(t *testing.T) {
+	for _, due := range []bool{false, true} {
+		t.Run(fmt.Sprint(due), func(t *testing.T) {
+			h := newHub(t, false, func(w http.ResponseWriter, r *http.Request) {
+				body := string(fixture(t, "overview"))
+				body = strings.ReplaceAll(body, `"trial_due_soon_days": 7`, `"trial_due_soon_days": 10`)
+				body = strings.ReplaceAll(body, `"drift": 2`, `"drift": 0`)
+				body = strings.ReplaceAll(body, `"refused": 1`, `"refused": 0`)
+				body = strings.ReplaceAll(body, `"broken_links": 1`, `"broken_links": 0`)
+				if !due {
+					body = strings.ReplaceAll(body, `"state": "due"`, `"state": "running"`)
+				}
+				w.Write([]byte(body))
+			})
+			stats := h.view(t, "overview", nil).Blocks[0].Items
+			if att := stats[1]; att.Value != "0" || att.Hint != "from 2 of 3 hosts" || att.Tone != "" {
+				t.Fatal(att)
+			}
+			wantHint, wantTone := "1 end within 10 days", ""
+			if due {
+				wantHint, wantTone = "1 past end date · "+wantHint, "warn"
+			}
+			if trial := stats[2]; trial.Hint != wantHint || trial.Tone != wantTone {
+				t.Fatal(trial)
+			}
+		})
 	}
 }
 
@@ -195,7 +287,7 @@ func TestStatusPrecedence(t *testing.T) {
 		commit     *string
 		word, tone string
 	}{
-		{false, 0, 1, nil, nil, "Never reported", "muted"},
+		{false, 0, 1, nil, nil, "Stale", "warn"},
 		{true, 4 * 24 * time.Hour, 1, &hostCounts{Refused: 1}, &older, "Stale", "warn"},
 		{true, time.Minute, 7, &hostCounts{Drift: 1}, &older, "Disk critical", "crit"},
 		{true, time.Minute, 8, nil, &older, "Attention", "warn"},
