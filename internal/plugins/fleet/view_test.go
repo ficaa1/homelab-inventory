@@ -127,6 +127,63 @@ func TestManifestAndViews(t *testing.T) {
 	}
 }
 
+func TestRecentSignInChangesHideHubSummaries(t *testing.T) {
+	const callback = "http://localhost:1455/callback?code=synthetic-recent-code"
+	var data map[string]any
+	if err := json.Unmarshal(fixture(t, "overview"), &data); err != nil {
+		t.Fatal(err)
+	}
+	data["recent"] = []map[string]any{
+		{"action": "proxy_reauth_start", "state": "working", "summary": callback},
+		{"action": "proxy_reauth_finish", "state": "done", "summary": callback, "account": "acc_a"},
+		{"action": "proxy_reauth_finish", "state": "failed", "summary": callback, "account": "acc_missing"},
+	}
+	proxy := fixture(t, "proxy")
+	p, _ := actionHub(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/overview":
+			json.NewEncoder(w).Encode(data)
+		case "/v1/proxy":
+			w.Write(proxy)
+		default:
+			t.Error("unexpected overview route")
+		}
+	})
+	v := checkedView(t, p, "overview", nil)
+	raw, err := plugin.ValidateView(v, p.Manifest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "synthetic-recent-code") {
+		t.Fatal("recent changes disclosed a callback")
+	}
+	recent := v.Blocks[len(v.Blocks)-1].Items
+	titles := []string{"Sign-in started for an account", "Sign-in finished for …@example.com", "Sign-in finished for an account"}
+	states := []string{"Working", "Done", "Failed"}
+	if len(recent) != len(titles) {
+		t.Fatal("missing recent sign-in changes")
+	}
+	for i, item := range recent {
+		if item.Title != titles[i] || len(item.Badges) != 1 || item.Badges[0].Text != states[i] {
+			t.Fatal("wrong recent sign-in copy or state")
+		}
+	}
+}
+
+func TestProviderEndpointDropsTokenPaths(t *testing.T) {
+	const base = "https://provider.example.lan:8443"
+	p := &Fleet{readToken: "synthetic-read", operatorToken: "synthetic-operator"}
+	for _, path := range []string{"/api/synthetic-read", "/api/%73ynthetic-read", "/api/%73ynthetic-operator"} {
+		if p.providerEndpoint(base+path) != base {
+			t.Fatal("provider endpoint retained a token path")
+		}
+	}
+	p.readToken = "synthetic%2Fread"
+	if p.providerEndpoint(base+"/api/synthetic%2Fread") != base {
+		t.Fatal("provider endpoint retained an escaped token path")
+	}
+}
+
 func TestHostDetailWithSeveralRefusedFilesAndUnknownMatchCount(t *testing.T) {
 	h := newHub(t, false, func(w http.ResponseWriter, r *http.Request) {
 		body := string(fixture(t, "host-a"))

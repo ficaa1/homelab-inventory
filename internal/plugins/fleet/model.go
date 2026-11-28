@@ -57,9 +57,9 @@ type overviewResponse struct {
 		Undecided int
 	}
 	Recent []struct {
-		Action, State, Summary string
-		Created                time.Time `json:"created_at"`
-		Pending                int       `json:"pending_hosts"`
+		Action, State, Summary, Account string
+		Created                         time.Time `json:"created_at"`
+		Pending                         int       `json:"pending_hosts"`
 	}
 }
 type hostResponse struct {

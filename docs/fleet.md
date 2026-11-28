@@ -262,7 +262,8 @@ One host's last report. `report` is `null` if the host never reported.
 - `kind`: `skill`, `instruction`, `setting` or `link`.
 - `path` is relative to the harness home. It is never absolute.
 - `providers[].endpoint` is a URL with no user info, query or fragment. The plugin shows only its
-  scheme, host, port and path anyway.
+  scheme, host, port and path. It omits a path containing either configured token, even when
+  percent-encoded.
 - `state`:
 
   | State | Meaning |
@@ -607,7 +608,9 @@ Content-Type: application/json
   receipts show it as `null`. Every other parameter is safe to store and show.
 
 `ReceiptSummary`, used in `recent`, has `id`, `action`, `state`, `summary`, `created_at` and
-`pending_hosts` (a count).
+`pending_hosts` (a count). Proxy sign-in summaries can include `account` (an account ID).
+The plugin displays fixed text for sign-in changes and uses the label when it can resolve the
+account ID.
 
 #### `GET /v1/receipts/{id}`
 

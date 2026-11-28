@@ -1,6 +1,7 @@
 package fleet
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -144,8 +145,9 @@ func (p *Fleet) hosts(data hostsResponse) ([]plugin.Block, error) {
 
 var receiptStates = map[string]plugin.Badge{"done": badge("Done", "ok"), "working": badge("Working", "info"), "failed": badge("Failed", "crit")}
 var actionWords = map[string]string{"add_trial_source": "Add trial source", "set_skill_mode": "Set skill mode", "end_trial": "End trial", "remove_source": "Remove source", "force_file": "Force file"}
+var reauthChanges = map[string]string{"proxy_reauth_start": "Sign-in started for ", "proxy_reauth_finish": "Sign-in finished for "}
 
-func (p *Fleet) overview(data overviewResponse) ([]plugin.Block, error) {
+func (p *Fleet) overview(ctx context.Context, data overviewResponse) ([]plugin.Block, error) {
 	if !data.Policy.complete() {
 		return nil, errResponse
 	}
@@ -243,15 +245,49 @@ func (p *Fleet) overview(data overviewResponse) ([]plugin.Block, error) {
 	if data.Recent == nil {
 		recent.Empty = "Recent changes not reported"
 	}
+	labels := p.recentAccountLabels(ctx, data)
 	for _, r := range data.Recent {
-		action := p.label(r.Action, actionWords)
-		item := plugin.Item{Title: p.clean(r.Summary, 400), Subtitle: join(action, age(data.Generated, r.Created)), Badges: []plugin.Badge{p.enum(r.State, receiptStates)}}
+		item := plugin.Item{Subtitle: age(data.Generated, r.Created)}
+		if change := reauthChanges[r.Action]; change != "" {
+			label := labels[r.Account]
+			if label == "" {
+				label = "an account"
+			}
+			item.Title = change + label
+			state := receiptStates[r.State]
+			if state.Text == "" {
+				state = badge("Unknown", "muted")
+			}
+			item.Badges = []plugin.Badge{state}
+		} else {
+			item.Title = p.clean(r.Summary, 400)
+			item.Subtitle = join(p.label(r.Action, actionWords), item.Subtitle)
+			item.Badges = []plugin.Badge{p.enum(r.State, receiptStates)}
+		}
 		if r.Pending > 0 {
 			item.Badges = append(item.Badges, badge("Pending on "+plural(r.Pending, "host", "hosts"), "info"))
 		}
 		recent.Items = append(recent.Items, item)
 	}
 	return append(blocks, recent), nil
+}
+
+func (p *Fleet) recentAccountLabels(ctx context.Context, data overviewResponse) map[string]string {
+	for _, r := range data.Recent {
+		if reauthChanges[r.Action] == "" || !proxyID.MatchString(r.Account) {
+			continue
+		}
+		var proxy proxyResponse
+		if err := p.get(ctx, "proxy", p.readToken, &proxy); err != nil || proxy.Proxy.State != "ok" {
+			return nil
+		}
+		labels := make(map[string]string, len(proxy.Accounts))
+		for _, account := range proxy.Accounts {
+			labels[account.ID] = p.word(account.Label)
+		}
+		return labels
+	}
+	return nil
 }
 
 var itemStates = map[string]string{"pending": "Pending", "drift": "Drift", "refused": "Refused", "broken_link": "Broken link", "remove": "To remove"}
@@ -270,7 +306,14 @@ func (p *Fleet) providerEndpoint(raw string) string {
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
 		return "Not a URL"
 	}
-	return p.word(u.Scheme + "://" + u.Host + u.EscapedPath())
+	path := u.EscapedPath()
+	for _, token := range []string{p.readToken, p.operatorToken} {
+		if token != "" && (strings.Contains(u.Path, token) || strings.Contains(path, token)) {
+			path = ""
+			break
+		}
+	}
+	return p.word(u.Scheme + "://" + u.Host + path)
 }
 
 func (p *Fleet) hostDetail(data hostResponse) ([]plugin.Block, error) {

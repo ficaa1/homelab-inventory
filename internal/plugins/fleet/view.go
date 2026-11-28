@@ -26,7 +26,7 @@ func (p *Fleet) View(ctx context.Context, name string, params url.Values) (plugi
 		var data overviewResponse
 		err = p.get(ctx, "overview", p.readToken, &data)
 		if err == nil {
-			v.Blocks, err = p.overview(data)
+			v.Blocks, err = p.overview(ctx, data)
 		}
 	case "hosts":
 		v.Title = "Hosts"
