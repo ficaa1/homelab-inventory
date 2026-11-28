@@ -114,6 +114,7 @@ func TestConfigure(t *testing.T) {
 		{"hub_url", "https://hub.example.lan/?x=y", "query"}, {"hub_url", "https://hub.example.lan?", "query"}, {"hub_url", "https://hub.example.lan#", "fragment"},
 		{"hub_url", "https://hub.example.lan/prefix/v1/", "without /v1"}, {"hub_url", "https://hub.example.lan/%761", "without /v1"},
 		{"read_token", "", "Enter"}, {"read_token", "one\rtwo", "one line"}, {"operator_token", "one\ntwo", "one line"},
+		{"operator_token", readToken, "Use a different token from the read token."},
 	} {
 		t.Run(tc.key+"_"+tc.want, func(t *testing.T) {
 			p := new(Fleet)
@@ -144,7 +145,12 @@ func TestConnectionChecks(t *testing.T) {
 		version                int
 		tls, operator, ok      bool
 	}{
-		{"read only", "read", "", 1, false, false, true}, {"both roles", "operator", "operator", 1, true, true, true}, {"role mismatch", "read", "read", 1, false, true, false}, {"future API", "read", "operator", 2, false, true, false}, {"bad read role", "report", "", 1, true, false, false},
+		{"read only", "read", "", 1, false, false, true},
+		{"both roles", "read", "operator", 1, true, true, true},
+		{"operator in the read field", "operator", "operator", 1, true, true, false},
+		{"role mismatch", "read", "read", 1, false, true, false},
+		{"future API", "read", "operator", 2, false, true, false},
+		{"bad read role", "report", "", 1, true, false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var credentials []string
@@ -174,13 +180,16 @@ func TestConnectionChecks(t *testing.T) {
 			for _, c := range r.Checks {
 				checks[c.Name] = c
 			}
-			if !checks["Hub reachable"].OK || checks["API version 1"].OK != (tc.version == 1) || checks["Read token accepted"].OK != (tc.version == 1 && tc.readRole != "report") {
+			if !checks["Hub reachable"].OK || checks["API version 1"].OK != (tc.version == 1) || checks["Read token accepted"].OK != (tc.version == 1 && tc.readRole == "read") {
 				t.Fatal(r)
 			}
 			if !checks["Connection"].OK || strings.Contains(checks["Connection"].Message, "unencrypted") == tc.tls {
 				t.Fatal(r)
 			}
 			if tc.name == "role mismatch" && (checks["Operator token"].OK || checks["Operator token"].Message != "This token has read access only; use the operator token") {
+				t.Fatal(r)
+			}
+			if tc.readRole == "operator" && (r.Message != "This is an operator token. Use the hub's read token here." || !checks["Operator token"].OK) {
 				t.Fatal(r)
 			}
 		})

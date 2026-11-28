@@ -3,6 +3,7 @@ package fleet
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -63,6 +64,9 @@ func (p *Fleet) Configure(c plugin.Config) error {
 		if strings.ContainsAny(value, "\r\n") {
 			return &plugin.FieldError{Key: key, Message: "Enter the token on one line."}
 		}
+	}
+	if operator != "" && subtle.ConstantTimeCompare([]byte(operator), []byte(read)) == 1 {
+		return &plugin.FieldError{Key: "operator_token", Message: "Use a different token from the read token."}
 	}
 	p.base, p.readToken, p.operatorToken = base, read, operator
 	return nil
@@ -186,12 +190,14 @@ func (p *Fleet) Test(ctx context.Context) plugin.TestResult {
 		versionMessage = err.Error()
 	}
 	check("API version 1", err == nil, versionMessage)
-	accepted := err == nil && (m.Role == "read" || m.Role == "operator")
+	accepted := err == nil && m.Role == "read"
 	message = "Read access confirmed."
 	if err != nil {
 		message = err.Error()
+	} else if m.Role == "operator" {
+		message = "This is an operator token. Use the hub's read token here."
 	} else if !accepted {
-		message = "Use a token with read or operator access."
+		message = "Use the hub's read token here."
 	}
 	check("Read token accepted", accepted, message)
 	if p.operatorToken != "" {
