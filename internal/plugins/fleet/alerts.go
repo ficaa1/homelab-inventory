@@ -71,9 +71,13 @@ func (p *Fleet) Alerts(ctx context.Context) ([]plugin.Alert, error) {
 	}
 	var proxy proxyResponse
 	err := p.get(ctx, "proxy", p.readToken, &proxy)
+	var cached []plugin.Alert
+	if p.base == p.proxyAlertsBase {
+		cached = p.proxyAlerts
+	}
 	var hub *hubError
 	if errors.As(err, &hub) && hub.status == http.StatusNotFound {
-		return append(alerts, p.proxyAlerts...), nil
+		return append(alerts, cached...), nil
 	}
 	if err != nil {
 		return nil, err
@@ -84,7 +88,7 @@ func (p *Fleet) Alerts(ctx context.Context) ([]plugin.Alert, error) {
 			text = p.proxyNotice(proxy).Text
 		}
 		add("proxy_unreachable", "proxy", "warning", text)
-		return append(alerts, p.proxyAlerts...), nil
+		return append(alerts, cached...), nil
 	}
 	if proxy.Truncated {
 		return nil, errors.New("Proxy alerts need the full account list.")
@@ -121,5 +125,6 @@ func (p *Fleet) Alerts(ctx context.Context) ([]plugin.Alert, error) {
 		add("proxy_cooling", provider, "critical", "Every enabled "+provider+" account is cooling down")
 	}
 	p.proxyAlerts = append([]plugin.Alert(nil), alerts[firstProxyAlert:]...)
+	p.proxyAlertsBase = p.base
 	return alerts, nil
 }

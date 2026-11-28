@@ -380,11 +380,13 @@ func TestProxyAlerts(t *testing.T) {
 	status := 200
 	p, _ := actionHub(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/v1/overview":
+		case "/v1/overview", "/draft/v1/overview":
 			w.Write(overview)
-		case "/v1/proxy":
+		case "/v1/proxy", "/draft/v1/proxy":
 			w.WriteHeader(status)
 			json.NewEncoder(w).Encode(data)
+		case "/draft/v1/meta":
+			fmt.Fprint(w, `{"api_version":1,"generated_at":"2026-12-01T09:15:00Z","role":"read"}`)
 		default:
 			t.Error("unexpected alert route")
 		}
@@ -449,14 +451,15 @@ func TestProxyAlerts(t *testing.T) {
 	data["accounts"] = nil
 	configure(base + "/")
 	check(outage)
-	configure(base + "/other-hub")
-	if len(p.proxyAlerts) != 0 {
-		t.Fatal("different hub retained account alerts")
+	if err := p.Configure(plugin.Config{"hub_url": base + "/draft", "read_token": readToken}); err != nil {
+		t.Fatal(err)
 	}
-	configure(base)
+	if result := p.Test(t.Context()); !result.OK {
+		t.Fatal("draft hub test failed")
+	}
 	check(map[string]string{"proxy_unreachable/proxy": "warning"})
-	data["accounts"] = accounts
-	check(complete)
+	configure(base)
+	check(outage)
 	if err := p.Close(); err != nil {
 		t.Fatal(err)
 	}

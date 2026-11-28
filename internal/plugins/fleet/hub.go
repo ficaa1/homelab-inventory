@@ -22,6 +22,7 @@ type Fleet struct {
 	host                                     plugin.Host
 	base, readToken, operatorToken, panelURL string
 	proxyAlerts                              []plugin.Alert
+	proxyAlertsBase                          string
 }
 
 func (*Fleet) Manifest() plugin.Manifest {
@@ -78,9 +79,6 @@ func (p *Fleet) Configure(c plugin.Config) error {
 			return badField("proxy_panel_url", "Enter an http:// or https:// panel URL without credentials.")
 		}
 	}
-	if p.base != base {
-		p.proxyAlerts = nil
-	}
 	p.panelURL = panel
 	p.base, p.readToken, p.operatorToken = base, read, operator
 	return nil
@@ -88,6 +86,7 @@ func (p *Fleet) Configure(c plugin.Config) error {
 
 func (p *Fleet) Close() error {
 	p.proxyAlerts = nil
+	p.proxyAlertsBase = ""
 	p.base, p.readToken, p.operatorToken, p.panelURL = "", "", "", ""
 	return nil
 }
