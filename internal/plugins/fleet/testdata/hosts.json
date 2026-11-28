@@ -1,0 +1,66 @@
+{
+  "api_version": 1,
+  "generated_at": "2026-12-01T09:15:00Z",
+  "repo_head": "f123abc",
+  "policy": {
+    "stale_after_seconds": 259200,
+    "disk_warn_free_ratio": 0.15,
+    "disk_crit_free_ratio": 0.08,
+    "trial_days": 30,
+    "trial_due_soon_days": 7
+  },
+  "hosts": [
+    {
+      "name": "host-a",
+      "fleet_version": "0.7.0",
+      "last_seen_at": "2026-12-01T09:03:00Z",
+      "synced_commit": "1234567890",
+      "counts": {
+        "drift": 2,
+        "refused": 1,
+        "broken_links": 1,
+        "pending": 3,
+        "updates": 2
+      },
+      "disk": {
+        "total_bytes": 512000000000,
+        "free_bytes": 61000000000
+      },
+      "context_cost": [
+        {
+          "harness": "harness-a",
+          "model_invoked": 14,
+          "description_chars": 9120,
+          "tokens_estimate": 2280
+        }
+      ]
+    },
+    {
+      "name": "host-b",
+      "fleet_version": null,
+      "last_seen_at": null,
+      "synced_commit": null,
+      "counts": null,
+      "disk": null,
+      "context_cost": null
+    },
+    {
+      "name": "host-c",
+      "fleet_version": "0.7.0",
+      "last_seen_at": "2026-11-27T09:15:00Z",
+      "synced_commit": "f123abc",
+      "counts": {
+        "drift": 0,
+        "refused": 0,
+        "broken_links": 0,
+        "pending": 0,
+        "updates": 0
+      },
+      "disk": {
+        "total_bytes": 100000000000,
+        "free_bytes": 4000000000
+      },
+      "context_cost": []
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "api_version": 1,
+  "generated_at": "2026-12-01T09:15:00Z",
+  "usage_window_days": 30,
+  "sources": [
+    {
+      "name": "example-skills",
+      "origin": "third_party",
+      "defined_in": "policy",
+      "trial": {
+        "since": "2026-11-10",
+        "ends": "2026-12-10",
+        "state": "running"
+      },
+      "hosts": null
+    },
+    {
+      "name": "sample-skills",
+      "origin": "third_party",
+      "defined_in": "config",
+      "trial": null,
+      "hosts": null
+    }
+  ],
+  "skills": [
+    {
+      "id": "example-skills/lint-docs",
+      "name": "lint-docs",
+      "source": "example-skills",
+      "mode": "model",
+      "mode_from": "decision",
+      "decided_at": "2026-11-20",
+      "hosts": [
+        {
+          "host": "host-a",
+          "installed": true
+        },
+        {
+          "host": "host-b",
+          "installed": false
+        }
+      ],
+      "usage": {
+        "threads": 5,
+        "by_host": [
+          {
+            "host": "host-a",
+            "threads": 5
+          }
+        ]
+      }
+    },
+    {
+      "id": "example-skills/sort-notes",
+      "name": "sort-notes",
+      "source": "example-skills",
+      "mode": "user",
+      "mode_from": "source",
+      "decided_at": null,
+      "hosts": [
+        {
+          "host": "host-a",
+          "installed": true
+        },
+        {
+          "host": "host-b",
+          "installed": false
+        }
+      ],
+      "usage": {
+        "threads": 0,
+        "by_host": [
+          {
+            "host": "host-a",
+            "threads": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "read-notes",
+      "name": "read-notes",
+      "source": null,
+      "mode": "user",
+      "mode_from": "frontmatter",
+      "decided_at": null,
+      "hosts": [
+        {
+          "host": "host-a",
+          "installed": true
+        },
+        {
+          "host": "host-b",
+          "installed": false
+        }
+      ],
+      "usage": null
+    }
+  ],
+  "truncated": false
+}

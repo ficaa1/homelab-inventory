@@ -1,0 +1,112 @@
+{
+  "api_version": 1,
+  "generated_at": "2026-12-01T09:15:00Z",
+  "repo_head": "f123abc",
+  "policy": {
+    "stale_after_seconds": 259200,
+    "disk_warn_free_ratio": 0.15,
+    "disk_crit_free_ratio": 0.08,
+    "trial_days": 30,
+    "trial_due_soon_days": 7
+  },
+  "host": {
+    "name": "host-a",
+    "fleet_version": "0.7.0",
+    "last_seen_at": "2026-12-01T09:03:00Z",
+    "synced_commit": "1234567890",
+    "counts": {
+      "drift": 2,
+      "refused": 1,
+      "broken_links": 1,
+      "pending": 3,
+      "updates": 2
+    },
+    "disk": {
+      "total_bytes": 512000000000,
+      "free_bytes": 61000000000
+    },
+    "context_cost": [
+      {
+        "harness": "harness-a",
+        "model_invoked": 14,
+        "description_chars": 9120,
+        "tokens_estimate": 2280
+      }
+    ]
+  },
+  "report": {
+    "reported_at": "2026-12-01T09:03:00Z",
+    "commit": "1234567890",
+    "ok_count": 12,
+    "items": [
+      {
+        "id": "harness-a:skills/lint-docs/SKILL.md",
+        "harness": "harness-a",
+        "kind": "skill",
+        "path": "skills/lint-docs/SKILL.md",
+        "state": "refused",
+        "detail": "A hand edit has a newer version waiting.",
+        "diff": {
+          "lines_added": 4,
+          "lines_removed": 1
+        }
+      },
+      {
+        "id": "harness-a:notes.md",
+        "harness": "harness-a",
+        "kind": "skill",
+        "path": "notes.md",
+        "state": "drift",
+        "detail": "",
+        "diff": null
+      },
+      {
+        "id": "harness-a:guide.md",
+        "harness": "harness-a",
+        "kind": "skill",
+        "path": "guide.md",
+        "state": "drift",
+        "detail": "",
+        "diff": null
+      },
+      {
+        "id": "harness-a:link.md",
+        "harness": "harness-a",
+        "kind": "skill",
+        "path": "link.md",
+        "state": "broken_link",
+        "detail": "",
+        "diff": null
+      }
+    ],
+    "providers": [
+      {
+        "harness": "harness-a",
+        "provider": "provider-a",
+        "endpoint": "https://provider.example.lan"
+      }
+    ],
+    "updates": [
+      {
+        "component": "component-a",
+        "installed": "1",
+        "latest": "2",
+        "apply": "manual"
+      },
+      {
+        "component": "component-b",
+        "installed": "2",
+        "latest": "3",
+        "apply": "auto"
+      }
+    ],
+    "force_requests": [
+      {
+        "id": "frc_example",
+        "item": "harness-a:skills/lint-docs/SKILL.md",
+        "requested_at": "2026-12-01T09:03:00Z",
+        "state": "queued"
+      }
+    ]
+  }
+}
