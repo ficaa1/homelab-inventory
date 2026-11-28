@@ -190,8 +190,10 @@ Everything the Overview view and the alerts need, in one call.
 ### `GET /v1/hosts`
 
 ```json
-{"api_version": 1, "generated_at": "…", "repo_head": "4f2c1a9", "hosts": [ HostSummary, … ]}
+{"api_version": 1, "generated_at": "…", "repo_head": "4f2c1a9", "policy": Policy, "hosts": [ HostSummary, … ]}
 ```
+
+Every response that has hosts also has `policy`, so a host's status comes from one response.
 
 ### `GET /v1/hosts/{name}`
 
@@ -202,6 +204,7 @@ One host's last report. `report` is `null` if the host never reported.
   "api_version": 1,
   "generated_at": "2026-12-01T09:15:00Z",
   "repo_head": "4f2c1a9",
+  "policy": Policy,
   "host": HostSummary,
   "report": {
     "reported_at": "2026-12-01T09:12:00Z",
