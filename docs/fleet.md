@@ -33,10 +33,10 @@ the clear, so use it only on a network you control. **Test** reports which one i
 
 | Rule | Severity | When |
 | --- | --- | --- |
-| `fleet.host_stale` | warning | A host hasn't reported for longer than the hub's `stale_after_seconds` |
+| `fleet.host_stale` | warning | A host hasn't reported for longer than the hub's `stale_after_seconds`, or never reported and its profile is older than that |
 | `fleet.drift` | warning | A host has drift or broken links |
 | `fleet.refused` | warning | A host refused a change because the file drifted |
-| `fleet.trial_due` | info | A trial passed its end date without a decision |
+| `fleet.trial_due` | info | A trial passed its end date and is still a trial. The summary says how many skills are undecided |
 | `fleet.disk` | warning or critical | A host's free disk is below the hub's thresholds |
 
 The subject is the host name, or the source name for `fleet.trial_due`. If the hub can't be
@@ -114,6 +114,7 @@ is set when one request field caused the error.
 ```json
 {
   "name": "host-a",
+  "profile_since": "2026-11-28T10:00:00Z",
   "fleet_version": "0.7.0",
   "last_seen_at": "2026-12-01T09:12:00Z",
   "synced_commit": "4f2c1a9",
@@ -125,6 +126,9 @@ is set when one request field caused the error.
 }
 ```
 
+- `profile_since` is when the hub first saw the host's profile. A host that never reported
+  counts as stale only once `stale_after_seconds` have passed since then. It is `null` if unknown,
+  and then a host that never reported counts as stale at once.
 - `last_seen_at`, `fleet_version` and `synced_commit` are `null` if the host never reported.
 - `counts` is `null` if the host never reported.
   - `drift`: files that changed since fleet wrote them.
@@ -176,6 +180,7 @@ Everything the Overview view and the alerts need, in one call.
   "repo_head": "4f2c1a9",
   "policy": {"stale_after_seconds": 259200, "disk_warn_free_ratio": 0.15, "disk_crit_free_ratio": 0.08, "trial_days": 30, "trial_due_soon_days": 7},
   "hosts": [ HostSummary, … ],
+  "truncated": false,
   "trials": [
     {"source": "example-skills", "since": "2026-11-10", "ends": "2026-12-10", "state": "running", "undecided": 4}
   ],
@@ -190,10 +195,12 @@ Everything the Overview view and the alerts need, in one call.
 ### `GET /v1/hosts`
 
 ```json
-{"api_version": 1, "generated_at": "…", "repo_head": "4f2c1a9", "policy": Policy, "hosts": [ HostSummary, … ]}
+{"api_version": 1, "generated_at": "…", "repo_head": "4f2c1a9", "policy": Policy, "hosts": [ HostSummary, … ], "truncated": false}
 ```
 
 Every response that has hosts also has `policy`, so a host's status comes from one response.
+`truncated` is true when the host list hit its cap. The plugin then treats the response as
+incomplete: views say so, and alerts fail the poll rather than resolve alerts for the missing hosts.
 
 ### `GET /v1/hosts/{name}`
 
@@ -240,6 +247,8 @@ One host's last report. `report` is `null` if the host never reported.
 - `items` lists only items that need attention. `ok_count` counts the rest.
 - `kind`: `skill`, `instruction`, `setting` or `link`.
 - `path` is relative to the harness home. It is never absolute.
+- `providers[].endpoint` is a URL with no user info, query or fragment. The plugin shows only its
+  scheme, host, port and path anyway.
 - `state`:
 
   | State | Meaning |
@@ -260,7 +269,8 @@ One host's last report. `report` is `null` if the host never reported.
 
 ### `GET /v1/skills`
 
-Optional query: `source=<source>`, `mode=model|user|exclude`. Both filter on the hub.
+Optional query: `source=<source>`, `origin=own|third_party`, `mode=model|user|exclude`. Each
+filters on the hub, and they combine.
 
 ```json
 {
@@ -275,9 +285,11 @@ Optional query: `source=<source>`, `mode=model|user|exclude`. Both filter on the
       "defined_in": "policy",
       "trial": {"since": "2026-11-10", "ends": "2026-12-10", "state": "running"},
       "hosts": null,
-      "removable": true
+      "removable": true,
+      "counts": {"skills": 12, "model": 5, "user": 4, "exclude": 3}
     }
   ],
+  "own_counts": {"skills": 20, "model": 14, "user": 6, "exclude": 0},
   "skills": [
     {
       "id": "example-skills/lint-docs",
@@ -300,6 +312,7 @@ Optional query: `source=<source>`, `mode=model|user|exclude`. Both filter on the
 - `defined_in`: `config` (hand-written) or `policy` (written by the hub).
 - `trial` is `null` for sources that aren't on trial.
 - `hosts` is `null` when the source installs on every host.
+- `counts` and `own_counts` count every skill, whatever the filter. `sources` is never filtered.
 - `mode`: `model` (model-invoked), `user` (user-only) or `exclude` (not installed).
 - `mode_from`: `source` (the source's lists), `decision` (a per-skill decision, with
   `decided_at`) or `frontmatter` (own skills).
