@@ -182,7 +182,7 @@ func (p *Fleet) skills(data skillsResponse, src, mode string) []plugin.Block {
 		}
 		var threads any = "No data"
 		if s.Usage != nil {
-			threads = s.Usage.Threads
+			threads = displayCount(s.Usage.Threads)
 		}
 		rows.Rows = append(rows.Rows, map[string]any{"skill": p.word(s.Name), "threads": threads, "source": source, "mode": p.label(s.Mode, modes), "set": set, "trial": trial, "hosts": p.skillHosts(s)})
 	}

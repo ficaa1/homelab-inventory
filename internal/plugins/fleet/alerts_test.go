@@ -86,6 +86,7 @@ func TestPollFailureAndSilence(t *testing.T) {
 		{"HTTP failure", `{"error":{"message":"Retry read-fixture-only operator-fixture-only"}}`, 500, true},
 		{"incomplete", "{", 200, true},
 		{"incompatible", `{"api_version":2}`, 200, true},
+		{"unknown threshold", `{"api_version":1,"generated_at":"2026-12-01T09:15:00Z","policy":{"disk_warn_free_ratio":null},"hosts":[],"trials":[]}`, 200, true},
 		{"unknown hosts", `{"api_version":1,"generated_at":"2026-12-01T09:15:00Z","policy":{},"hosts":null,"trials":[]}`, 200, true},
 		{"empty", `{"api_version":1,"generated_at":"2026-12-01T09:15:00Z","policy":{"stale_after_seconds":60,"disk_warn_free_ratio":0.2,"disk_crit_free_ratio":0.1,"trial_due_soon_days":7},"hosts":[],"trials":[]}`, 200, false},
 	} {

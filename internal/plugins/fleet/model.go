@@ -3,10 +3,15 @@ package fleet
 import "time"
 
 type policy struct {
-	StaleSeconds int64   `json:"stale_after_seconds"`
-	WarnFree     float64 `json:"disk_warn_free_ratio"`
-	CritFree     float64 `json:"disk_crit_free_ratio"`
-	DueSoon      int     `json:"trial_due_soon_days"`
+	StaleSeconds *int64   `json:"stale_after_seconds"`
+	WarnFree     *float64 `json:"disk_warn_free_ratio"`
+	CritFree     *float64 `json:"disk_crit_free_ratio"`
+	DueSoon      *int     `json:"trial_due_soon_days"`
+}
+
+// Zero is a valid threshold. An absent threshold cannot classify a host.
+func (p *policy) complete() bool {
+	return p != nil && p.StaleSeconds != nil && p.WarnFree != nil && p.CritFree != nil && p.DueSoon != nil
 }
 
 type hostCounts struct {
@@ -96,7 +101,7 @@ type skill struct {
 	DecidedAt  string `json:"decided_at"`
 	Hosts      []installation
 	Usage      *struct {
-		Threads int
+		Threads *int
 		ByHost  []hostUsage `json:"by_host"`
 	}
 }

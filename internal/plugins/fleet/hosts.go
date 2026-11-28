@@ -26,9 +26,9 @@ func (d *disk) status(pol *policy) plugin.Badge {
 	switch {
 	case !ok:
 		return plugin.Badge{}
-	case r < pol.CritFree:
+	case r < *pol.CritFree:
 		return badge("Disk critical", "crit")
-	case r < pol.WarnFree:
+	case r < *pol.WarnFree:
 		return badge("Disk low", "warn")
 	default:
 		return plugin.Badge{}
@@ -42,7 +42,7 @@ func (c *hostCounts) attention() int {
 }
 func (h hostSummary) pending(head string) bool { return h.Commit != nil && *h.Commit != head }
 func (h hostSummary) stale(env hostEnvelope) bool {
-	return h.Seen != nil && env.Generated.Sub(*h.Seen).Seconds() > float64(env.Policy.StaleSeconds)
+	return h.Seen != nil && env.Generated.Sub(*h.Seen).Seconds() > float64(*env.Policy.StaleSeconds)
 }
 func (h hostSummary) status(env hostEnvelope) plugin.Badge {
 	d := h.Disk.status(env.Policy)
@@ -109,7 +109,7 @@ func (p *Fleet) hostList(data hostsResponse, counts bool) plugin.Block {
 	return list
 }
 func (p *Fleet) hosts(data hostsResponse) ([]plugin.Block, error) {
-	if data.Policy == nil {
+	if !data.Policy.complete() {
 		return nil, errResponse
 	}
 	counts := table("Counts", "No host counts to show", col("host", "Host"), col("status", "Status"), number("drift", "Drift"), number("refused", "Refused"), number("broken", "Broken links"), number("pending", "Pending"), number("updates", "Updates"), plugin.Column{Key: "free", Label: "Free", Format: "percent", Align: "right"})
@@ -130,7 +130,7 @@ var receiptStates = map[string]plugin.Badge{"done": badge("Done", "ok"), "workin
 var actionWords = map[string]string{"add_trial_source": "Add trial source", "set_skill_mode": "Set skill mode", "end_trial": "End trial", "remove_source": "Remove source", "force_file": "Force file"}
 
 func (p *Fleet) overview(data overviewResponse) ([]plugin.Block, error) {
-	if data.Policy == nil {
+	if !data.Policy.complete() {
 		return nil, errResponse
 	}
 	stale, attention, affected, pending, reportedCounts, knownCommits := 0, 0, 0, 0, 0, 0
@@ -165,7 +165,7 @@ func (p *Fleet) overview(data overviewResponse) ([]plugin.Block, error) {
 		switch t.State {
 		case "running":
 			running++
-			if days, ok := daysUntil(data.Generated, t.Ends); ok && days >= 0 && days <= data.Policy.DueSoon {
+			if days, ok := daysUntil(data.Generated, t.Ends); ok && days >= 0 && days <= *data.Policy.DueSoon {
 				soon++
 			}
 		case "due":
@@ -237,7 +237,7 @@ func (p *Fleet) hostDetail(data hostResponse) ([]plugin.Block, error) {
 	if r == nil {
 		return []plugin.Block{notice("info", p.word(h.Name)+" hasn't reported yet. Run fleet sync on it.")}, nil
 	}
-	if data.Policy == nil {
+	if !data.Policy.complete() {
 		return nil, errResponse
 	}
 	status := h.status(data.hostEnvelope)

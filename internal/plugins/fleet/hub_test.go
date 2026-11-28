@@ -250,3 +250,47 @@ func TestSafeHubErrors(t *testing.T) {
 	}
 	assertPrivate(t, err.Error())
 }
+
+func TestFleetRegistryLifecycle(t *testing.T) {
+	h := fixtureHub(t)
+	r, err := plugin.Open(t.TempDir(), []plugin.Builtin{{ID: "fleet", New: New}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if _, err := r.Update("fleet", plugin.Update{Settings: plugin.Config{"hub_url": h.base, "read_token": nil, "operator_token": nil}}); err != nil {
+		t.Fatal("save disabled settings", err)
+	}
+	if _, err := r.Test(t.Context(), "fleet", nil); err == nil {
+		t.Fatal("missing required token accepted")
+	}
+	on := true
+	if _, err := r.Update("fleet", plugin.Update{Enabled: &on, Settings: plugin.Config{"read_token": readToken}}); err != nil {
+		t.Fatal(err)
+	}
+	if h.calls.Load() != 0 {
+		t.Fatal("configuration performed network I/O")
+	}
+	result, err := r.Test(t.Context(), "fleet", nil)
+	if err != nil || !result.OK {
+		t.Fatal(result, err)
+	}
+	b, err := r.View(t.Context(), "fleet", "hosts", nil)
+	if err != nil || !strings.Contains(string(b), "host-a") {
+		t.Fatal("guarded host read failed", err)
+	}
+	on = false
+	if _, err := r.Update("fleet", plugin.Update{Enabled: &on}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.View(t.Context(), "fleet", "hosts", nil); !errors.Is(err, plugin.ErrNotFound) {
+		t.Fatal("disabled view available")
+	}
+	on = true
+	if _, err := r.Update("fleet", plugin.Update{Enabled: &on}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.View(t.Context(), "fleet", "overview", nil); err != nil {
+		t.Fatal("re-enable lost credentials", err)
+	}
+}

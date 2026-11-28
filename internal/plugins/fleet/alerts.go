@@ -13,7 +13,7 @@ func (p *Fleet) Alerts(ctx context.Context) ([]plugin.Alert, error) {
 	if err := p.get(ctx, "overview", p.readToken, &data); err != nil {
 		return nil, err
 	}
-	if data.Policy == nil || data.Hosts == nil || data.Trials == nil {
+	if !data.Policy.complete() || data.Hosts == nil || data.Trials == nil {
 		return nil, errResponse
 	}
 	alerts := []plugin.Alert{}

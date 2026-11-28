@@ -38,19 +38,24 @@ func (*Fleet) Manifest() plugin.Manifest {
 
 func (p *Fleet) Configure(c plugin.Config) error {
 	base, _ := c["hub_url"].(string)
-	u, err := url.Parse(base)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
-		return &plugin.FieldError{Key: "hub_url", Message: "Use an http:// or https:// URL with a host name."}
-	}
-	if u.User != nil || u.ForceQuery || u.RawQuery != "" || strings.Contains(base, "#") {
-		return &plugin.FieldError{Key: "hub_url", Message: "Remove credentials, query and fragment from the hub URL."}
-	}
-	if strings.HasSuffix(strings.TrimRight(u.Path, "/"), "/v1") {
-		return &plugin.FieldError{Key: "hub_url", Message: "Use the hub's base URL without /v1"}
+	// The registry omits unset fields when saving a disabled plugin and
+	// enforces required settings before enabling or testing one.
+	if _, present := c["hub_url"]; present {
+		u, err := url.Parse(base)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+			return &plugin.FieldError{Key: "hub_url", Message: "Use an http:// or https:// URL with a host name."}
+		}
+		if u.User != nil || u.ForceQuery || u.RawQuery != "" || strings.Contains(base, "#") {
+			return &plugin.FieldError{Key: "hub_url", Message: "Remove credentials, query and fragment from the hub URL."}
+		}
+		if strings.HasSuffix(strings.TrimRight(u.Path, "/"), "/v1") {
+			return &plugin.FieldError{Key: "hub_url", Message: "Use the hub's base URL without /v1"}
+		}
+		base = strings.TrimRight(u.String(), "/")
 	}
 	read, _ := c["read_token"].(string)
 	operator, _ := c["operator_token"].(string)
-	if strings.TrimSpace(read) == "" {
+	if _, present := c["read_token"]; present && strings.TrimSpace(read) == "" {
 		return &plugin.FieldError{Key: "read_token", Message: "Enter the hub's read token."}
 	}
 	for _, key := range []string{"read_token", "operator_token"} {
@@ -59,7 +64,7 @@ func (p *Fleet) Configure(c plugin.Config) error {
 			return &plugin.FieldError{Key: key, Message: "Enter the token on one line."}
 		}
 	}
-	p.base, p.readToken, p.operatorToken = strings.TrimRight(u.String(), "/"), read, operator
+	p.base, p.readToken, p.operatorToken = base, read, operator
 	return nil
 }
 
@@ -111,6 +116,9 @@ var errVersion = errors.New("Use a fleet hub that supports API version 1.")
 var errResponse = errors.New("Check that hub_url points to a fleet hub returning a complete JSON response.")
 
 func (p *Fleet) get(ctx context.Context, path, token string, out interface{ header() envelope }) error {
+	if p.base == "" || token == "" {
+		return errors.New("Set the hub URL and read token in Admin → Plugins.")
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.base+"/v1/"+path, nil)
 	if err != nil {
 		return errResponse
